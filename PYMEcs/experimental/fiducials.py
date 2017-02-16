@@ -7,11 +7,7 @@ Created on Tue Jun 30 10:24:45 2015
 
 import wx
 import numpy as np
-import scipy as sp
 from scipy import ndimage
-from matplotlib import pyplot
-import inspect
-import os
 from collections import OrderedDict
 
 import logging
@@ -323,9 +319,6 @@ class ExtractTrajectoriesDialog(wx.Dialog):
 
     def GetClumpTimeWindow(self):
         return int(self.tClumpTime.GetValue())
-        
-    #def OnFilterSelected(self, event):
-    #    self.argText.SetLabel(inspect.getargspec(self.filterFunc[event.GetSelection()])[0][1] + ":")
     
     def GetFilterMethod(self):
         return self.filter.GetStringSelection()
