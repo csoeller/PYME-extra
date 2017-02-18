@@ -5,6 +5,12 @@ Created on Tue Jun 30 10:24:45 2015
 @author: Kenny
 """
 
+# this is Kenny's code with minimal changes to run as standonlone plugin
+# using the new PYME.config system
+
+# mostly used as a comparison to the newer recipe based implementation
+# will be dropped once the recipe based version is complete
+
 import wx
 import numpy as np
 from scipy import ndimage
@@ -144,7 +150,6 @@ class FiducialAnalyser:
         self.visFr = visFr
 
         visFr.AddMenuItem('Experimental>Fiducials', "Estimate drift from Fiducials", self.FindBeadsAndTrack)
-        visFr.AddMenuItem('Experimental>Fiducials', "Plot Fiducial Track", self.OnPlotFiducial)
         visFr.AddMenuItem('Experimental>Fiducials', 'Apply fiducial correction', self.OnApplyFiducial,
                           helpText='Apply fiducial to x, y, z')
         visFr.AddMenuItem('Experimental>Fiducials', 'Revert fiducial correction', self.OnRevertFiducial,
@@ -193,20 +198,6 @@ class FiducialAnalyser:
                 logger.debug('setting attribute %s' % fiducial)
             pipeline.Rebuild()
         pipeline.selectDataSource(curds)
-        
-    def OnPlotFiducial(self, event):
-        pipeline = self.visFr.pipeline
-        t = pipeline['t']
-        x = pipeline['fiducial_x']
-        y = pipeline['fiducial_y']
-        tu,idx = np.unique(t.astype('int'), return_index=True)
-        xu = x[idx]
-        yu = y[idx]
-        import matplotlib.pyplot as plt
-        plt.figure()
-        plt.plot(tu, xu)
-        plt.plot(tu, yu)
-
 
     def OnApplyFiducial(self, event=None):
         pipeline = self.visFr.pipeline

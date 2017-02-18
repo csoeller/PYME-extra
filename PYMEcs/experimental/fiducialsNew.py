@@ -1,3 +1,5 @@
+import numpy as np
+
 class FiducialTracker:
     """
 
@@ -6,8 +8,10 @@ class FiducialTracker:
         self.visFr = visFr
         self.pipeline = visFr.pipeline
     
-        visFr.AddMenuItem('Experimental>Fiducials', 'Add fiducial track', self.OnFiducialTrack,
-                          helpText='Add fiducial track')
+        visFr.AddMenuItem('Experimental>Fiducials', 'Add mean fiducial track', self.OnFiducialTrack,
+                          helpText='Add mean fiducial track')
+        visFr.AddMenuItem('Experimental>Fiducials', "Plot Fiducial Track", self.OnPlotFiducial,
+                          helpText='Plot mean fiducial tracks for all available dims')
 
     def OnFiducialTrack(self, event=None):
         """
@@ -15,9 +19,7 @@ class FiducialTracker:
         """
         from PYMEcs.recipes import localisations
 
-        fTracker = localisations.FiducialTrack()
-        # set trait defaults for our specific application
-        fTracker.filterMethod = 'Gaussian'
+        fTracker = localisations.FiducialTrack(filterMethod = 'Gaussian')
         if fTracker.configure_traits(kind='modal'):
             namespace = {fTracker.inputName: self.pipeline}
             fTracker.execute(namespace)
@@ -28,6 +30,18 @@ class FiducialTracker:
                 except:
                     pass
 
+    def OnPlotFiducial(self, event):
+        pipeline = self.visFr.pipeline
+        t = pipeline['t']
+        x = pipeline['fiducial_x']
+        y = pipeline['fiducial_y']
+        tu,idx = np.unique(t.astype('int'), return_index=True)
+        xu = x[idx]
+        yu = y[idx]
+        import matplotlib.pyplot as plt
+        plt.figure()
+        plt.plot(tu, xu)
+        plt.plot(tu, yu)
 
 def Plug(visFr):
     """Plugs this module into the gui"""

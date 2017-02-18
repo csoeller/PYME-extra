@@ -8,18 +8,20 @@ from PYME.IO import tabular
 @register_module('FiducialTrack')
 class FiducialTrack(ModuleBase):
     """
-    Performs DBSCAN clustering on input dictionary
+    Extract average fiducial track from input pipeline
 
     Parameters
     ----------
 
-        searchRadius: search radius for clustering
-        minPtsForCore: number of points within SearchRadius required for a given point to be considered a core point
+        radiusMultiplier: this number is multiplied with error_x to obtain search radius for clustering
+        timeWindow: the window along the time dimension used for clustering
+        filterScale: the size of the filter kernel used to smooth the resulting average fiducial track
+        filterMethod: enumrated choice of filter methods for smoothing operation (Gaussian, Median or Uniform kernel)
 
     Notes
     -----
 
-    See `sklearn.cluster.dbscan` for more details about the underlying algorithm and parameter meanings.
+    Output is a new pipeline with added fiducial_x, fiducial_y columns
 
     """
     import PYMEcs.Analysis.trackFiducials as tfs
@@ -29,7 +31,6 @@ class FiducialTrack(ModuleBase):
     timeWindow = Int(25)
     filterScale = Float(11)
     filterMethod = Enum(tfs.FILTER_FUNCS.keys())
-    
 
     outputName = Output('fiducialAdded')
 
@@ -44,7 +45,7 @@ class FiducialTrack(ModuleBase):
                                               timeWindow=self.timeWindow, filter=self.filterMethod,
                                               filterScale=self.filterScale)
 
-        # shift dbscan labels up by one to match existing convention that a clumpID of 0 corresponds to unclumped
+        # add tracks for all calculated dims to output
         for dim in tracks.keys():
             mapped.addColumn('fiducial_%s' % dim, tracks[dim])
 

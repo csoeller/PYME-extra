@@ -40,16 +40,15 @@ class ClusterTracker:
         recipe module.
 
         Args are user defined through GUI
-            eps: search radius for clustering
-            min_points: number of points within eps required for a given point to be considered a core point
+            searchRadius: search radius for clustering
+            minClumpSize: number of points within eps required for a given point to be considered a core point
 
+        This version is generally used to identify clumps identifying fiduciaries and therefore the
+        default searchRadius is set fairly generous.
         """
         from PYME.recipes import localisations
 
-        clumper = localisations.DBSCANClustering()
-        # set trait defaults for our specific application
-        clumper.minClumpSize = 50
-        clumper.searchRadius = 20.0
+        clumper = localisations.DBSCANClustering(minClumpSize = 50, searchRadius = 20.0)
         if clumper.configure_traits(kind='modal'):
             namespace = {clumper.inputName: self.pipeline}
             clumper.execute(namespace)
@@ -79,25 +78,27 @@ class ClusterTracker:
 
     def OnShowTracks(self, event=None):
         import matplotlib.pyplot as plt
-        plt.figure()
-        for entry in self.clusterTracks:
-            t,x,y = entry
-            plt.plot(t,zshift(x))
-        plt.figure()
-        for entry in self.clusterTracks:
-            t,x,y = entry
-            plt.plot(t,zshift(y))
+        if len(self.clusterTracks) > 0:
+            plt.figure()
+            for entry in self.clusterTracks:
+                t,x,y = entry
+                plt.plot(t,zshift(x))
+            plt.figure()
+            for entry in self.clusterTracks:
+                t,x,y = entry
+                plt.plot(t,zshift(y))
 
     def OnShowTracksFiltered(self, event=None):
         import matplotlib.pyplot as plt
-        plt.figure()
-        for entry in self.clusterTracks:
-            t,x,y = entry
-            plt.plot(t,myfilter(zshift(x)))
-        plt.figure()
-        for entry in self.clusterTracks:
-            t,x,y = entry
-            plt.plot(t,myfilter(zshift(y)))
+        if len(self.clusterTracks) > 0:
+            plt.figure()
+            for entry in self.clusterTracks:
+                t,x,y = entry
+                plt.plot(t,myfilter(zshift(x)))
+            plt.figure()
+            for entry in self.clusterTracks:
+                t,x,y = entry
+                plt.plot(t,myfilter(zshift(y)))
 
     def OnClearTracks(self, event=None):
         self.clusterTracks = []

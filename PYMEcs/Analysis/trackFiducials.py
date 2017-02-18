@@ -5,6 +5,14 @@ from collections import OrderedDict
 import logging
 logger = logging.getLogger(__name__)
 
+# this is just a slightly cleaned up version of the core code of
+# Kenny's fiducial tracker from PYMEnf
+
+# currently only does x and y dims
+
+# in this version we enforce that the returned fiducial track
+# starts out of zero
+
 def foffset(t,ft,navg=100):
     tu,idx = np.unique(t.astype('int'), return_index=True)
     fu = ft[idx]
@@ -28,20 +36,19 @@ FILTER_FUNCS = {
     'Median' : makeFilter(ndimage.median_filter)
     } 
 
-def extractAverageTrajectory(pipeline, clumpRadiusVar = 'error_x', clumpRadiusMultiplier=5.0, 
+def extractAverageTrajectory(ds, clumpRadiusVar = 'error_x', clumpRadiusMultiplier=5.0, 
                                   timeWindow=25, filter='Gaussian', filterScale=10.0):
                                       
     import PYME.Analysis.points.DeClump.deClump as deClump
-    from scipy.optimize import fmin
     #track beads through frames
     if clumpRadiusVar == '1.0':
-        delta_x = 0*pipeline['x'] + clumpRadiusMultiplier
+        delta_x = 0*ds['x'] + clumpRadiusMultiplier
     else:
-        delta_x = clumpRadiusMultiplier*pipeline[clumpRadiusVar]
+        delta_x = clumpRadiusMultiplier*ds[clumpRadiusVar]
         
-    t = pipeline['t'].astype('i')
-    x = pipeline['x'].astype('f4')
-    y = pipeline['y'].astype('f4')
+    t = ds['t'].astype('i')
+    x = ds['x'].astype('f4')
+    y = ds['y'].astype('f4')
     delta_x = delta_x.astype('f4')
     
     I = np.argsort(t)
@@ -91,8 +98,6 @@ def extractAverageTrajectory(pipeline, clumpRadiusVar = 'error_x', clumpRadiusMu
         m_adj = meas + np.hstack([[0], p])[:,None]
         
         return np.nansum(np.nanvar(m_adj, axis=0))
-        
-    #print x_f.shape, np.hstack([[0], np.random.randn(x_f.shape[0]-1)]).shape
         
     def _align(meas, tol=.1):
         n_iters = 0
