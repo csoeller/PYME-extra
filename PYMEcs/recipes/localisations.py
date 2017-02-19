@@ -5,6 +5,9 @@ import numpy as np
 import pandas as pd
 from PYME.IO import tabular
 
+import logging
+logger = logging.getLogger(__file__)
+
 @register_module('FiducialTrack')
 class FiducialTrack(ModuleBase):
     """
@@ -60,3 +63,20 @@ class FiducialTrack(ModuleBase):
     @property
     def hide_in_overview(self):
         return ['columns']
+
+@register_module('FiducialApply')
+class FiducialApply(ModuleBase):
+    inputName = Input('filtered')
+    outputName = Output('fiducialApplied')
+
+    def execute(self, namespace):
+        inp = namespace[self.inputName]
+        mapped = tabular.mappingFilter(inp)
+
+        for dim in ['x','y','z']:
+            try:
+                mapped.addColumn(dim, inp[dim]-inp['fiducial_%s' % dim])
+            except:
+                logger.warn('Could not set dim %s' % dim)
+
+        namespace[self.outputName] = mapped
