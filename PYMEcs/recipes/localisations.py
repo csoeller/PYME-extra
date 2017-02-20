@@ -80,3 +80,21 @@ class FiducialApply(ModuleBase):
                 logger.warn('Could not set dim %s' % dim)
 
         namespace[self.outputName] = mapped
+
+@register_module('QindexScale')
+class QindexScale(ModuleBase):
+    inputName = Input('qindex')
+    outputName = Output('qindex-calibrated')
+    qindexValue = Float(1.0)
+    NEquivalent = Float(1.0)
+
+    def execute(self, namespace):
+        inp = namespace[self.inputName]
+        mapped = tabular.mappingFilter(inp)
+
+        scaled = inp['qIndex']
+        qigood = inp['qIndex'] > 0
+        scaled[qigood] = inp['qIndex'][qigood] * self.NEquivalent / self.qindexValue
+
+        mapped.addColumn('qIndexCalibrated', scaled)
+        namespace[self.outputName] = mapped
