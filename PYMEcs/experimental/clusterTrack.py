@@ -46,7 +46,7 @@ class ClusterTracker:
         This version is generally used to identify clumps identifying fiduciaries and therefore the
         default searchRadius is set fairly generous.
         """
-        from PYME.recipes import localisations
+        from PYMEcs.recipes import localisations
 
         clumper = localisations.DBSCANClustering(minClumpSize = 50, searchRadius = 20.0)
         if clumper.configure_traits(kind='modal'):
@@ -57,7 +57,7 @@ class ClusterTracker:
 
     def OnTrackClumps(self, event=None):
         pipeline = self.pipeline
-        from PYME.recipes import localisations
+        from PYMEcs.recipes import localisations
         clumper = localisations.DBSCANClustering()
         clusterID = clumper.outputName
 
