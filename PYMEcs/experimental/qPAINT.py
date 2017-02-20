@@ -16,9 +16,11 @@ class QPCalc:
 
         visFr.AddMenuItem('Experimental>qPAINT', 'objID by DBSCAN clumping', self.OnClumpObjects,
                           helpText='Calculate objID using DBSCAN algorithm')
-        visFr.AddMenuItem('Experimental>qPAINT', "Measure nonzero object ID dark times",self.OnMeasure)
-        visFr.AddMenuItem('Experimental>qPAINT', "Plot Qindex histogram",self.OnQindexHist)
-        visFr.AddMenuItem('Experimental>qPAINT', "Calibrate Qindex",self.OnQindexCalibrate)
+        visFr.AddMenuItem('Experimental>qPAINT', "Measure nonzero object ID dark times",self.OnMeasureTau)
+        visFr.AddMenuItem('Experimental>qPAINT', "Measure nonzero object ID volumes (area for 2D data)",self.OnMeasureVol)
+        visFr.AddMenuItem('Experimental>qPAINT', "Calibrate qIndex",self.OnQindexCalibrate)
+        visFr.AddMenuItem('Experimental>qPAINT', "Plot qIndex histogram",self.OnQindexHist)
+        visFr.AddMenuItem('Experimental>qPAINT', "Plot qIndex vs Area/Volume",self.OnPlotQIvsVol)
 
     def OnClumpObjects(self, event=None):
         """
@@ -32,7 +34,7 @@ class QPCalc:
         This version is generally used to identify clumps identifying fiduciaries and therefore the
         default searchRadius is set fairly generous.
         """
-        from PYME.recipes import localisations
+        from PYMEcs.recipes import localisations
 
         clumper = localisations.DBSCANClustering(minClumpSize = 20, searchRadius = 20.0)
         if clumper.configure_traits(kind='modal'):
@@ -41,7 +43,7 @@ class QPCalc:
 
             self.pipeline.addColumn('objectID', namespace[clumper.outputName]['dbscanClumpID'])
 
-    def OnMeasure(self, event):
+    def OnMeasureTau(self, event):
         from PYMEcs.Analysis import fitDarkTimes
 
         # chans = self.pipeline.colourFilter.getColourChans()
@@ -57,6 +59,17 @@ class QPCalc:
 
         # pipeline.Rebuild()
 
+    def OnMeasureVol(self, event):
+        from PYMEcs.recipes import localisations
+
+        VolMeasurer = localisations.ObjectVolume()
+        if VolMeasurer.configure_traits(kind='modal'):
+            # we call this with the pipeline to allow filtering etc
+            namespace = {VolMeasurer.inputName: self.pipeline}
+            VolMeasurer.execute(namespace)
+
+            self.pipeline.addColumn('volumes', namespace[VolMeasurer.outputName]['volumes'])
+        
     def OnQindexHist(self, event):
         ids, idx = np.unique(self.pipeline['objectID'].astype('int'), return_index=True)
         try:
@@ -91,6 +104,26 @@ class QPCalc:
 
             self.pipeline.addColumn('qIndexCalibrated', namespace[QIScaler.outputName]['qIndexCalibrated'])
         
+
+    def OnPlotQIvsVol(self, event):
+        if 'qIndexCalibrated' in self.pipeline.keys():
+            qi = self.pipeline['qIndexCalibrated']
+        else:
+            qi = self.pipeline['qIndex']
+
+        ids, idx = np.unique(self.pipeline['objectID'], return_index=True)
+        qiu = qi[idx]
+        vols = self.pipeline['volumes'][idx]
+        
+        import matplotlib.pyplot as plt
+        plt.figure()        
+        plt.scatter(qiu, vols)
+        if 'qIndexCalibrated' in self.pipeline.keys():
+            plt.xlabel('Calibrated qIndex')
+        else:
+            plt.xlabel('qIndex (a.u.)')
+        plt.ylabel('Area (nm^2)')
+
 def Plug(visFr):
     """Plugs this module into the gui"""
     visFr.qPAINTCalc = QPCalc(visFr)
