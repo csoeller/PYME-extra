@@ -1,3 +1,4 @@
+import wx
 import numpy as np
 import sys
 from scipy import ndimage
@@ -13,14 +14,19 @@ class QPCalc:
         self.visFr = visFr
         self.pipeline = visFr.pipeline
         self.qpMeasurements = None
+        self.measurements = None
 
-        visFr.AddMenuItem('Experimental>qPAINT', 'objID by DBSCAN clumping', self.OnClumpObjects,
+        visFr.AddMenuItem('qPAINT', 'Set objIDs by DBSCAN clumping', self.OnClumpObjects,
                           helpText='Calculate objID using DBSCAN algorithm')
-        visFr.AddMenuItem('Experimental>qPAINT', "Measure nonzero object ID dark times",self.OnMeasureTau)
-        visFr.AddMenuItem('Experimental>qPAINT', "Measure nonzero object ID volumes (area for 2D data)",self.OnMeasureVol)
-        visFr.AddMenuItem('Experimental>qPAINT', "Calibrate qIndex",self.OnQindexCalibrate)
-        visFr.AddMenuItem('Experimental>qPAINT', "Plot qIndex histogram",self.OnQindexHist)
-        visFr.AddMenuItem('Experimental>qPAINT', "Plot qIndex vs Area/Volume",self.OnPlotQIvsVol)
+        visFr.AddMenuItem('qPAINT', "Set driftpars from image",self.OnSetDriftPars)
+        visFr.AddMenuItem('qPAINT', "Set objIDs from image",self.OnGetIDsfromImage)
+        visFr.AddMenuItem('qPAINT', "Get Area from Label Image",self.OnAreaFromLabels)
+        visFr.AddMenuItem('qPAINT', "Measure object ID dark times",self.OnMeasureTau)
+        visFr.AddMenuItem('qPAINT', "Measure object ID volumes (area for 2D) from convex hull",self.OnMeasureVol)
+        visFr.AddMenuItem('qPAINT', "Calibrate qIndex",self.OnQindexCalibrate)
+        visFr.AddMenuItem('qPAINT', "Plot qIndex histogram",self.OnQindexHist)
+        visFr.AddMenuItem('qPAINT', "Plot qIndex vs Area/Volume",self.OnPlotQIvsVol)
+        visFr.AddMenuItem('qPAINT', "qDensity - qIndex to area ratio",self.OnQDensityCalc)
 
     def OnClumpObjects(self, event=None):
         """
@@ -42,6 +48,91 @@ class QPCalc:
             clumper.execute(namespace)
 
             self.pipeline.addColumn('objectID', namespace[clumper.outputName]['dbscanClumpID'])
+
+    def OnGetIDsfromImage(self, event):
+        from PYME.DSView import dsviewer
+
+        visFr = self.visFr
+        pipeline = visFr.pipeline
+
+        dlg = wx.SingleChoiceDialog(
+                None, 'choose the image which contains labels', 'Use Segmentation',
+                dsviewer.openViewers.keys(),
+                wx.CHOICEDLG_STYLE
+                )
+
+        if dlg.ShowModal() == wx.ID_OK:
+            img = dsviewer.openViewers[dlg.GetStringSelection()].image
+            
+            pixX = np.round((pipeline.filter['x'] - img.imgBounds.x0 )/img.pixelSize).astype('i')
+            pixY = np.round((pipeline.filter['y'] - img.imgBounds.y0 )/img.pixelSize).astype('i')
+
+            ind = (pixX < img.data.shape[0])*(pixY < img.data.shape[1])*(pixX >= 0)*(pixY >= 0)
+
+            ids = np.zeros_like(pixX)
+            #assume there is only one channel
+            ids[ind] = img.data[:,:,:,0].squeeze()[pixX[ind], pixY[ind]].astype('i')
+
+            numPerObject, b = np.histogram(ids, np.arange(ids.max() + 1.5) + .5)
+
+            pipeline.addColumn('objectID', ids)
+            pipeline.addColumn('NEvents', numPerObject[ids-1])
+
+            pipeline.Rebuild()
+
+        dlg.Destroy()
+
+    def OnSetDriftPars(self, event):
+        from PYME.DSView import dsviewer
+
+        dlg = wx.SingleChoiceDialog(
+                None, 'choose the image which contains drift info', 'Use Segmentation',
+                dsviewer.openViewers.keys(),
+                wx.CHOICEDLG_STYLE
+                )
+        if dlg.ShowModal() == wx.ID_OK:
+            dpn = self.visFr.driftPane
+            img = dsviewer.openViewers[dlg.GetStringSelection()].image
+            dpn.tXExpr.SetValue(img.mdh['DriftCorrection.ExprX'])
+            dpn.tYExpr.SetValue(img.mdh['DriftCorrection.ExprY'])
+            dpn.tZExpr.SetValue(img.mdh['DriftCorrection.ExprZ'])
+            dpn.OnDriftExprChange(None)
+            destp = dpn.dp.driftCorrParams
+            srcp = img.mdh['DriftCorrection.Parameters']
+            for key in destp.keys():
+                if key.startswith(('a','b')):
+                    destp[key] = srcp[key]
+            dpn.OnDriftApply(None)
+
+    def OnAreaFromLabels(self, event):
+        from PYME.DSView import dsviewer
+
+        dlg = wx.SingleChoiceDialog(
+                None, 'choose the image which contains drift info', 'Use Segmentation',
+                dsviewer.openViewers.keys(),
+                wx.CHOICEDLG_STYLE
+                )
+        if dlg.ShowModal() == wx.ID_OK:
+            from PYME.recipes.measurement import Measure2D
+
+            img = dsviewer.openViewers[dlg.GetStringSelection()].image
+            # execute the measure2D module as a mini-recipe
+            MeasureIt = Measure2D(measureContour=False)
+            namespace = {MeasureIt.inputLabels: img, MeasureIt.inputIntensity: img}
+            MeasureIt.execute(namespace)
+            # save the measurements for further use
+            self.measurements = namespace[MeasureIt.outputName]
+            # make a new objAreas column for the pipeline
+            meas = self.measurements
+            areas = meas['area'] * float(img.mdh['voxelsize.x'])*float(img.mdh['voxelsize.y'])
+            labels = meas['label'].astype('int')
+            abyl = np.zeros(labels.max()+1)
+            abyl[labels] = areas
+            objIDs = self.pipeline['objectID'].astype('int')
+            objAreas = np.zeros_like(objIDs,dtype='float')
+            objAreas[objIDs>0] = abyl[objIDs[objIDs>0]]
+            # enter the new column into the pipeline
+            self.pipeline.addColumn('objArea',objAreas)
 
     def OnMeasureTau(self, event):
         from PYMEcs.Analysis import fitDarkTimes
@@ -70,6 +161,18 @@ class QPCalc:
 
             self.pipeline.addColumn('volumes', namespace[VolMeasurer.outputName]['volumes'])
         
+    def OnQDensityCalc(self, event):
+        if 'qIndexCalibrated' in self.pipeline.keys():
+            qi = self.pipeline['qIndexCalibrated']
+        else:
+            qi = self.pipeline['qIndex']
+        
+        objAreas = self.pipeline['objArea']
+        valid = (qi > 0)*(objAreas > 0)
+        objDensity = np.zeros_like(objAreas)
+        objDensity[valid] = qi[valid]/objAreas[valid]
+        self.pipeline.addColumn('objDensity',objDensity)
+
     def OnQindexHist(self, event):
         ids, idx = np.unique(self.pipeline['objectID'].astype('int'), return_index=True)
         try:
