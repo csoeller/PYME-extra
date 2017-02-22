@@ -1,6 +1,14 @@
 # README #
 
-Plugins and associated code for PYME
+Plugins and associated code for PYME.
+
+This is currently used as a testbed for
+
+* the new plugin system
+* the recipe based processing of SMLM data
+* new ideas for data processing
+
+Once sufficiiently mature functionality can migrate into more permanent PYME code if deemed suitable.
 
 ### Installation ###
 
