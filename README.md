@@ -26,6 +26,7 @@ In my file (.PYME/plugins/visgui/myplugins.txt) I currently have
 PYMEcs.experimental.clusterTrack
 PYMEcs.experimental.fiducials
 PYMEcs.experimental.fiducialsNew
+PYMEcs.experimental.qPAINT
 
 ```
 
