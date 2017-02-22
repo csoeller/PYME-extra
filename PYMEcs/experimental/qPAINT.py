@@ -6,6 +6,12 @@ from scipy import ndimage
 import logging
 logger = logging.getLogger(__file__)
 
+def uniqueByID(ids,column):
+    uids, idx = np.unique(ids, return_index=True)
+    ucol = column[idx]
+    valid = uids > 0
+    return uids[valid], ucol[valid]
+
 class QPCalc:
     """
 
@@ -26,6 +32,7 @@ class QPCalc:
         visFr.AddMenuItem('qPAINT', "Calibrate qIndex",self.OnQindexCalibrate)
         visFr.AddMenuItem('qPAINT', "Plot qIndex histogram",self.OnQindexHist)
         visFr.AddMenuItem('qPAINT', "Plot qIndex vs Area/Volume",self.OnPlotQIvsVol)
+        visFr.AddMenuItem('qPAINT', "Scatter plot by ID",self.OnScatterByID)
         visFr.AddMenuItem('qPAINT', "qDensity - qIndex to area ratio",self.OnQDensityCalc)
 
     def OnClumpObjects(self, event=None):
@@ -124,7 +131,8 @@ class QPCalc:
             self.measurements = namespace[MeasureIt.outputName]
             # make a new objAreas column for the pipeline
             meas = self.measurements
-            areas = meas['area'] * float(img.mdh['voxelsize.x'])*float(img.mdh['voxelsize.y'])
+            # currently the scale of areas is in 1000 nm^2
+            areas = meas['area'] * float(img.mdh['voxelsize.x'])*float(img.mdh['voxelsize.y'])*1e3
             labels = meas['label'].astype('int')
             abyl = np.zeros(labels.max()+1)
             abyl[labels] = areas
@@ -152,14 +160,14 @@ class QPCalc:
 
     def OnMeasureVol(self, event):
         from PYMEcs.recipes import localisations
-
+        # fixme: this is currently 2D only but allows straightforward extension to 3D
         VolMeasurer = localisations.ObjectVolume()
         if VolMeasurer.configure_traits(kind='modal'):
             # we call this with the pipeline to allow filtering etc
             namespace = {VolMeasurer.inputName: self.pipeline}
             VolMeasurer.execute(namespace)
-
-            self.pipeline.addColumn('volumes', namespace[VolMeasurer.outputName]['volumes'])
+            # FIXME: scaling factor is correct for 2D only
+            self.pipeline.addColumn('volumes', namespace[VolMeasurer.outputName]['volumes']/1e3) # are in 1000 nm^2
         
     def OnQDensityCalc(self, event):
         if 'qIndexCalibrated' in self.pipeline.keys():
@@ -213,20 +221,34 @@ class QPCalc:
             qi = self.pipeline['qIndexCalibrated']
         else:
             qi = self.pipeline['qIndex']
+        if 'objArea' in self.pipeline.keys():
+            vols = self.pipeline['objArea']
+        else:
+            vols = self.pipeline['volumes']
 
-        ids, idx = np.unique(self.pipeline['objectID'], return_index=True)
-        qiu = qi[idx]
-        vols = self.pipeline['volumes'][idx]
-        
+        ids = self.pipeline['objectID']
+        uids, uqi = uniqueByID(ids, qi)
+        uids, uvols =  uniqueByID(ids, vols)
+
         import matplotlib.pyplot as plt
         plt.figure()        
-        plt.scatter(qiu, vols)
+        plt.scatter(uqi, uvols)
         if 'qIndexCalibrated' in self.pipeline.keys():
             plt.xlabel('Calibrated qIndex')
         else:
             plt.xlabel('qIndex (a.u.)')
-        plt.ylabel('Area (nm^2)')
+        plt.ylabel('Area (1000 nm^2)')
 
+    def OnScatterByID(self, event):
+        from PYMEcs.recipes import localisations
+
+        ScatterbyID = localisations.ScatterbyID()
+        if ScatterbyID.configure_traits(kind='modal'):
+            # we call this with the pipeline to allow filtering etc
+            namespace = {ScatterbyID.inputName: self.pipeline}
+            ScatterbyID.execute(namespace)
+        
+        
 def Plug(visFr):
     """Plugs this module into the gui"""
     visFr.qPAINTCalc = QPCalc(visFr)

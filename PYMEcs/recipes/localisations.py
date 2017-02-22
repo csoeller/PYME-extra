@@ -179,3 +179,34 @@ class DBSCANClustering(ModuleBase):
     @property
     def hide_in_overview(self):
         return ['columns']
+
+def uniqueByID(ids,column):
+    uids, idx = np.unique(ids.astype('int'), return_index=True)
+    ucol = column[idx]
+    valid = uids > 0
+    return uids[valid], ucol[valid]
+
+@register_module('ScatterbyID')         
+class ScatterbyID(ModuleBase):
+    """Take just certain columns of a variable"""
+    inputName = Input('measurements')
+    IDkey = CStr('objectID')
+    xkey = CStr('qIndex')
+    ykey = CStr('objArea')
+    outputName = Output('outGraph')
+    
+    def execute(self, namespace):
+        meas = namespace[self.inputName]
+        ids = meas[self.IDkey]
+        uid, x = uniqueByID(ids,meas[self.xkey])
+        uid, y = uniqueByID(ids,meas[self.ykey])
+        
+        import pylab
+        pylab.figure()
+        pylab.scatter(x,y)
+        
+        pylab.grid()
+        pylab.xlabel(self.xkey)
+        pylab.ylabel(self.ykey)
+        #namespace[self.outputName] = out
+
