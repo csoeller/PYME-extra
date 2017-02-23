@@ -30,10 +30,11 @@ class QPCalc:
         visFr.AddMenuItem('qPAINT', "Measure object ID dark times",self.OnMeasureTau)
         visFr.AddMenuItem('qPAINT', "Measure object ID volumes (area for 2D) from convex hull",self.OnMeasureVol)
         visFr.AddMenuItem('qPAINT', "Calibrate qIndex",self.OnQindexCalibrate)
-        visFr.AddMenuItem('qPAINT', "Plot qIndex histogram",self.OnQindexHist)
-        visFr.AddMenuItem('qPAINT', "Plot qIndex vs Area/Volume",self.OnPlotQIvsVol)
-        visFr.AddMenuItem('qPAINT', "Scatter plot by ID",self.OnScatterByID)
         visFr.AddMenuItem('qPAINT', "qDensity - qIndex to area ratio",self.OnQDensityCalc)
+        visFr.AddMenuItem('qPAINT', "Plot qIndex histogram",self.OnQindexHist)
+        # visFr.AddMenuItem('qPAINT', "Plot qIndex vs Area/Volume",self.OnPlotQIvsVol)
+        visFr.AddMenuItem('qPAINT', "Scatter plot by ID",self.OnScatterByID)
+        visFr.AddMenuItem('qPAINT', "Save Measurements",self.OnSaveMeasurements)
 
     def OnClumpObjects(self, event=None):
         """
@@ -167,7 +168,7 @@ class QPCalc:
             namespace = {VolMeasurer.inputName: self.pipeline}
             VolMeasurer.execute(namespace)
             # FIXME: scaling factor is correct for 2D only
-            self.pipeline.addColumn('volumes', namespace[VolMeasurer.outputName]['volumes']/1e3) # are in 1000 nm^2
+            self.pipeline.addColumn('volume', namespace[VolMeasurer.outputName]['volume']/1e3) # are in 1000 nm^2
         
     def OnQDensityCalc(self, event):
         if 'qIndexCalibrated' in self.pipeline.keys():
@@ -224,7 +225,7 @@ class QPCalc:
         if 'objArea' in self.pipeline.keys():
             vols = self.pipeline['objArea']
         else:
-            vols = self.pipeline['volumes']
+            vols = self.pipeline['volume']
 
         ids = self.pipeline['objectID']
         uids, uqi = uniqueByID(ids, qi)
@@ -242,13 +243,42 @@ class QPCalc:
     def OnScatterByID(self, event):
         from PYMEcs.recipes import localisations
 
-        ScatterbyID = localisations.ScatterbyID()
+        ScatterbyID = localisations.ScatterbyID(self)
+        self.namespace = {ScatterbyID.inputName: self.pipeline}
         if ScatterbyID.configure_traits(kind='modal'):
             # we call this with the pipeline to allow filtering etc
-            namespace = {ScatterbyID.inputName: self.pipeline}
-            ScatterbyID.execute(namespace)
+            ScatterbyID.execute(self.namespace)
+
+    def OnSaveMeasurements(self,event):
+        from PYME.recipes import runRecipe
+
+        if self.measurements is not None:
+            filename = wx.FileSelector('Save Area measurements as ...', 
+                                       wildcard="CSV files (*.csv)|*.csv|Excell files (*.xlsx)|*.xlsx|HDF5 files (*.hdf)|*.hdf", 
+                                       flags = wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
+                                   
+            if not filename == '':
+                runRecipe.saveOutput(self.measurements, filename)
         
-        
+        if self.qpMeasurements is not None:
+            fdialog = wx.FileDialog(None, 'Save qPaint measurements ...',
+                                    wildcard='Numpy array|*.npy|Tab formatted text|*.txt', style=wx.SAVE)
+            succ = fdialog.ShowModal()
+            if (succ == wx.ID_OK):
+                outFilename = fdialog.GetPath().encode()
+
+                if outFilename.endswith('.txt'):
+                    of = open(outFilename, 'w')
+                    of.write('\t'.join(self.qpMeasurements.dtype.names) + '\n')
+
+                    for obj in self.qpMeasurements:
+                        of.write('\t'.join([repr(v) for v in obj]) + '\n')
+                    of.close()
+
+                else:
+                    np.save(outFilename, self.qpMeasurements) # we are assuming single channel here!
+
+            
 def Plug(visFr):
     """Plugs this module into the gui"""
     visFr.qPAINTCalc = QPCalc(visFr)

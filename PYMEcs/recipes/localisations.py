@@ -210,3 +210,32 @@ class ScatterbyID(ModuleBase):
         pylab.ylabel(self.ykey)
         #namespace[self.outputName] = out
 
+    @property
+    def _key_choices(self):
+        #try and find the available column names
+        try:
+            return self._parent.namespace[self.inputName].keys()
+        except:
+            return []
+
+    @property
+    def pipeline_view(self):
+        from traitsui.api import View, Group, Item
+        from PYME.ui.custom_traits_editors import CBEditor
+
+        modname = 'mylabel'
+
+        return View(Group(Item('parameter', editor=CBEditor(choices=self._key_choices)), label=modname))
+
+    @property
+    def default_view(self):
+        from traitsui.api import View, Group, Item
+        from PYME.ui.custom_traits_editors import CBEditor
+
+        return View(Item('inputName', editor=CBEditor(choices=self._namespace_keys)),
+                    Item('_'),
+                    Item('IDkey', editor=CBEditor(choices=self._key_choices)),
+                    Item('xkey', editor=CBEditor(choices=self._key_choices)),
+                    Item('ykey', editor=CBEditor(choices=self._key_choices)),
+                    Item('_'),
+                    Item('outputName'), buttons=['OK'])
