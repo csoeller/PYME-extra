@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 # in this version we enforce that the returned fiducial track
 # starts out of zero
 
-def foffset(t,ft,navg=100):
+def foffset(t,ft,navg=50):
     tu,idx = np.unique(t.astype('int'), return_index=True)
     fu = ft[idx]
     offs = fu[0:min(navg,fu.shape[0])].mean()

@@ -5,9 +5,11 @@ from scipy import ndimage
 import logging
 logger = logging.getLogger(__file__)
 
-def zshift(data,navg=100):
-    nm = min(navg,data.shape[0])
-    offset = data[0:nm].mean()
+def zshift(t,data,navg=50):
+    ti,idx = np.unique(t.astype('int'),return_index=True)
+    di = data[idx]
+    nm = min(navg,di.shape[0])
+    offset = di[0:nm].mean()
     return data - offset
 
 def myfilter(d,width=11):
@@ -82,11 +84,11 @@ class ClusterTracker:
             plt.figure()
             for entry in self.clusterTracks:
                 t,x,y = entry
-                plt.plot(t,zshift(x))
+                plt.plot(t,zshift(t,x))
             plt.figure()
             for entry in self.clusterTracks:
                 t,x,y = entry
-                plt.plot(t,zshift(y))
+                plt.plot(t,zshift(t,y))
 
     def OnShowTracksFiltered(self, event=None):
         import matplotlib.pyplot as plt
@@ -94,11 +96,11 @@ class ClusterTracker:
             plt.figure()
             for entry in self.clusterTracks:
                 t,x,y = entry
-                plt.plot(t,myfilter(zshift(x)))
+                plt.plot(t,myfilter(zshift(t,x)))
             plt.figure()
             for entry in self.clusterTracks:
                 t,x,y = entry
-                plt.plot(t,myfilter(zshift(y)))
+                plt.plot(t,myfilter(zshift(t,y)))
 
     def OnClearTracks(self, event=None):
         self.clusterTracks = []
