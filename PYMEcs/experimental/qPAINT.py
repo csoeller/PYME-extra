@@ -22,15 +22,22 @@ class QPCalc:
         self.qpMeasurements = None
         self.measurements = None
 
-        visFr.AddMenuItem('qPAINT', 'Set objIDs by DBSCAN clumping', self.OnClumpObjects,
-                          helpText='Calculate objID using DBSCAN algorithm')
         visFr.AddMenuItem('qPAINT', "Set driftpars from image",self.OnSetDriftPars)
         visFr.AddMenuItem('qPAINT', "Set objIDs from image",self.OnGetIDsfromImage)
         visFr.AddMenuItem('qPAINT', "Get Area from Label Image",self.OnAreaFromLabels)
         visFr.AddMenuItem('qPAINT', "Measure object ID dark times",self.OnMeasureTau)
-        visFr.AddMenuItem('qPAINT', "Measure object ID volumes (area for 2D) from convex hull",self.OnMeasureVol)
+        visFr.AddMenuItem('qPAINT', "Select Image and set drift, measure dark time and areas",self.OnSelectImgAndProcess)
+
+        visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
+        visFr.AddMenuItem('qPAINT', 'Points based: Set objIDs by DBSCAN clumping', self.OnClumpObjects,
+                          helpText='Calculate objID using DBSCAN algorithm')
+        visFr.AddMenuItem('qPAINT', "Points based: Measure object ID volumes (area for 2D) from convex hull",self.OnMeasureVol)
+
+        visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
         visFr.AddMenuItem('qPAINT', "Calibrate qIndex",self.OnQindexCalibrate)
         visFr.AddMenuItem('qPAINT', "qDensity - qIndex to area ratio",self.OnQDensityCalc)
+
+        visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
         visFr.AddMenuItem('qPAINT', "Plot qIndex histogram",self.OnQindexHist)
         # visFr.AddMenuItem('qPAINT', "Plot qIndex vs Area/Volume",self.OnPlotQIvsVol)
         visFr.AddMenuItem('qPAINT', "Scatter plot by ID",self.OnScatterByID)
@@ -57,21 +64,23 @@ class QPCalc:
 
             self.pipeline.addColumn('objectID', namespace[clumper.outputName]['dbscanClumpID'])
 
-    def OnGetIDsfromImage(self, event):
+    def OnGetIDsfromImage(self, event, img=None):
         from PYME.DSView import dsviewer
 
         visFr = self.visFr
         pipeline = visFr.pipeline
 
-        dlg = wx.SingleChoiceDialog(
-                None, 'choose the image which contains labels', 'Use Segmentation',
+        if img is None:
+            dlg = wx.SingleChoiceDialog(
+                None, 'choose the image which contains drift info', 'Use Segmentation',
                 dsviewer.openViewers.keys(),
                 wx.CHOICEDLG_STYLE
                 )
+            if dlg.ShowModal() == wx.ID_OK:
+                img = dsviewer.openViewers[dlg.GetStringSelection()].image
+            dlg.Destroy()
 
-        if dlg.ShowModal() == wx.ID_OK:
-            img = dsviewer.openViewers[dlg.GetStringSelection()].image
-            
+        if img is not None:            
             pixX = np.round((pipeline.filter['x'] - img.imgBounds.x0 )/img.pixelSize).astype('i')
             pixY = np.round((pipeline.filter['y'] - img.imgBounds.y0 )/img.pixelSize).astype('i')
 
@@ -86,21 +95,23 @@ class QPCalc:
             pipeline.addColumn('objectID', ids)
             pipeline.addColumn('NEvents', numPerObject[ids-1])
 
-            pipeline.Rebuild()
+            #pipeline.Rebuild()
 
-        dlg.Destroy()
-
-    def OnSetDriftPars(self, event):
+    def OnSetDriftPars(self, event, img=None):
         from PYME.DSView import dsviewer
 
-        dlg = wx.SingleChoiceDialog(
+        if img is None:
+            dlg = wx.SingleChoiceDialog(
                 None, 'choose the image which contains drift info', 'Use Segmentation',
                 dsviewer.openViewers.keys(),
                 wx.CHOICEDLG_STYLE
                 )
-        if dlg.ShowModal() == wx.ID_OK:
+            if dlg.ShowModal() == wx.ID_OK:
+                img = dsviewer.openViewers[dlg.GetStringSelection()].image
+            dlg.Destroy()
+
+        if img is not None:
             dpn = self.visFr.driftPane
-            img = dsviewer.openViewers[dlg.GetStringSelection()].image
             dpn.tXExpr.SetValue(img.mdh['DriftCorrection.ExprX'])
             dpn.tYExpr.SetValue(img.mdh['DriftCorrection.ExprY'])
             dpn.tZExpr.SetValue(img.mdh['DriftCorrection.ExprZ'])
@@ -112,18 +123,21 @@ class QPCalc:
                     destp[key] = srcp[key]
             dpn.OnDriftApply(None)
 
-    def OnAreaFromLabels(self, event):
+    def OnAreaFromLabels(self, event, img=None):
         from PYME.DSView import dsviewer
 
-        dlg = wx.SingleChoiceDialog(
+        if img is None:
+            dlg = wx.SingleChoiceDialog(
                 None, 'choose the image which contains drift info', 'Use Segmentation',
                 dsviewer.openViewers.keys(),
                 wx.CHOICEDLG_STYLE
                 )
-        if dlg.ShowModal() == wx.ID_OK:
+            if dlg.ShowModal() == wx.ID_OK:
+                img = dsviewer.openViewers[dlg.GetStringSelection()].image
+
+        if img is not None:
             from PYME.recipes.measurement import Measure2D
 
-            img = dsviewer.openViewers[dlg.GetStringSelection()].image
             # execute the measure2D module as a mini-recipe
             MeasureIt = Measure2D(measureContour=False)
             namespace = {MeasureIt.inputLabels: img, MeasureIt.inputIntensity: img}
@@ -158,6 +172,22 @@ class QPCalc:
         pipeline.addColumn('qIndex',qidx)
 
         # pipeline.Rebuild()
+
+    def OnSelectImgAndProcess(self, event):
+        from PYME.DSView import dsviewer
+        dlg = wx.SingleChoiceDialog(
+            None, 'choose the image which contains drift info', 'Use Segmentation',
+            dsviewer.openViewers.keys(),
+            wx.CHOICEDLG_STYLE
+        )
+        if dlg.ShowModal() == wx.ID_OK:
+            img = dsviewer.openViewers[dlg.GetStringSelection()].image
+            self.OnSetDriftPars(None,img=img)
+            self.OnGetIDsfromImage(None,img=img)
+            self.OnAreaFromLabels(None,img=img)
+            self.OnMeasureTau(None)
+
+        dlg.Destroy()
 
     def OnMeasureVol(self, event):
         from PYMEcs.recipes import localisations

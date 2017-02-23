@@ -214,7 +214,7 @@ class ScatterbyID(ModuleBase):
     def _key_choices(self):
         #try and find the available column names
         try:
-            return self._parent.namespace[self.inputName].keys()
+            return sorted(self._parent.namespace[self.inputName].keys())
         except:
             return []
 
