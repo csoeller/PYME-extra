@@ -22,24 +22,24 @@ class QPCalc:
         self.qpMeasurements = None
         self.measurements = None
 
-        visFr.AddMenuItem('qPAINT', "Set driftpars from image",self.OnSetDriftPars)
-        visFr.AddMenuItem('qPAINT', "Set objIDs from image",self.OnGetIDsfromImage)
-        visFr.AddMenuItem('qPAINT', "Get Area from Label Image",self.OnAreaFromLabels)
+        visFr.AddMenuItem('qPAINT', "From Image - Set driftpars",self.OnSetDriftPars)
+        visFr.AddMenuItem('qPAINT', "From Image - Set objIDs",self.OnGetIDsfromImage)
+        visFr.AddMenuItem('qPAINT', "From Image - Get Areas by ID",self.OnAreaFromLabels)
         visFr.AddMenuItem('qPAINT', "Measure object ID dark times",self.OnMeasureTau)
-        visFr.AddMenuItem('qPAINT', "Select Image and set drift, measure dark time and areas",self.OnSelectImgAndProcess)
+        visFr.AddMenuItem('qPAINT', "All in 1 go: select Image, set drift, IDs, measure qindex, areas",
+                          self.OnSelectImgAndProcess)
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
         visFr.AddMenuItem('qPAINT', 'Points based: Set objIDs by DBSCAN clumping', self.OnClumpObjects,
                           helpText='Calculate objID using DBSCAN algorithm')
-        visFr.AddMenuItem('qPAINT', "Points based: Measure object ID volumes (area for 2D) from convex hull",self.OnMeasureVol)
+        visFr.AddMenuItem('qPAINT', "Points based: Measure object ID volumes (area if 2D) by convex hull",self.OnMeasureVol)
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
         visFr.AddMenuItem('qPAINT', "Calibrate qIndex",self.OnQindexCalibrate)
-        visFr.AddMenuItem('qPAINT', "qDensity - qIndex to area ratio",self.OnQDensityCalc)
+        visFr.AddMenuItem('qPAINT', "qDensity - calculate qIndex to area ratio",self.OnQDensityCalc)
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
         visFr.AddMenuItem('qPAINT', "Plot qIndex histogram",self.OnQindexHist)
-        # visFr.AddMenuItem('qPAINT', "Plot qIndex vs Area/Volume",self.OnPlotQIvsVol)
         visFr.AddMenuItem('qPAINT', "Scatter plot by ID",self.OnScatterByID)
         visFr.AddMenuItem('qPAINT', "Save Measurements",self.OnSaveMeasurements)
 
