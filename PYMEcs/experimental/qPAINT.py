@@ -81,8 +81,8 @@ class QPCalc:
             dlg.Destroy()
 
         if img is not None:            
-            pixX = np.round((pipeline.filter['x'] - img.imgBounds.x0 )/img.pixelSize).astype('i')
-            pixY = np.round((pipeline.filter['y'] - img.imgBounds.y0 )/img.pixelSize).astype('i')
+            pixX = np.round((pipeline['x'] - img.imgBounds.x0 )/img.pixelSize).astype('i')
+            pixY = np.round((pipeline['y'] - img.imgBounds.y0 )/img.pixelSize).astype('i')
 
             ind = (pixX < img.data.shape[0])*(pixY < img.data.shape[1])*(pixX >= 0)*(pixY >= 0)
 
