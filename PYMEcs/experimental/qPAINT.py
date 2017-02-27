@@ -12,6 +12,15 @@ def uniqueByID(ids,column):
     valid = uids > 0
     return uids[valid], ucol[valid]
 
+def selectWithDialog(choices, message='select image from list', caption='Selection'):
+    dlg = wx.SingleChoiceDialog(None, message, caption, choices, wx.CHOICEDLG_STYLE)
+    if dlg.ShowModal() == wx.ID_OK:
+        item = dlg.GetStringSelection()
+    else:
+        item = None
+    dlg.Destroy()
+    return item
+
 class QPCalc:
     """
 
@@ -28,6 +37,10 @@ class QPCalc:
         visFr.AddMenuItem('qPAINT', "Measure object ID dark times",self.OnMeasureTau)
         visFr.AddMenuItem('qPAINT', "All in 1 go: select Image, set drift, IDs, measure qindex, areas",
                           self.OnSelectImgAndProcess)
+
+        visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
+        visFr.AddMenuItem('qPAINT', "Multicolour - set timed species from image",self.OnTimedSpeciesFromImage)
+        visFr.AddMenuItem('qPAINT', "Multicolour - qindex by channel",self.OnChannelMeasureTau)
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
         visFr.AddMenuItem('qPAINT', 'Points based: Set objIDs by DBSCAN clumping', self.OnClumpObjects,
@@ -71,14 +84,9 @@ class QPCalc:
         pipeline = visFr.pipeline
 
         if img is None:
-            dlg = wx.SingleChoiceDialog(
-                None, 'choose the image which contains drift info', 'Use Segmentation',
-                dsviewer.openViewers.keys(),
-                wx.CHOICEDLG_STYLE
-                )
-            if dlg.ShowModal() == wx.ID_OK:
-                img = dsviewer.openViewers[dlg.GetStringSelection()].image
-            dlg.Destroy()
+            selection = selectWithDialog(dsviewer.openViewers.keys())
+            if selection is not None:
+                img = dsviewer.openViewers[selection].image
 
         if img is not None:            
             pixX = np.round((pipeline['x'] - img.imgBounds.x0 )/img.pixelSize).astype('i')
@@ -101,14 +109,9 @@ class QPCalc:
         from PYME.DSView import dsviewer
 
         if img is None:
-            dlg = wx.SingleChoiceDialog(
-                None, 'choose the image which contains drift info', 'Use Segmentation',
-                dsviewer.openViewers.keys(),
-                wx.CHOICEDLG_STYLE
-                )
-            if dlg.ShowModal() == wx.ID_OK:
-                img = dsviewer.openViewers[dlg.GetStringSelection()].image
-            dlg.Destroy()
+            selection = selectWithDialog(dsviewer.openViewers.keys())
+            if selection is not None:
+                img = dsviewer.openViewers[selection].image
 
         if img is not None:
             dpn = self.visFr.driftPane
@@ -122,18 +125,36 @@ class QPCalc:
                 if key.startswith(('a','b')):
                     destp[key] = srcp[key]
             dpn.OnDriftApply(None)
+            dpn.OnDriftExprChange(None)
 
+    def OnTimedSpeciesFromImage(self, event, img=None):
+        from PYME.DSView import dsviewer
+        
+        if img is None:
+            selection = selectWithDialog(dsviewer.openViewers.keys())
+            if selection is not None:
+                img = dsviewer.openViewers[selection].image
+
+        if img is not None:
+            if 'TimedSpecies' in img.mdh.keys():
+                pipeline = self.visFr.pipeline
+                timedSpecies = img.mdh['TimedSpecies']
+                if pipeline.selectedDataSource is not None:
+                    pipeline.selectedDataSource.setMapping('ColourNorm', '1.0 + 0*t')
+                    for species in timedSpecies.keys():
+                        pipeline.selectedDataSource.setMapping('p_%s' % species,
+                                                               '(t>= %d)*(t<%d)' % timedSpecies[species])
+                    self.visFr.RegenFilter()
+                    self.visFr.CreateFoldPanel()
+
+                
     def OnAreaFromLabels(self, event, img=None):
         from PYME.DSView import dsviewer
 
         if img is None:
-            dlg = wx.SingleChoiceDialog(
-                None, 'choose the image which contains drift info', 'Use Segmentation',
-                dsviewer.openViewers.keys(),
-                wx.CHOICEDLG_STYLE
-                )
-            if dlg.ShowModal() == wx.ID_OK:
-                img = dsviewer.openViewers[dlg.GetStringSelection()].image
+            selection = selectWithDialog(dsviewer.openViewers.keys())
+            if selection is not None:
+                img = dsviewer.openViewers[selection].image
 
         if img is not None:
             from PYME.recipes.measurement import Measure2D
@@ -173,21 +194,36 @@ class QPCalc:
 
         # pipeline.Rebuild()
 
+    def OnChannelMeasureTau(self, event):
+        from PYMEcs.Analysis import fitDarkTimes
+
+        chan = selectWithDialog(self.pipeline.colourFilter.getColourChans())
+        if chan is None:
+            return
+
+        pipeline = self.pipeline
+        dispColor = self.pipeline.colourFilter.currentColour
+        pipeline.colourFilter.setColour(chan)
+
+        ids = np.unique(pipeline['objectID'].astype('int'))
+        
+        self.qpMeasurements, tau1, qidx, ndt = fitDarkTimes.measureObjectsByID(pipeline, set(ids))
+        pipeline.addColumn('taudark_%s' % chan,tau1)
+        pipeline.addColumn('NDarktimes_%s' % chan,ndt)
+        pipeline.addColumn('qIndex_%s' % chan,qidx)
+        # restore original display settings
+        pipeline.colourFilter.setColour(dispColor)
+
     def OnSelectImgAndProcess(self, event):
         from PYME.DSView import dsviewer
-        dlg = wx.SingleChoiceDialog(
-            None, 'choose the image which contains drift info', 'Use Segmentation',
-            dsviewer.openViewers.keys(),
-            wx.CHOICEDLG_STYLE
-        )
-        if dlg.ShowModal() == wx.ID_OK:
-            img = dsviewer.openViewers[dlg.GetStringSelection()].image
+        selection = selectWithDialog(dsviewer.openViewers.keys())
+        if selection is not None:
+            img = dsviewer.openViewers[selection].image
             self.OnSetDriftPars(None,img=img)
             self.OnGetIDsfromImage(None,img=img)
             self.OnAreaFromLabels(None,img=img)
             self.OnMeasureTau(None)
 
-        dlg.Destroy()
 
     def OnMeasureVol(self, event):
         from PYMEcs.recipes import localisations
@@ -198,7 +234,7 @@ class QPCalc:
             namespace = {VolMeasurer.inputName: self.pipeline}
             VolMeasurer.execute(namespace)
             # FIXME: scaling factor is correct for 2D only
-            self.pipeline.addColumn('volume', namespace[VolMeasurer.outputName]['volume']/1e3) # are in 1000 nm^2
+            self.pipeline.addColumn('volume', namespace[VolMeasurer.outputName]['volume']/1e3) # area in 1000 nm^2
         
     def OnQDensityCalc(self, event):
         if 'qIndexCalibrated' in self.pipeline.keys():

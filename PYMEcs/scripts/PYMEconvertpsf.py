@@ -15,6 +15,8 @@ def main():
     except ImportError:
         import pickle
 
+    # we need to trick pickle into thinking that
+    #    PYME.Acquire.MetaDataHandler is still available
     import PYME.IO.MetaDataHandler as MD
     sys.modules['PYME.Acquire.MetaDataHandler'] = MD
     with open(args.psfname,'rb') as inpfi:
