@@ -144,7 +144,9 @@ class QPCalc:
                     for species in timedSpecies.keys():
                         pipeline.selectedDataSource.setMapping('p_%s' % species,
                                                                '(t>= %d)*(t<%d)' % timedSpecies[species])
-                    self.visFr.RegenFilter()
+                        # FIXME: (1) append if exists, (2) assigning to mdh ok?
+                        pipeline.selectedDataSource.mdh['TimedSpecies'] = timedSpecies
+                    self.visFr.pipeline.Rebuild()
                     self.visFr.CreateFoldPanel()
 
                 
@@ -283,6 +285,7 @@ class QPCalc:
             self.pipeline.addColumn('qIndexCalibrated', namespace[QIScaler.outputName]['qIndexCalibrated'])
         
 
+    # superseded by OnScatterByID
     def OnPlotQIvsVol(self, event):
         if 'qIndexCalibrated' in self.pipeline.keys():
             qi = self.pipeline['qIndexCalibrated']
