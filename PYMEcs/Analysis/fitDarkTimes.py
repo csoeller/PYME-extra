@@ -20,12 +20,27 @@ def notimes(ndarktimes):
     }
     return analysis
 
+def cumuhist(timeintervals):
+    ti = timeintervals
+    nIntervals = ti.shape[0]
+    cumux = np.sort(ti+0.01*np.random.random(nIntervals)) # hack: adding random noise helps us ensure uniqueness of x values
+    cumuy = (1.0+np.arange(nIntervals))/np.float(nIntervals)
+    return (cumux,cumuy)
+    
+def cumuhistBinned(timeintervals):
+    binedges = 0.5+np.arange(0,timeintervals.max())
+    binctrs = 0.5*(binedges[0:-1]+binedges[1:])
+    h,be2 = np.histogram(timeintervals,bins=binedges)
+    hc = np.cumsum(h)
+    hcg = hc[h>0]/float(timeintervals.shape[0]) # only nonzero bins and normalise
+    binctrsg = binctrs[h>0]
+
+    return (binctrs, hc, binctrsg, hcg)
+
 def fitDarktimes(t):
     # determine darktime from gaps and reject zeros (no real gaps) 
     nts = 0 # initialise to safe default
     NTMIN = 5
-    #print t
-    #print type(t)
     
     if t.size > NTMIN:
         dts = t[1:]-t[0:-1]-1
@@ -36,10 +51,9 @@ def fitDarktimes(t):
         # now make a cumulative histogram from these
         cumux = np.sort(dtg+0.01*np.random.random(nts)) # hack: adding random noise helps us ensure uniqueness of x values
         cumuy = (1.0+np.arange(nts))/np.float(nts)
-        maxtd = dtg.max()
         
         # generate histograms 2nd way
-        binedges = 0.5+np.arange(0,maxtd)
+        binedges = 0.5+np.arange(0,dtg.max())
         binctrs = 0.5*(binedges[0:-1]+binedges[1:])
         h,be2 = np.histogram(dtg,bins=binedges)
         hc = np.cumsum(h)
