@@ -41,6 +41,7 @@ class QPCalc:
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
         visFr.AddMenuItem('qPAINT', "Multicolour - set timed species from image",self.OnTimedSpeciesFromImage)
         visFr.AddMenuItem('qPAINT', "Multicolour - qindex by channel",self.OnChannelMeasureTau)
+        visFr.AddMenuItem('qPAINT', "Multicolour - copy data source",self.OnCopyDS)
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
         visFr.AddMenuItem('qPAINT', 'Points based: Set objIDs by DBSCAN clumping', self.OnClumpObjects,
@@ -53,6 +54,7 @@ class QPCalc:
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
         visFr.AddMenuItem('qPAINT', "Plot qIndex histogram",self.OnQindexHist)
+        visFr.AddMenuItem('qPAINT', "Plot histogram of one data column",self.OnGeneralHist)
         visFr.AddMenuItem('qPAINT', "Scatter plot by ID",self.OnScatterByID)
         visFr.AddMenuItem('qPAINT', "Save Measurements",self.OnSaveMeasurements)
 
@@ -103,7 +105,26 @@ class QPCalc:
             pipeline.addColumn('objectID', ids)
             pipeline.addColumn('NEvents', numPerObject[ids-1])
 
-            #pipeline.Rebuild()
+            pipeline.Rebuild()
+            self.visFr.CreateFoldPanel() # to make, for example, new columns show up in filter columns
+            
+
+    def OnCopyDS(self, event=None):
+        """
+
+        """
+        from PYMEcs.recipes.localisations import CopyMapped
+        recipe = self.pipeline.recipe
+        CM = CopyMapped(recipe, inputName=self.pipeline.selectedDataSourceKey,
+                                        outputName='%s-copy' % self.pipeline.selectedDataSourceKey)
+        if CM.configure_traits(kind='modal'):
+            recipe.add_module(CM)
+            recipe.execute()
+            self.pipeline.selectDataSource(CM.outputName)
+
+            self.visFr.RefreshView()
+            self.visFr.CreateFoldPanel()
+
 
     def OnSetDriftPars(self, event, img=None):
         from PYME.DSView import dsviewer
@@ -199,7 +220,7 @@ class QPCalc:
     def OnChannelMeasureTau(self, event):
         from PYMEcs.Analysis import fitDarkTimes
 
-        chan = selectWithDialog(self.pipeline.colourFilter.getColourChans())
+        chan = selectWithDialog(self.pipeline.colourFilter.getColourChans(), message='select channel')
         if chan is None:
             return
 
@@ -210,6 +231,10 @@ class QPCalc:
         ids = np.unique(pipeline['objectID'].astype('int'))
         
         self.qpMeasurements, tau1, qidx, ndt = fitDarkTimes.measureObjectsByID(pipeline, set(ids))
+        # switch back to all channels
+        pipeline.colourFilter.setColour('Everything')
+        tau1, qidx, ndt =  fitDarkTimes.retrieveMeasuresForIDs(self.qpMeasurements,pipeline['objectID'])       
+
         pipeline.addColumn('taudark_%s' % chan,tau1)
         pipeline.addColumn('NDarktimes_%s' % chan,ndt)
         pipeline.addColumn('qIndex_%s' % chan,qidx)
@@ -249,6 +274,16 @@ class QPCalc:
         objDensity = np.zeros_like(objAreas)
         objDensity[valid] = qi[valid]/objAreas[valid]
         self.pipeline.addColumn('objDensity',objDensity)
+
+
+    def OnGeneralHist(self, event):
+        from PYMEcs.recipes import localisations
+
+        HistByID = localisations.HistByID(self)
+        self.namespace = {HistByID.inputName: self.pipeline}
+        if HistByID.configure_traits(kind='modal'):
+            # we call this with the pipeline to allow filtering etc
+            HistByID.execute(self.namespace)
 
     def OnQindexHist(self, event):
         ids, idx = np.unique(self.pipeline['objectID'].astype('int'), return_index=True)

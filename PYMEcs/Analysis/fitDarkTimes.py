@@ -82,11 +82,11 @@ measureDType = [('objID', 'i4'), ('xPos', 'f4'), ('yPos', 'f4'), ('NEvents', 'i4
 def measure(object, measurements = np.zeros(1, dtype=measureDType)):
     #measurements = {}
 
-    measurements['NEvents'] = object.shape[0]
-    measurements['xPos'] = object[:,0].mean()
-    measurements['yPos'] = object[:,1].mean()
+    measurements['NEvents'] = object['t'].shape[0]
+    measurements['xPos'] = object['x'].mean()
+    measurements['yPos'] = object['y'].mean()
 
-    t = object[:,2].squeeze()
+    t = object['t']
 
     darkanalysis = fitDarktimes(t)
     measurements['tau1'] = darkanalysis['tau1'][0]
@@ -106,9 +106,9 @@ def measureObjectsByID(filter, ids):
     id = filter['objectID'].astype('i')
     t = filter['t']
     floattype = 'float64'
-    tau1 = -1*np.ones_like(t, dtype = floattype)
-    ndt = -1*np.ones_like(t, dtype = floattype)
-    qus = -1*np.ones_like(t, dtype = floattype)
+    tau1 = np.zeros_like(t, dtype = floattype)
+    ndt = np.zeros_like(t, dtype = floattype)
+    qus = np.zeros_like(t, dtype = floattype)
     #ids = set(ids)
 
     measurements = np.zeros(len(ids), dtype=measureDType)
@@ -116,7 +116,7 @@ def measureObjectsByID(filter, ids):
     for j,i in enumerate(ids):
         if not i == 0:
             ind = id == i
-            obj = np.vstack([x[ind],y[ind],t[ind]]).T
+            obj = {'x': x[ind], 'y': y[ind], 't': t[ind]}
             #print obj.shape
             measure(obj, measurements[j])
             measurements[j]['objID'] = i
@@ -126,3 +126,18 @@ def measureObjectsByID(filter, ids):
             ndt[ind] = measurements[j]['NDarktimes']
 
     return (measurements, tau1, qus, ndt)
+
+def retrieveMeasuresForIDs(measurements,idcolumn):
+    tau1 = np.zeros_like(idcolumn, dtype = 'float64')
+    ndt = np.zeros_like(idcolumn, dtype = 'float64')
+    qus = np.zeros_like(idcolumn, dtype = 'float64')
+
+    for j,i in enumerate(measurements['objID']):
+        if not i == 0:
+            ind = idcolumn == i
+            if not np.isnan(measurements[j]['tau1']):
+                tau1[ind] = measurements[j]['tau1']
+                qus[ind] = 100.0/measurements[j]['tau1']
+            ndt[ind] = measurements[j]['NDarktimes']
+
+    return (tau1, qus, ndt)

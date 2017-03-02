@@ -81,6 +81,16 @@ class FiducialApply(ModuleBase):
 
         namespace[self.outputName] = mapped
 
+@register_module('CopyMapped')
+class CopyMapped(ModuleBase):
+    inputName = Input('filtered')
+    outputName = Output('filtered-copy')
+
+    def execute(self, namespace):
+        inp = namespace[self.inputName]
+        mapped = tabular.mappingFilter(inp)
+        namespace[self.outputName] = mapped
+
 @register_module('QindexScale')
 class QindexScale(ModuleBase):
     inputName = Input('qindex')
@@ -237,5 +247,68 @@ class ScatterbyID(ModuleBase):
                     Item('IDkey', editor=CBEditor(choices=self._key_choices)),
                     Item('xkey', editor=CBEditor(choices=self._key_choices)),
                     Item('ykey', editor=CBEditor(choices=self._key_choices)),
+                    Item('_'),
+                    Item('outputName'), buttons=['OK'])
+
+@register_module('HistByID')         
+class HistByID(ModuleBase):
+    """Plot histogram of a column by ID"""
+    inputName = Input('measurements')
+    IDkey = CStr('objectID')
+    histkey = CStr('qIndex')
+    outputName = Output('outGraph')
+    nbins = Int(50)
+    minval = Float(float('nan'))
+    maxval = Float(float('nan'))
+    
+    def execute(self, namespace):
+        import math
+        meas = namespace[self.inputName]
+        ids = meas[self.IDkey]
+            
+        uid, valsu = uniqueByID(ids,meas[self.histkey])
+        if math.isnan(self.minval):
+            minv = valsu.min()
+        else:
+            minv = self.minval
+        if math.isnan(self.maxval):
+            maxv = valsu.max()
+        else:
+            maxv = self.maxval
+
+        import matplotlib.pyplot as plt
+        plt.figure()
+        plt.hist(valsu,self.nbins,range=(minv,maxv))
+        plt.xlabel(self.histkey)
+
+    @property
+    def _key_choices(self):
+        #try and find the available column names
+        try:
+            return sorted(self._parent.namespace[self.inputName].keys())
+        except:
+            return []
+
+    @property
+    def pipeline_view(self):
+        from traitsui.api import View, Group, Item
+        from PYME.ui.custom_traits_editors import CBEditor
+
+        modname = 'mylabel'
+
+        return View(Group(Item('parameter', editor=CBEditor(choices=self._key_choices)), label=modname))
+
+    @property
+    def default_view(self):
+        from traitsui.api import View, Group, Item
+        from PYME.ui.custom_traits_editors import CBEditor
+
+        return View(Item('inputName', editor=CBEditor(choices=self._namespace_keys)),
+                    Item('_'),
+                    Item('IDkey', editor=CBEditor(choices=self._key_choices)),
+                    Item('histkey', editor=CBEditor(choices=self._key_choices)),
+                    Item('nbins'),
+                    Item('minval'),
+                    Item('maxval'), 
                     Item('_'),
                     Item('outputName'), buttons=['OK'])
