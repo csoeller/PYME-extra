@@ -49,7 +49,8 @@ class QPCalc:
         visFr.AddMenuItem('qPAINT', "Points based: Measure object ID volumes (area if 2D) by convex hull",self.OnMeasureVol)
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
-        visFr.AddMenuItem('qPAINT', "Calibrate qIndex",self.OnQindexCalibrate)
+        visFr.AddMenuItem('qPAINT', "Calibrate a qIndex",self.OnQindexCalibrate)
+        visFr.AddMenuItem('qPAINT', "Ratio two qIndices",self.OnQindexRatio)
         visFr.AddMenuItem('qPAINT', "qDensity - calculate qIndex to area ratio",self.OnQDensityCalc)
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
@@ -157,18 +158,26 @@ class QPCalc:
                 img = dsviewer.openViewers[selection].image
 
         if img is not None:
-            if 'TimedSpecies' in img.mdh.keys():
-                pipeline = self.visFr.pipeline
+            # somewhat weired condition as sometimes TimeSpecies becomes None in the root namespce
+            if img.mdh.getOrDefault('TimedSpecies',None) is not None:
+                logger.debug('setting timed species from root level')
                 timedSpecies = img.mdh['TimedSpecies']
-                if pipeline.selectedDataSource is not None:
-                    pipeline.selectedDataSource.setMapping('ColourNorm', '1.0 + 0*t')
-                    for species in timedSpecies.keys():
-                        pipeline.selectedDataSource.setMapping('p_%s' % species,
-                                                               '(t>= %d)*(t<%d)' % timedSpecies[species])
+            elif 'Source.TimedSpecies' in img.mdh.keys():
+                logger.debug('setting timed species from source level')
+                timedSpecies = img.mdh['Source.TimedSpecies']
+                logger.debug('time species is %s' % repr(timedSpecies))
+            else:
+                return
+            pipeline = self.visFr.pipeline
+            if pipeline.selectedDataSource is not None:
+                pipeline.selectedDataSource.setMapping('ColourNorm', '1.0 + 0*t')
+                for species in timedSpecies.keys():
+                    pipeline.selectedDataSource.setMapping('p_%s' % species,
+                                                           '(t>= %d)*(t<%d)' % timedSpecies[species])
                         # FIXME: (1) append if exists, (2) assigning to mdh ok?
-                        pipeline.selectedDataSource.mdh['TimedSpecies'] = timedSpecies
-                    self.visFr.pipeline.Rebuild()
-                    self.visFr.CreateFoldPanel()
+                    pipeline.selectedDataSource.mdh['TimedSpecies'] = timedSpecies
+                self.visFr.pipeline.Rebuild()
+                self.visFr.CreateFoldPanel()
 
                 
     def OnAreaFromLabels(self, event, img=None):
@@ -278,12 +287,15 @@ class QPCalc:
 
     def OnGeneralHist(self, event):
         from PYMEcs.recipes import localisations
+        from PYME.recipes.base import ModuleCollection
 
-        HistByID = localisations.HistByID(self)
-        self.namespace = {HistByID.inputName: self.pipeline}
+        rec = ModuleCollection()
+
+        HistByID = localisations.HistByID(rec)
+        rec.namespace = {HistByID.inputName: self.pipeline}
         if HistByID.configure_traits(kind='modal'):
             # we call this with the pipeline to allow filtering etc
-            HistByID.execute(self.namespace)
+            HistByID.execute(rec.namespace)
 
     def OnQindexHist(self, event):
         ids, idx = np.unique(self.pipeline['objectID'].astype('int'), return_index=True)
@@ -310,48 +322,40 @@ class QPCalc:
 
     def OnQindexCalibrate(self, event):
         from PYMEcs.recipes import localisations
+        from PYME.recipes.base import ModuleCollection
 
-        QIScaler = localisations.QindexScale()
-        if QIScaler.configure_traits(kind='modal'):
-            # we call this with the pipeline to allow filtering etc
-            namespace = {QIScaler.inputName: self.pipeline}
-            QIScaler.execute(namespace)
-
-            self.pipeline.addColumn('qIndexCalibrated', namespace[QIScaler.outputName]['qIndexCalibrated'])
+        rec = ModuleCollection()
+        QIScaler = localisations.QindexScale(rec)
         
+        # we call this with the pipeline to allow filtering etc
+        rec.namespace = {QIScaler.inputName: self.pipeline}
+        if QIScaler.configure_traits(kind='modal'):
+            QIScaler.execute(rec.namespace)
+            self.pipeline.addColumn(QIScaler.newKey, rec.namespace[QIScaler.outputName][QIScaler.newKey])
 
-    # superseded by OnScatterByID
-    def OnPlotQIvsVol(self, event):
-        if 'qIndexCalibrated' in self.pipeline.keys():
-            qi = self.pipeline['qIndexCalibrated']
-        else:
-            qi = self.pipeline['qIndex']
-        if 'objArea' in self.pipeline.keys():
-            vols = self.pipeline['objArea']
-        else:
-            vols = self.pipeline['volume']
+    def OnQindexRatio(self, event):
+        from PYMEcs.recipes import localisations
+        from PYME.recipes.base import ModuleCollection
 
-        ids = self.pipeline['objectID']
-        uids, uqi = uniqueByID(ids, qi)
-        uids, uvols =  uniqueByID(ids, vols)
-
-        import matplotlib.pyplot as plt
-        plt.figure()        
-        plt.scatter(uqi, uvols)
-        if 'qIndexCalibrated' in self.pipeline.keys():
-            plt.xlabel('Calibrated qIndex')
-        else:
-            plt.xlabel('qIndex (a.u.)')
-        plt.ylabel('Area (1000 nm^2)')
+        rec = ModuleCollection()
+        QIRatio = localisations.QindexRatio(rec)
+        
+        # we call this with the pipeline to allow filtering etc
+        rec.namespace = {QIRatio.inputName: self.pipeline}
+        if QIRatio.configure_traits(kind='modal'):
+            QIRatio.execute(rec.namespace)
+            self.pipeline.addColumn(QIRatio.qIndexRatio, rec.namespace[QIRatio.outputName][QIRatio.qIndexRatio])
 
     def OnScatterByID(self, event):
         from PYMEcs.recipes import localisations
+        from PYME.recipes.base import ModuleCollection
 
-        ScatterbyID = localisations.ScatterbyID(self)
-        self.namespace = {ScatterbyID.inputName: self.pipeline}
+        rec = ModuleCollection()
+        ScatterbyID = localisations.ScatterbyID(rec)
+        rec.namespace = {ScatterbyID.inputName: self.pipeline}
         if ScatterbyID.configure_traits(kind='modal'):
             # we call this with the pipeline to allow filtering etc
-            ScatterbyID.execute(self.namespace)
+            ScatterbyID.execute(rec.namespace)
 
     def OnSaveMeasurements(self,event):
         from PYME.recipes import runRecipe

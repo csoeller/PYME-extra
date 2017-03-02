@@ -95,19 +95,85 @@ class CopyMapped(ModuleBase):
 class QindexScale(ModuleBase):
     inputName = Input('qindex')
     outputName = Output('qindex-calibrated')
+    qIndexkey = CStr('qIndex')
     qindexValue = Float(1.0)
     NEquivalent = Float(1.0)
 
     def execute(self, namespace):
         inp = namespace[self.inputName]
         mapped = tabular.mappingFilter(inp)
+        qkey = self.qIndexkey
+        scaled = inp[qkey]
+        qigood = inp[qkey] > 0
+        scaled[qigood] = inp[qkey][qigood] * self.NEquivalent / self.qindexValue
 
-        scaled = inp['qIndex']
-        qigood = inp['qIndex'] > 0
-        scaled[qigood] = inp['qIndex'][qigood] * self.NEquivalent / self.qindexValue
-
-        mapped.addColumn('qIndexCalibrated', scaled)
+        self.newKey = '%sCal' % qkey
+        mapped.addColumn(self.newKey, scaled)
         namespace[self.outputName] = mapped
+
+    @property
+    def _key_choices(self):
+        #try and find the available column names
+        try:
+            return sorted(self._parent.namespace[self.inputName].keys())
+        except:
+            return []
+
+    @property
+    def default_view(self):
+        from traitsui.api import View, Group, Item
+        from PYME.ui.custom_traits_editors import CBEditor
+
+        return View(Item('inputName', editor=CBEditor(choices=self._namespace_keys)),
+                    Item('_'),
+                    Item('qIndexkey', editor=CBEditor(choices=self._key_choices)),
+                    Item('qindexValue'),
+                    Item('NEquivalent'),
+                    Item('_'),
+                    Item('outputName'), buttons=['OK'])
+
+@register_module('QindexRatio')
+class QindexRatio(ModuleBase):
+    inputName = Input('qindex')
+    outputName = Output('qindex-calibrated')
+    qIndexDenom = CStr('qIndex1')
+    qIndexNumer = CStr('qIndex2')
+    qIndexRatio = CStr('qRatio')
+
+    def execute(self, namespace):
+        inp = namespace[self.inputName]
+        mapped = tabular.mappingFilter(inp)
+        qkey1 = self.qIndexDenom
+        qkey2 = self.qIndexNumer
+
+        v2 = inp[qkey2]
+        ratio = np.zeros_like(v2,dtype='float64')
+        qigood = v2 > 0
+        ratio[qigood] = inp[qkey1][qigood] / v2[qigood]
+
+        mapped.addColumn(self.qIndexRatio, ratio)
+        namespace[self.outputName] = mapped
+
+    @property
+    def _key_choices(self):
+        #try and find the available column names
+        try:
+            return sorted(self._parent.namespace[self.inputName].keys())
+        except:
+            return []
+
+    @property
+    def default_view(self):
+        from traitsui.api import View, Group, Item
+        from PYME.ui.custom_traits_editors import CBEditor
+
+        return View(Item('inputName', editor=CBEditor(choices=self._namespace_keys)),
+                    Item('_'),
+                    Item('qIndexDenom', editor=CBEditor(choices=self._key_choices)),
+                    Item('qIndexNumer', editor=CBEditor(choices=self._key_choices)),
+                    Item('qIndexRatio'),
+                    Item('_'),
+                    Item('outputName'), buttons=['OK'])
 
 
 @register_module('ObjectVolume')
@@ -124,71 +190,6 @@ class ObjectVolume(ModuleBase):
 
         mapped.addColumn('volumes', volumes)
         namespace[self.outputName] = mapped
-
-
-# a version of David's module which we include here so that we can test/hack a few things
-@register_module('DBSCANClustering')
-class DBSCANClustering(ModuleBase):
-    """
-    Performs DBSCAN clustering on input dictionary
-
-    Parameters
-    ----------
-
-        searchRadius: search radius for clustering
-        minPtsForCore: number of points within SearchRadius required for a given point to be considered a core point
-
-    Notes
-    -----
-
-    See `sklearn.cluster.dbscan` for more details about the underlying algorithm and parameter meanings.
-
-    """
-    import multiprocessing
-    inputName = Input('filtered')
-
-    columns = ListStr(['x', 'y', 'z'])
-    searchRadius = Float()
-    minClumpSize = Int()
-    numberOfJobs = Int(max(multiprocessing.cpu_count()-1,1))
-    
-    outputName = Output('dbscanClustered')
-
-    def execute(self, namespace):
-        from sklearn.cluster import dbscan
-
-        inp = namespace[self.inputName]
-        mapped = tabular.mappingFilter(inp)
-
-        # Note that sklearn gives unclustered points label of -1, and first value starts at 0.
-        try:
-            core_samp, dbLabels = dbscan(np.vstack([inp[k] for k in self.columns]).T,
-                                         self.searchRadius, self.minClumpSize, n_jobs=self.numberOfJobs)
-            multiproc = True
-        except:
-            core_samp, dbLabels = dbscan(np.vstack([inp[k] for k in self.columns]).T,
-                                         self.searchRadius, self.minClumpSize)
-            multiproc = False
-
-        if multiproc:
-            logger.info('using dbscan multiproc version')
-        else:
-            logger.info('falling back to dbscan single-threaded version')
-
-            # shift dbscan labels up by one to match existing convention that a clumpID of 0 corresponds to unclumped
-        mapped.addColumn('dbscanClumpID', dbLabels + 1)
-
-        # propogate metadata, if present
-        try:
-            mapped.mdh = inp.mdh
-        except AttributeError:
-            pass
-
-        namespace[self.outputName] = mapped
-
-    @property
-    def hide_in_overview(self):
-        return ['columns']
 
 def uniqueByID(ids,column):
     uids, idx = np.unique(ids.astype('int'), return_index=True)
@@ -227,15 +228,6 @@ class ScatterbyID(ModuleBase):
             return sorted(self._parent.namespace[self.inputName].keys())
         except:
             return []
-
-    @property
-    def pipeline_view(self):
-        from traitsui.api import View, Group, Item
-        from PYME.ui.custom_traits_editors import CBEditor
-
-        modname = 'mylabel'
-
-        return View(Group(Item('parameter', editor=CBEditor(choices=self._key_choices)), label=modname))
 
     @property
     def default_view(self):
@@ -290,15 +282,6 @@ class HistByID(ModuleBase):
             return []
 
     @property
-    def pipeline_view(self):
-        from traitsui.api import View, Group, Item
-        from PYME.ui.custom_traits_editors import CBEditor
-
-        modname = 'mylabel'
-
-        return View(Group(Item('parameter', editor=CBEditor(choices=self._key_choices)), label=modname))
-
-    @property
     def default_view(self):
         from traitsui.api import View, Group, Item
         from PYME.ui.custom_traits_editors import CBEditor
@@ -312,3 +295,67 @@ class HistByID(ModuleBase):
                     Item('maxval'), 
                     Item('_'),
                     Item('outputName'), buttons=['OK'])
+
+    # a version of David's module which we include here so that we can test/hack a few things
+@register_module('DBSCANClustering')
+class DBSCANClustering(ModuleBase):
+    """
+    Performs DBSCAN clustering on input dictionary
+
+    Parameters
+    ----------
+
+        searchRadius: search radius for clustering
+        minPtsForCore: number of points within SearchRadius required for a given point to be considered a core point
+
+    Notes
+    -----
+
+    See `sklearn.cluster.dbscan` for more details about the underlying algorithm and parameter meanings.
+
+    """
+    import multiprocessing
+    inputName = Input('filtered')
+
+    columns = ListStr(['x', 'y', 'z'])
+    searchRadius = Float()
+    minClumpSize = Int()
+    numberOfJobs = Int(max(multiprocessing.cpu_count()-1,1)) # this is a feature of the latest dbscan in scipy
+    
+    outputName = Output('dbscanClustered')
+
+    def execute(self, namespace):
+        from sklearn.cluster import dbscan
+
+        inp = namespace[self.inputName]
+        mapped = tabular.mappingFilter(inp)
+
+        # Note that sklearn gives unclustered points label of -1, and first value starts at 0.
+        try:
+            core_samp, dbLabels = dbscan(np.vstack([inp[k] for k in self.columns]).T,
+                                         self.searchRadius, self.minClumpSize, n_jobs=self.numberOfJobs)
+            multiproc = True
+        except:
+            core_samp, dbLabels = dbscan(np.vstack([inp[k] for k in self.columns]).T,
+                                         self.searchRadius, self.minClumpSize)
+            multiproc = False
+
+        if multiproc:
+            logger.info('using dbscan multiproc version')
+        else:
+            logger.info('falling back to dbscan single-threaded version')
+
+            # shift dbscan labels up by one to match existing convention that a clumpID of 0 corresponds to unclumped
+        mapped.addColumn('dbscanClumpID', dbLabels + 1)
+
+        # propogate metadata, if present
+        try:
+            mapped.mdh = inp.mdh
+        except AttributeError:
+            pass
+
+        namespace[self.outputName] = mapped
+
+    @property
+    def hide_in_overview(self):
+        return ['columns']
