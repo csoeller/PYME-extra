@@ -105,11 +105,6 @@ def measureObjectsByID(filter, ids):
     y = filter['y'] #+ 0.1*random.randn(x.size)
     id = filter['objectID'].astype('i')
     t = filter['t']
-    floattype = 'float64'
-    tau1 = np.zeros_like(t, dtype = floattype)
-    ndt = np.zeros_like(t, dtype = floattype)
-    qus = np.zeros_like(t, dtype = floattype)
-    #ids = set(ids)
 
     measurements = np.zeros(len(ids), dtype=measureDType)
 
@@ -120,12 +115,8 @@ def measureObjectsByID(filter, ids):
             #print obj.shape
             measure(obj, measurements[j])
             measurements[j]['objID'] = i
-            if not np.isnan(measurements[j]['tau1']):
-                tau1[ind] = measurements[j]['tau1']
-                qus[ind] = 100.0/measurements[j]['tau1']
-            ndt[ind] = measurements[j]['NDarktimes']
 
-    return (measurements, tau1, qus, ndt)
+    return measurements
 
 def retrieveMeasuresForIDs(measurements,idcolumn):
     tau1 = np.zeros_like(idcolumn, dtype = 'float64')
@@ -137,7 +128,8 @@ def retrieveMeasuresForIDs(measurements,idcolumn):
             ind = idcolumn == i
             if not np.isnan(measurements[j]['tau1']):
                 tau1[ind] = measurements[j]['tau1']
-                qus[ind] = 100.0/measurements[j]['tau1']
+                if measurements[j]['tau1'] > 0:
+                    qus[ind] = 100.0/measurements[j]['tau1']
             ndt[ind] = measurements[j]['NDarktimes']
 
     return (tau1, qus, ndt)

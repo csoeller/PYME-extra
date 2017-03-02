@@ -28,20 +28,22 @@ class QPCalc:
     def __init__(self, visFr):
         self.visFr = visFr
         self.pipeline = visFr.pipeline
-        self.qpMeasurements = None
+        self.qpMeasurements = {}
         self.measurements = None
 
         visFr.AddMenuItem('qPAINT', "From Image - Set driftpars",self.OnSetDriftPars)
         visFr.AddMenuItem('qPAINT', "From Image - Set objIDs",self.OnGetIDsfromImage)
         visFr.AddMenuItem('qPAINT', "From Image - Get Areas by ID",self.OnAreaFromLabels)
-        visFr.AddMenuItem('qPAINT', "Measure object ID dark times",self.OnMeasureTau)
+        visFr.AddMenuItem('qPAINT', "Qindex - Measure object ID dark times",self.OnMeasureTau)
         visFr.AddMenuItem('qPAINT', "All in 1 go: select Image, set drift, IDs, measure qindex, areas",
                           self.OnSelectImgAndProcess)
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
         visFr.AddMenuItem('qPAINT', "Multicolour - set timed species from image",self.OnTimedSpeciesFromImage)
-        visFr.AddMenuItem('qPAINT', "Multicolour - qindex by channel",self.OnChannelMeasureTau)
+        visFr.AddMenuItem('qPAINT', "Multicolour - qIndex by channel",self.OnChannelMeasureTau)
         visFr.AddMenuItem('qPAINT', "Multicolour - copy data source",self.OnCopyDS)
+        visFr.AddMenuItem('qPAINT', "Multicolour - in 1 go: select Image, set drift, IDs, areas, species, qIndex by channel",
+                          self.OnSelectImgAndProcessMulticol)
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
         visFr.AddMenuItem('qPAINT', 'Points based: Set objIDs by DBSCAN clumping', self.OnClumpObjects,
@@ -49,12 +51,11 @@ class QPCalc:
         visFr.AddMenuItem('qPAINT', "Points based: Measure object ID volumes (area if 2D) by convex hull",self.OnMeasureVol)
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
-        visFr.AddMenuItem('qPAINT', "Calibrate a qIndex",self.OnQindexCalibrate)
-        visFr.AddMenuItem('qPAINT', "Ratio two qIndices",self.OnQindexRatio)
+        visFr.AddMenuItem('qPAINT', "Calibrate a qIndex (or any column)",self.OnQindexCalibrate)
+        visFr.AddMenuItem('qPAINT', "Ratio two qIndices (or any two columns)",self.OnQindexRatio)
         visFr.AddMenuItem('qPAINT', "qDensity - calculate qIndex to area ratio",self.OnQDensityCalc)
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
-        visFr.AddMenuItem('qPAINT', "Plot qIndex histogram",self.OnQindexHist)
         visFr.AddMenuItem('qPAINT', "Plot histogram of one data column",self.OnGeneralHist)
         visFr.AddMenuItem('qPAINT', "Scatter plot by ID",self.OnScatterByID)
         visFr.AddMenuItem('qPAINT', "Save Measurements",self.OnSaveMeasurements)
@@ -219,17 +220,20 @@ class QPCalc:
 
         pipeline = self.pipeline
         
-        self.qpMeasurements, tau1, qidx, ndt = fitDarkTimes.measureObjectsByID(self.pipeline, set(ids))
+        measure = fitDarkTimes.measureObjectsByID(self.pipeline, set(ids))
+        self.qpMeasurements['Everything'] = measure
+        tau1, qidx, ndt =  fitDarkTimes.retrieveMeasuresForIDs(measure,pipeline['objectID'])       
         pipeline.addColumn('taudark',tau1)
         pipeline.addColumn('NDarktimes',ndt)
         pipeline.addColumn('qIndex',qidx)
 
         # pipeline.Rebuild()
 
-    def OnChannelMeasureTau(self, event):
+    def OnChannelMeasureTau(self, event, chan=None):
         from PYMEcs.Analysis import fitDarkTimes
 
-        chan = selectWithDialog(self.pipeline.colourFilter.getColourChans(), message='select channel')
+        if chan is None:
+            chan = selectWithDialog(self.pipeline.colourFilter.getColourChans(), message='select channel')
         if chan is None:
             return
 
@@ -239,10 +243,10 @@ class QPCalc:
 
         ids = np.unique(pipeline['objectID'].astype('int'))
         
-        self.qpMeasurements, tau1, qidx, ndt = fitDarkTimes.measureObjectsByID(pipeline, set(ids))
+        self.qpMeasurements[chan] = fitDarkTimes.measureObjectsByID(pipeline, set(ids))
         # switch back to all channels
         pipeline.colourFilter.setColour('Everything')
-        tau1, qidx, ndt =  fitDarkTimes.retrieveMeasuresForIDs(self.qpMeasurements,pipeline['objectID'])       
+        tau1, qidx, ndt =  fitDarkTimes.retrieveMeasuresForIDs(self.qpMeasurements[chan],pipeline['objectID'])       
 
         pipeline.addColumn('taudark_%s' % chan,tau1)
         pipeline.addColumn('NDarktimes_%s' % chan,ndt)
@@ -260,6 +264,17 @@ class QPCalc:
             self.OnAreaFromLabels(None,img=img)
             self.OnMeasureTau(None)
 
+    def OnSelectImgAndProcessMulticol(self, event):
+        from PYME.DSView import dsviewer
+        selection = selectWithDialog(dsviewer.openViewers.keys())
+        if selection is not None:
+            img = dsviewer.openViewers[selection].image
+            self.OnSetDriftPars(None,img=img)
+            self.OnGetIDsfromImage(None,img=img)
+            self.OnAreaFromLabels(None,img=img)
+            self.OnTimedSpeciesFromImage(None,img=img)
+            for chan in self.pipeline.colourFilter.getColourChans():
+                self.OnChannelMeasureTau(None,chan=chan)
 
     def OnMeasureVol(self, event):
         from PYMEcs.recipes import localisations
@@ -297,28 +312,6 @@ class QPCalc:
             # we call this with the pipeline to allow filtering etc
             HistByID.execute(rec.namespace)
 
-    def OnQindexHist(self, event):
-        ids, idx = np.unique(self.pipeline['objectID'].astype('int'), return_index=True)
-        try:
-            qidx = self.pipeline['qIndexCalibrated'][idx]
-            isCalibrated = True
-        except:
-            qidx = self.pipeline['qIndex'][idx]
-            isCalibrated = False
-
-        if qidx.shape[0] > 200:
-            nbins = 50
-        else:
-            nbins = 20
-            
-        import matplotlib.pyplot as plt
-        plt.figure()
-        plt.hist(qidx[qidx > 0],nbins)
-        if isCalibrated:
-            plt.title('Calibrated QIndex from %d objects' % qidx.shape[0])
-        else:
-            plt.title('Uncalibrated QIndex from %d objects' % qidx.shape[0])
-        plt.xlabel('qIndex')
 
     def OnQindexCalibrate(self, event):
         from PYMEcs.recipes import localisations
@@ -368,8 +361,8 @@ class QPCalc:
             if not filename == '':
                 runRecipe.saveOutput(self.measurements, filename)
         
-        if self.qpMeasurements is not None:
-            fdialog = wx.FileDialog(None, 'Save qPaint measurements ...',
+        for chan in self.qpMeasurements.keys():
+            fdialog = wx.FileDialog(None, 'Save qPaint measurements foir channel %s...' % chan,
                                     wildcard='Numpy array|*.npy|Tab formatted text|*.txt', style=wx.SAVE)
             succ = fdialog.ShowModal()
             if (succ == wx.ID_OK):
@@ -377,14 +370,14 @@ class QPCalc:
 
                 if outFilename.endswith('.txt'):
                     of = open(outFilename, 'w')
-                    of.write('\t'.join(self.qpMeasurements.dtype.names) + '\n')
+                    of.write('\t'.join(self.qpMeasurements[chan].dtype.names) + '\n')
 
-                    for obj in self.qpMeasurements:
+                    for obj in self.qpMeasurements[chan]:
                         of.write('\t'.join([repr(v) for v in obj]) + '\n')
                     of.close()
 
                 else:
-                    np.save(outFilename, self.qpMeasurements) # we are assuming single channel here!
+                    np.save(outFilename, self.qpMeasurements[chan]) # we are assuming single channel here!
 
             
 def Plug(visFr):
