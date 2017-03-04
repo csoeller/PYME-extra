@@ -6,10 +6,6 @@ from scipy import ndimage
 import logging
 logger = logging.getLogger(__file__)
 
-from scipy.optimize import curve_fit
-def cumuexpfit(t,tau):
-    return 1-np.exp(-t/tau)
-
 def uniqueByID(ids,column):
     uids, idx = np.unique(ids, return_index=True)
     ucol = column[idx]
@@ -25,6 +21,11 @@ def selectWithDialog(choices, message='select image from list', caption='Selecti
     dlg.Destroy()
     return item
 
+def Warn(parent, message, caption = 'Warning!'):
+    dlg = wx.MessageDialog(parent, message, caption, wx.OK | wx.ICON_WARNING)
+    dlg.ShowModal()
+    dlg.Destroy()
+
 class QPCalc:
     """
 
@@ -33,11 +34,10 @@ class QPCalc:
         self.visFr = visFr
         self.pipeline = visFr.pipeline
         self.qpMeasurements = {}
-        self.measurements = None
 
         visFr.AddMenuItem('qPAINT', "Darktime distribution of selected events",self.OnDarkT)
         visFr.AddMenuItem('qPAINT', "From Image - Set driftpars",self.OnSetDriftPars)
-        visFr.AddMenuItem('qPAINT', "From Image - Set objIDs",self.OnGetIDsfromImage)
+        visFr.AddMenuItem('qPAINT', "From Image - Set objectIDs",self.OnGetIDsfromImage)
         visFr.AddMenuItem('qPAINT', "From Image - Get Areas by ID",self.OnAreaFromLabels)
         visFr.AddMenuItem('qPAINT', "Qindex - Measure object ID dark times",self.OnMeasureTau)
         visFr.AddMenuItem('qPAINT', "All in 1 go: select Image, set drift, IDs, measure qindex, areas",
@@ -51,14 +51,13 @@ class QPCalc:
                           self.OnSelectImgAndProcessMulticol)
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
-        visFr.AddMenuItem('qPAINT', 'Points based: Set objIDs by DBSCAN clumping', self.OnClumpObjects,
-                          helpText='Calculate objID using DBSCAN algorithm')
+        visFr.AddMenuItem('qPAINT', 'Points based: Set objectIDs by DBSCAN clumping', self.OnClumpObjects,
+                          helpText='Calculate objectID using DBSCAN algorithm')
         visFr.AddMenuItem('qPAINT', "Points based: Measure object ID volumes (area if 2D) by convex hull",self.OnMeasureVol)
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
         visFr.AddMenuItem('qPAINT', "Calibrate a qIndex (or any column)",self.OnQindexCalibrate)
         visFr.AddMenuItem('qPAINT', "Ratio two qIndices (or any two columns)",self.OnQindexRatio)
-        visFr.AddMenuItem('qPAINT', "qDensity - calculate qIndex to area ratio",self.OnQDensityCalc)
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
         visFr.AddMenuItem('qPAINT', "Plot histogram of one data column",self.OnGeneralHist)
@@ -202,16 +201,28 @@ class QPCalc:
             namespace = {MeasureIt.inputLabels: img, MeasureIt.inputIntensity: img}
             MeasureIt.execute(namespace)
             # save the measurements for further use
-            self.measurements = namespace[MeasureIt.outputName]
-            # make a new objAreas column for the pipeline
-            meas = self.measurements
+            self.qpMeasurements['area'] = namespace[MeasureIt.outputName]
+
+            meas = self.qpMeasurements['area']
             # currently the scale of areas is in 1000 nm^2
             areas = meas['area'] * float(img.mdh['voxelsize.x'])*float(img.mdh['voxelsize.y'])*1e3
+
+            from PYMEcs.Analysis import fitDarkTimes
+            # add the area info to the qPAINT measures already available
+            for chan in (self.pipeline.colourFilter.getColourChans() + ['Everything']):
+                if chan in self.qpMeasurements.keys():
+                    # here we copy the area over, other 2D measures could be similarly copied
+                    self.qpMeasurements[chan].addNewColumnByID(meas['label'], 'area', areas)
+
+            # make a new objAreas column for the pipeline
+            #      1st we are making a lookup table
+            #      for areas by label index in abyl
             labels = meas['label'].astype('int')
-            abyl = np.zeros(labels.max()+1)
+            abyl = np.zeros(labels.max()+1) # make it long enough to hold all labels present
             abyl[labels] = areas
             objIDs = self.pipeline['objectID'].astype('int')
             objAreas = np.zeros_like(objIDs,dtype='float')
+            # now look up the area values by addressing into our lookup table abyl
             objAreas[objIDs>0] = abyl[objIDs[objIDs>0]]
             # enter the new column into the pipeline
             self.pipeline.addColumn('objArea',objAreas)
@@ -222,15 +233,24 @@ class QPCalc:
         # chans = self.pipeline.colourFilter.getColourChans()
 
         ids = np.unique(self.pipeline['objectID'].astype('int'))
-
+        idsnz = ids[ids > 0]
         pipeline = self.pipeline
         
-        measure = fitDarkTimes.measureObjectsByID(self.pipeline, set(ids))
+        measure = fitDarkTimes.measureObjectsByID(self.pipeline, set(idsnz))
         self.qpMeasurements['Everything'] = measure
-        tau1, qidx, ndt =  fitDarkTimes.retrieveMeasuresForIDs(measure,pipeline['objectID'])       
-        pipeline.addColumn('taudark',tau1)
-        pipeline.addColumn('NDarktimes',ndt)
-        pipeline.addColumn('qIndex',qidx)
+
+        # mapping from measurements column name to new pipeline column name to add
+        colmapNames = {
+            'tau1':'taudark',
+            'NDarktimes':'NDarktimes',
+            'qindex1':'qIndex',
+            'tau1err':'taudark_error',
+            'chisqr1':'taudark_chisq2'}
+        
+        newcols =  fitDarkTimes.retrieveMeasuresForIDs(measure,pipeline['objectID'],
+                                                       columns=colmapNames.keys())       
+        for sourceCol in colmapNames.keys():
+            pipeline.addColumn(colmapNames[sourceCol],newcols[sourceCol])
 
         # pipeline.Rebuild()
 
@@ -247,15 +267,24 @@ class QPCalc:
         pipeline.colourFilter.setColour(chan)
 
         ids = np.unique(pipeline['objectID'].astype('int'))
+        idsnz = ids[ids > 0]
         
-        self.qpMeasurements[chan] = fitDarkTimes.measureObjectsByID(pipeline, set(ids))
+        self.qpMeasurements[chan] = fitDarkTimes.measureObjectsByID(pipeline, set(idsnz))
+
         # switch back to all channels
         pipeline.colourFilter.setColour('Everything')
-        tau1, qidx, ndt =  fitDarkTimes.retrieveMeasuresForIDs(self.qpMeasurements[chan],pipeline['objectID'])       
+        colmapNames = {
+            'tau1':'taudark_%s' % chan,
+            'NDarktimes':'NDarktimes_%s' % chan,
+            'qindex1':'qIndex_%s' % chan,
+            'tau1err':'taudark_error_%s' % chan,
+            'chisqr1':'taudark_chisq2_%s' % chan}
+        
+        newcols =  fitDarkTimes.retrieveMeasuresForIDs(self.qpMeasurements[chan],pipeline['objectID'],
+                                                       columns=colmapNames.keys())       
+        for sourceCol in colmapNames.keys():
+            pipeline.addColumn(colmapNames[sourceCol],newcols[sourceCol])
 
-        pipeline.addColumn('taudark_%s' % chan,tau1)
-        pipeline.addColumn('NDarktimes_%s' % chan,ndt)
-        pipeline.addColumn('qIndex_%s' % chan,qidx)
         # restore original display settings
         pipeline.colourFilter.setColour(dispColor)
 
@@ -266,8 +295,9 @@ class QPCalc:
             img = dsviewer.openViewers[selection].image
             self.OnSetDriftPars(None,img=img)
             self.OnGetIDsfromImage(None,img=img)
-            self.OnAreaFromLabels(None,img=img)
             self.OnMeasureTau(None)
+            # areas last so that qpMeasures get the area info 
+            self.OnAreaFromLabels(None,img=img)
 
     def OnSelectImgAndProcessMulticol(self, event):
         from PYME.DSView import dsviewer
@@ -276,10 +306,11 @@ class QPCalc:
             img = dsviewer.openViewers[selection].image
             self.OnSetDriftPars(None,img=img)
             self.OnGetIDsfromImage(None,img=img)
-            self.OnAreaFromLabels(None,img=img)
             self.OnTimedSpeciesFromImage(None,img=img)
             for chan in self.pipeline.colourFilter.getColourChans():
                 self.OnChannelMeasureTau(None,chan=chan)
+            # areas last so that qpMeasures get the area info 
+            self.OnAreaFromLabels(None,img=img)
 
     def OnMeasureVol(self, event):
         from PYMEcs.recipes import localisations
@@ -291,18 +322,6 @@ class QPCalc:
             VolMeasurer.execute(namespace)
             # FIXME: scaling factor is correct for 2D only
             self.pipeline.addColumn('volume', namespace[VolMeasurer.outputName]['volume']/1e3) # area in 1000 nm^2
-        
-    def OnQDensityCalc(self, event):
-        if 'qIndexCalibrated' in self.pipeline.keys():
-            qi = self.pipeline['qIndexCalibrated']
-        else:
-            qi = self.pipeline['qIndex']
-        
-        objAreas = self.pipeline['objArea']
-        valid = (qi > 0)*(objAreas > 0)
-        objDensity = np.zeros_like(objAreas)
-        objDensity[valid] = qi[valid]/objAreas[valid]
-        self.pipeline.addColumn('objDensity',objDensity)
 
 
     def OnGeneralHist(self, event):
@@ -357,32 +376,17 @@ class QPCalc:
 
     def OnSaveMeasurements(self,event):
         from PYME.recipes import runRecipe
-
-        if self.measurements is not None:
-            filename = wx.FileSelector('Save Area measurements as ...', 
+        import os.path
+        
+        if len(self.qpMeasurements.keys()) > 0:
+            filename = wx.FileSelector('Save all measurements (select basename)...',
                                        wildcard="CSV files (*.csv)|*.csv|Excell files (*.xlsx)|*.xlsx|HDF5 files (*.hdf)|*.hdf", 
                                        flags = wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
                                    
             if not filename == '':
-                runRecipe.saveOutput(self.measurements, filename)
-        
-        for chan in self.qpMeasurements.keys():
-            fdialog = wx.FileDialog(None, 'Save qPaint measurements foir channel %s...' % chan,
-                                    wildcard='Numpy array|*.npy|Tab formatted text|*.txt', style=wx.SAVE)
-            succ = fdialog.ShowModal()
-            if (succ == wx.ID_OK):
-                outFilename = fdialog.GetPath().encode()
-
-                if outFilename.endswith('.txt'):
-                    of = open(outFilename, 'w')
-                    of.write('\t'.join(self.qpMeasurements[chan].dtype.names) + '\n')
-
-                    for obj in self.qpMeasurements[chan]:
-                        of.write('\t'.join([repr(v) for v in obj]) + '\n')
-                    of.close()
-
-                else:
-                    np.save(outFilename, self.qpMeasurements[chan]) # we are assuming single channel here!
+                base, ext = os.path.splitext(filename)
+                for chan in self.qpMeasurements.keys():
+                    runRecipe.saveOutput(self.qpMeasurements[chan], base + '_' + chan + ext)
 
     def OnDarkT(self,event):
         import StringIO
@@ -408,8 +412,8 @@ class QPCalc:
 
         if nts > NTMIN:
             # now make a cumulative histogram from these
-            (cumux,cumuy) = fitDarkTimes.cumuhist(dtg)
-            (binctrs,hc,binctrsg,hcg) = fitDarkTimes.cumuhistBinned(dtg)
+            cumux,cumuy = fitDarkTimes.cumuhist(dtg)
+            binctrs,hc,binctrsg,hcg = fitDarkTimes.cumuhistBinned(dtg)
             
             bbx = (x.min(),x.max())
             bby = (y.min(),y.max())
@@ -421,9 +425,15 @@ class QPCalc:
         # fit theoretical distributions
         popth,pcovh,popt,pcov = (None,None,None,None)
         if nts > NTMIN:
-            popth,pcovh,infodicth,errmsgh,ierrh = curve_fit(cumuexpfit,binctrsg,hcg, p0=(300.0),full_output=True)
+            from scipy.optimize import curve_fit
+
+            idx = (np.abs(hcg - 0.63)).argmin()
+            tauesth = binctrsg[idx]
+            popth,pcovh,infodicth,errmsgh,ierrh = curve_fit(fitDarkTimes.cumuexpfit,binctrsg,hcg, p0=(tauesth),full_output=True)
             chisqredh = ((hcg - infodicth['fvec'])**2).sum()/(hcg.shape[0]-1)
-            popt,pcov,infodict,errmsg,ierr = curve_fit(cumuexpfit,cumux,cumuy, p0=(300.0),full_output=True)
+            idx = (np.abs(cumuy - 0.63)).argmin()
+            tauest = cumux[idx]
+            popt,pcov,infodict,errmsg,ierr = curve_fit(fitDarkTimes.cumuexpfit,cumux,cumuy, p0=(tauest),full_output=True)
             chisqred = ((cumuy - infodict['fvec'])**2).sum()/(nts-1)
 
             import matplotlib.pyplot as plt
@@ -431,15 +441,15 @@ class QPCalc:
             plt.figure()
             plt.subplot(211)
             plt.plot(cumux,cumuy,'o')
-            plt.plot(cumux,cumuexpfit(cumux,popt[0]))
+            plt.plot(cumux,fitDarkTimes.cumuexpfit(cumux,popt[0]))
             plt.plot(binctrs,hc/float(nts),'o')
-            plt.plot(binctrs,cumuexpfit(binctrs,popth[0]))
+            plt.plot(binctrs,fitDarkTimes.cumuexpfit(binctrs,popth[0]))
             plt.ylim(-0.2,1.2)
             plt.subplot(212)
             plt.semilogx(cumux,cumuy,'o')
-            plt.semilogx(cumux,cumuexpfit(cumux,popt[0]))
+            plt.semilogx(cumux,fitDarkTimes.cumuexpfit(cumux,popt[0]))
             plt.semilogx(binctrs,hc/float(nts),'o')
-            plt.semilogx(binctrs,cumuexpfit(binctrs,popth[0]))
+            plt.semilogx(binctrs,fitDarkTimes.cumuexpfit(binctrs,popth[0]))
             plt.ylim(-0.2,1.2)
             plt.show()
             
@@ -453,15 +463,17 @@ class QPCalc:
                 'darktimeErrors' : (np.sqrt(pcov[0][0]),np.sqrt(pcovh[0][0]))
             }
 
-            if not hasattr(self.visFr,'analysisrecord'):
-                self.visFr.analysisrecord = []
-                self.visFr.analysisrecord.append(analysis)
+            #if not hasattr(self.visFr,'analysisrecord'):
+            #    self.visFr.analysisrecord = []
+            #    self.visFr.analysisrecord.append(analysis)
 
-            print >>outstr, "events: %d" % t.shape[0]
-            print >>outstr, "dark times: %d" % nts
+            print >>outstr, "events: %d, dark times: %d" % (t.shape[0],nts)
             print >>outstr, "region: %d x %d nm (%d x %d pixel)" % (bbszx,bbszy,bbszx/voxx,bbszy/voxy)
             print >>outstr, "centered at %d,%d (%d,%d pixels)" % (x.mean(),y.mean(),x.mean()/voxx,y.mean()/voxy)
-            print >>outstr, "darktime: %.1f (%.1f) frames - chisqr %.2f (%.2f)" % (popt[0],popth[0],chisqred,chisqredh)
+            print >>outstr, "darktime: %.1f+-%d (%.1f+-%d) frames - chisqr %.2f (%.2f)" % (popt[0],np.sqrt(pcov[0][0]),
+                                                                                           popth[0],np.sqrt(pcovh[0][0]),
+                                                                                           chisqred,chisqredh)
+            print >>outstr, "darktime: starting estimates: %.1f (%.1f)" % (tauest,tauesth)
             print >>outstr, "qunits: %.2f (%.2f), eunits: %.2f" % (100.0/popt[0], 100.0/popth[0],t.shape[0]/500.0)
 
             labelstr = outstr.getvalue()

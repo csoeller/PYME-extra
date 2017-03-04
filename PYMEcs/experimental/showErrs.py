@@ -16,40 +16,34 @@ class WindowPopup(wx.PopupWindow):
       sizer.Add(self.st, 0, wx.EXPAND)
       self.SetSizer(sizer)
       self.Layout()
-      self.Show(True)
 
 
 
 class ShowErr:
-    """
+   """
 
-    """
-    def __init__(self, visFr):
-        self.visFr = visFr
-        self.txtwin = None
-        visFr.AddMenuItem('Experimental', 'Show/Update error log', self.OnShowErr)
-        visFr.AddMenuItem('Experimental', 'Hide error log', self.OnHideErr)
+   """
+   def __init__(self, visFr):
+      self.visFr = visFr
+      self.txtwin = None
+      visFr.AddMenuItem('Experimental', 'Toggle Error Log Display\tCtrl+E', self.OnToggleErrVisibility)
 
 
-    def OnShowErr(self, event=None):
-        import os
-        pid = int(os.getpid()) - 1
+   def OnToggleErrVisibility(self, event=None):
+      import os
 
-        with open(os.path.join('/tmp','visgui-%d.tmp' % pid),"r") as f:
+      if self.txtwin is None:
+         self.txtwin = WindowPopup(self.visFr,wx.SIMPLE_BORDER, '')
+      
+      if self.txtwin.IsShown():
+         self.txtwin.Hide()
+      else:
+         pid = int(os.getpid()) - 1
+         with open(os.path.join('/tmp','visgui-%d.tmp' % pid),"r") as f:
             self.txt = "\n".join(f.readlines())
-
-        if self.txtwin is None:
-            self.txtwin = WindowPopup(self.visFr,wx.SIMPLE_BORDER, self.txt)
-        else:
-            self.txtwin.st.SetValue(self.txt)
-            self.txtwin.Layout()
-
-        self.txtwin.Show()
-
-    def OnHideErr(self, event=None):
-        if self.txtwin is not None:
-            self.txtwin.Hide()
-
+         self.txtwin.st.SetValue(self.txt)
+         self.txtwin.Layout()
+         self.txtwin.Show()
 
 def Plug(visFr):
     """Plugs this module into the gui"""
