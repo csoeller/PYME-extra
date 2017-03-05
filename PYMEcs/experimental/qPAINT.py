@@ -49,6 +49,7 @@ class QPCalc:
         visFr.AddMenuItem('qPAINT', "Multicolour - copy data source",self.OnCopyDS)
         visFr.AddMenuItem('qPAINT', "Multicolour - in 1 go: select Image, set drift, IDs, areas, species, qIndex by channel",
                           self.OnSelectImgAndProcessMulticol)
+        visFr.AddMenuItem('qPAINT', "Multicolour - Merge Channel Measures", self.OnMergeChannelMeasures)
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
         visFr.AddMenuItem('qPAINT', 'Points based: Set objectIDs by DBSCAN clumping', self.OnClumpObjects,
@@ -287,6 +288,15 @@ class QPCalc:
 
         # restore original display settings
         pipeline.colourFilter.setColour(dispColor)
+
+    def OnMergeChannelMeasures(self, event):
+        from PYMEcs.Analysis import fitDarkTimes
+        if len(self.pipeline.colourFilter.getColourChans()) > 0:
+            channels = self.pipeline.colourFilter.getColourChans()
+            if np.all([chan in self.qpMeasurements.keys() for chan in channels]):
+               mergedMeas = fitDarkTimes.mergeChannelMeasurements(channels,[self.qpMeasurements[chan] for chan in channels])
+               self.qpMeasurements['Everything'] = mergedMeas
+
 
     def OnSelectImgAndProcess(self, event):
         from PYME.DSView import dsviewer

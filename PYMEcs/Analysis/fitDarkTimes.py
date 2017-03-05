@@ -68,6 +68,25 @@ class TabularRecArrayWrap(tabular.TabularBase):
         newcol[idx] = valsByID
         self.addColumn(colname,newcol)
 
+
+def mergeChannelMeasurements(channels,measures):
+    master = measures[0]['objectID']
+    for chan,meas in zip(channels,measures):
+        if meas['objectID'].size != master.size:
+            raise RuntimeError('channel %s does not have same size as channel %s' % (chan, channels[0]))
+        if not np.all(meas['objectID'] == master):
+            raise RuntimeError('channel %s object IDs do not match channel %s object IDs' % (chan, channels[0]))
+    mergedIDs = np.zeros(master.size, dtype=[('objectID','i4')])
+    mergedIDs[:] = master
+    mergedMeas = TabularRecArrayWrap(mergedIDs)
+
+    for chan,meas in zip(channels,measures):
+        for key in meas.keys():
+            if key != 'objectID':
+                mergedMeas.addColumn('%s_%s' % (key,chan), meas[key])
+
+    return mergedMeas
+
 from scipy.optimize import curve_fit
 def cumuexpfit(t,tau):
     return 1-np.exp(-t/tau)
