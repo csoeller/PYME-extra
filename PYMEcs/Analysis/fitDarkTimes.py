@@ -87,6 +87,47 @@ def mergeChannelMeasurements(channels,measures):
 
     return mergedMeas
 
+def safeRatio(mmeas, div11, div22):
+    mzeros = mmeas.getZeroColumn(dtype='float')
+    div1 = mzeros+div11 # this converts scalars if needed
+    div2 = mzeros+div22
+    ratio = np.zeros_like(div1)
+    d1good = (np.logical_not(np.isnan(div1)))
+    d2good = div2 > 0
+    allgood = d1good * d2good
+    ratio[allgood] = div1[allgood] / div2[allgood]
+    return ratio
+
+def makeRatio(meas, key, div1, div2):
+    meas.addColumn(key,safeRatio(meas, div1, div2))
+
+def channelName(key, chan):
+    return '%s_%s' % (key,chan)
+
+def channelColumn(meas,key,chan):
+    fullkey = channelName(key,chan)
+    return meas[fullkey]
+
+def mergedMeasurementsRatios(mmeas, chan1, chan2, cal1, cal2):
+    for chan, cal in zip([chan1,chan2],[cal1,cal2]):
+        if  channelName('qIndex',chan) not in mmeas.keys():
+            makeRatio(mmeas, channelName('qIndex',chan), 100.0, channelColumn(mmeas,'tau1',chan))
+        if  channelName('qIndexC',chan) not in mmeas.keys():
+            makeRatio(mmeas, channelName('qIndexC',chan), channelColumn(mmeas,'qIndex',chan), cal)
+        if  (channelName('qDensity',chan) not in mmeas.keys()) and (channelName('area',chan) in mmeas.keys()):
+            makeRatio(mmeas, channelName('qDensity',chan), channelColumn(mmeas,'qIndex',chan),
+                      channelColumn(mmeas,'area',chan)) 
+        if  (channelName('qDensityC',chan) not in mmeas.keys()) and (channelName('area',chan) in mmeas.keys()):
+            makeRatio(mmeas, channelName('qDensityC',chan), channelColumn(mmeas,'qIndexC',chan),
+                      channelColumn(mmeas,'area',chan)) 
+    makeRatio(mmeas, channelName('qRatio','%svs%s' % (chan1,chan2)),
+              channelColumn(mmeas,'qIndex',chan1),
+              channelColumn(mmeas,'qIndex',chan2))
+    makeRatio(mmeas, channelName('qRatioC','%svs%s' % (chan1,chan2)),
+              channelColumn(mmeas,'qIndexC',chan1),
+              channelColumn(mmeas,'qIndexC',chan2))
+
+
 from scipy.optimize import curve_fit
 def cumuexpfit(t,tau):
     return 1-np.exp(-t/tau)
@@ -202,31 +243,28 @@ def measureObjectsByID(filter, ids):
 
     for j,i in enumerate(ids):
         if not i == 0:
-            ind = id == i
-            obj = {'x': x[ind], 'y': y[ind], 't': t[ind]}
-            #print obj.shape
-            measure(obj, measurements[j])
+            if np.all(np.in1d(i, id)): # check if this ID is present in data
+                ind = id == i
+                obj = {'x': x[ind], 'y': y[ind], 't': t[ind]}
+                #print obj.shape
+                measure(obj, measurements[j])
+            else:
+                for key in  measurements[j].dtype.fields.keys():
+                    measurements[j][key]=0
             measurements[j]['objectID'] = i
 
     # wrap recarray in tabular that allows us to
     # easily add columns and save using tabular methods
     return TabularRecArrayWrap(measurements)
 
-def retrieveMeasuresForIDs(measurements,idcolumn,columns=['tau1','NDarktimes','qindex1']):
+def retrieveMeasuresForIDs(measurements,idcolumn,columns=['tau1','NDarktimes','qIndex']):
     newcols = {key: np.zeros_like(idcolumn, dtype = 'float64') for key in columns}
 
     for j,i in enumerate(measurements['objectID']):
         if not i == 0:
             ind = idcolumn == i
             for col in newcols.keys():
-                if col.startswith('tau'):
-                    if not np.isnan(measurements[col][j]) and measurements[col][j] is not None:
-                        newcols[col][ind] = measurements[col][j]
-                if col.startswith('qindex'):
-                    source = col.replace('qindex','tau')
-                    if measurements[source][j] > 0:
-                        newcols[col][ind] = 100.0/measurements[source][j]
-                else:
+                if not np.isnan(measurements[col][j]):
                     newcols[col][ind] = measurements[col][j]
 
     return newcols

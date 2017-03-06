@@ -35,7 +35,6 @@ class QPCalc:
         self.pipeline = visFr.pipeline
         self.qpMeasurements = {}
 
-        visFr.AddMenuItem('qPAINT', "Darktime distribution of selected events",self.OnDarkT)
         visFr.AddMenuItem('qPAINT', "From Image - Set driftpars",self.OnSetDriftPars)
         visFr.AddMenuItem('qPAINT', "From Image - Set objectIDs",self.OnGetIDsfromImage)
         visFr.AddMenuItem('qPAINT', "From Image - Get Areas by ID",self.OnAreaFromLabels)
@@ -46,17 +45,20 @@ class QPCalc:
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
         visFr.AddMenuItem('qPAINT', "Multicolour - set timed species from image",self.OnTimedSpeciesFromImage)
         visFr.AddMenuItem('qPAINT', "Multicolour - qIndex by channel",self.OnChannelMeasureTau)
-        visFr.AddMenuItem('qPAINT', "Multicolour - copy data source",self.OnCopyDS)
-        visFr.AddMenuItem('qPAINT', "Multicolour - in 1 go: select Image, set drift, IDs, areas, species, qIndex by channel",
-                          self.OnSelectImgAndProcessMulticol)
+        visFr.AddMenuItem('qPAINT', "Multicolour - qIndex by channel",self.OnChannelMeasureTau)
         visFr.AddMenuItem('qPAINT', "Multicolour - Merge Channel Measures", self.OnMergeChannelMeasures)
-
+        visFr.AddMenuItem('qPAINT', "Multicolour - Calculate Channel Ratios", self.OnChannelMeasurementRatios)
+        # visFr.AddMenuItem('qPAINT', "Multicolour - calibrate channel qIndices",self.OnChannelCalibrate)
+        visFr.AddMenuItem('qPAINT', "Multicolour - in 1 go: select Image, set drift, IDs, areas, species, qIndex & merge & ratio",
+                          self.OnSelectImgAndProcessMulticol)
+        
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
         visFr.AddMenuItem('qPAINT', 'Points based: Set objectIDs by DBSCAN clumping', self.OnClumpObjects,
                           helpText='Calculate objectID using DBSCAN algorithm')
         visFr.AddMenuItem('qPAINT', "Points based: Measure object ID volumes (area if 2D) by convex hull",self.OnMeasureVol)
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
+        visFr.AddMenuItem('qPAINT', "Darktime distribution of selected events",self.OnDarkT)
         visFr.AddMenuItem('qPAINT', "Calibrate a qIndex (or any column)",self.OnQindexCalibrate)
         visFr.AddMenuItem('qPAINT', "Ratio two qIndices (or any two columns)",self.OnQindexRatio)
 
@@ -65,6 +67,7 @@ class QPCalc:
         visFr.AddMenuItem('qPAINT', "Scatter plot by ID",self.OnScatterByID)
         visFr.AddMenuItem('qPAINT', "Save Measurements",self.OnSaveMeasurements)
 
+        
     def OnClumpObjects(self, event=None):
         """
         Runs sklearn DBSCAN clustering algorithm on pipeline filtered results using the GUI defined in the DBSCAN
@@ -255,7 +258,7 @@ class QPCalc:
 
         # pipeline.Rebuild()
 
-    def OnChannelMeasureTau(self, event, chan=None):
+    def OnChannelMeasureTau(self, event, chan=None, mapMeasuresToEvents=True):
         from PYMEcs.Analysis import fitDarkTimes
 
         if chan is None:
@@ -265,29 +268,38 @@ class QPCalc:
 
         pipeline = self.pipeline
         dispColor = self.pipeline.colourFilter.currentColour
-        pipeline.colourFilter.setColour(chan)
 
+        # make sure we get our IDs when everything is present -
+        # otherwise colourfiltering can create an issue with some IDs not present
+        # in some channels
+        pipeline.colourFilter.setColour('Everything')
         ids = np.unique(pipeline['objectID'].astype('int'))
         idsnz = ids[ids > 0]
-        
+
+        pipeline.colourFilter.setColour(chan)
+
         self.qpMeasurements[chan] = fitDarkTimes.measureObjectsByID(pipeline, set(idsnz))
-
-        # switch back to all channels
-        pipeline.colourFilter.setColour('Everything')
-        colmapNames = {
-            'tau1':'taudark_%s' % chan,
-            'NDarktimes':'NDarktimes_%s' % chan,
-            'qindex1':'qIndex_%s' % chan,
-            'tau1err':'taudark_error_%s' % chan,
-            'chisqr1':'taudark_chisq2_%s' % chan}
+        fitDarkTimes.makeRatio(self.qpMeasurements[chan], 'qIndex',
+                               100.0, self.qpMeasurements[chan]['tau1'])
         
-        newcols =  fitDarkTimes.retrieveMeasuresForIDs(self.qpMeasurements[chan],pipeline['objectID'],
-                                                       columns=colmapNames.keys())       
-        for sourceCol in colmapNames.keys():
-            pipeline.addColumn(colmapNames[sourceCol],newcols[sourceCol])
+        if mapMeasuresToEvents:
+            # switch back to all channels
+            pipeline.colourFilter.setColour('Everything')
+            colmapNames = {
+                'tau1':'taudark_%s' % chan,
+                'NDarktimes':'NDarktimes_%s' % chan,
+                'qIndex':'qIndex_%s' % chan,
+                'tau1err':'taudark_error_%s' % chan,
+                'chisqr1':'taudark_chisq2_%s' % chan}
 
+            newcols =  fitDarkTimes.retrieveMeasuresForIDs(self.qpMeasurements[chan],pipeline['objectID'],
+                                                           columns=colmapNames.keys())       
+            for sourceCol in colmapNames.keys():
+                pipeline.addColumn(colmapNames[sourceCol],newcols[sourceCol])
+            
         # restore original display settings
         pipeline.colourFilter.setColour(dispColor)
+
 
     def OnMergeChannelMeasures(self, event):
         from PYMEcs.Analysis import fitDarkTimes
@@ -296,6 +308,85 @@ class QPCalc:
             if np.all([chan in self.qpMeasurements.keys() for chan in channels]):
                mergedMeas = fitDarkTimes.mergeChannelMeasurements(channels,[self.qpMeasurements[chan] for chan in channels])
                self.qpMeasurements['Everything'] = mergedMeas
+
+
+    def OnChannelMeasurementRatios(self, event=None, channels=None, cals=None):
+        from PYMEcs.Analysis import fitDarkTimes
+        from PYME.recipes.traits import HasTraits, Enum, Float
+
+        if not len(self.pipeline.colourFilter.getColourChans()) > 0:
+            return
+
+        if channels is None:
+            chans = self.pipeline.colourFilter.getColourChans()
+            class myChanChoice(HasTraits):
+                RatioChannel1 = Enum(*chans)
+                RatioChannel2 = Enum(*chans)
+                RC1Calibration = Float(1.0)
+                RC2Calibration = Float(1.0)
+                
+            cChoice = myChanChoice()
+            if cChoice.configure_traits(kind='modal'):
+                channels = (cChoice.Channel1, cChoice.Channel2)
+                cals = (cChoice.RC1Calibration,cChoice.RC2Calibration)
+                
+        # here if cancel from configure_traits
+        if channels is None:
+            return
+        
+        if ('Everything' in self.qpMeasurements):
+            fitDarkTimes.mergedMeasurementsRatios(self.qpMeasurements['Everything'],
+                                                  channels[0], channels[1], cals[0], cals[1])            
+
+        def chanName(key,chan):
+            return '%s_%s' % (key,chan)
+        
+        pipeline = self.pipeline
+        dispColor = pipeline.colourFilter.currentColour
+        pipeline.colourFilter.setColour('Everything')
+        
+        colmapNames = {
+            'tau1':       'taudark',
+            'NDarktimes': 'NDarktimes',
+            'qIndex':     'qIndex',
+            'qIndexC':    'qIndexC',
+            'tau1err':    'taudark',
+            'chisqr1':    'taudark_chisq2',
+            'qDensity':   'qDensity',
+            'qDensityC':   'qDensityC'}
+
+        for chan in channels:
+            cmapChan = { chanName(key,chan) : chanName(value,chan) for key, value in colmapNames.items()}
+            newcols =  fitDarkTimes.retrieveMeasuresForIDs(self.qpMeasurements['Everything'],pipeline['objectID'],
+                                                               columns=cmapChan.keys())       
+            for sourceCol in cmapChan.keys():
+                if cmapChan[sourceCol] not in pipeline.keys():
+                    pipeline.addColumn(cmapChan[sourceCol],newcols[sourceCol])
+
+        for ratioName in ['qRatio','qRatioC']:
+            ratiokey = '%s_%svs%s' % (ratioName,channels[0],channels[1])
+            newcol = fitDarkTimes.retrieveMeasuresForIDs(self.qpMeasurements['Everything'],pipeline['objectID'],
+                                                         columns=[ratiokey])
+            pipeline.addColumn(ratiokey, newcol[ratiokey])
+
+        # restore original display settings
+        pipeline.colourFilter.setColour(dispColor)
+
+    def OnChannelCalibrate(self, event, channels=None):
+        from PYMEcs.Analysis import fitDarkTimes
+        from PYME.recipes.traits import HasTraits, Enum, Float
+
+        if not len(self.pipeline.colourFilter.getColourChans()) > 0:
+            return
+
+        if channels is None:
+            class myCalibChoice(HasTraits):
+                RChanCalibration1 = Float(1.0)
+                RChanCalibration2 = Float(1.0)
+                
+            cChoice = myCalibChoice()
+            if cChoice.configure_traits(kind='modal'):
+                calibs = (cChoice.RChanCalibration1, cChoice.RChanCalibration2)
 
 
     def OnSelectImgAndProcess(self, event):
@@ -311,16 +402,53 @@ class QPCalc:
 
     def OnSelectImgAndProcessMulticol(self, event):
         from PYME.DSView import dsviewer
+        from PYME.recipes.traits import HasTraits, Enum, Float
+
         selection = selectWithDialog(dsviewer.openViewers.keys())
-        if selection is not None:
-            img = dsviewer.openViewers[selection].image
-            self.OnSetDriftPars(None,img=img)
-            self.OnGetIDsfromImage(None,img=img)
-            self.OnTimedSpeciesFromImage(None,img=img)
-            for chan in self.pipeline.colourFilter.getColourChans():
-                self.OnChannelMeasureTau(None,chan=chan)
-            # areas last so that qpMeasures get the area info 
-            self.OnAreaFromLabels(None,img=img)
+        if selection is None:
+            return
+
+        img = dsviewer.openViewers[selection].image
+        self.OnTimedSpeciesFromImage(None,img=img)
+        # get channel ratio info
+        if len(self.pipeline.colourFilter.getColourChans()) > 0:
+            chans = self.pipeline.colourFilter.getColourChans()
+            class myChanChoice(HasTraits):
+                RatioChannel1 = Enum(*chans)
+                RatioChannel2 = Enum(*chans)
+                RC1Calibration = Float(1.0)
+                RC2Calibration = Float(1.0)
+
+            cChoice = myChanChoice()
+            if cChoice.configure_traits(kind='modal'):
+                channels = (cChoice.RatioChannel1, cChoice.RatioChannel2)
+                cals = (cChoice.RC1Calibration,cChoice.RC2Calibration)
+            else:
+                channels = None
+                cals = None
+
+        prog = wx.ProgressDialog("Process Multicolour Data", "Setting Drift...", 100,
+                                 style=wx.PD_ELAPSED_TIME | wx.PD_AUTO_HIDE)
+        prog.Update(10)
+        self.OnSetDriftPars(None,img=img)
+
+        prog.Update(25,"Setting IDs...")        
+        self.OnGetIDsfromImage(None,img=img)
+
+        prog.Update(35,"Calculating qIndices...")        
+        for chan in self.pipeline.colourFilter.getColourChans():
+            self.OnChannelMeasureTau(None,chan=chan)
+
+        prog.Update(85,"Calculating Areas and Ratios...")        
+        # areas last so that qpMeasures get the area info 
+        self.OnAreaFromLabels(None,img=img)
+        self.OnMergeChannelMeasures(None)
+
+        prog.Update(95,"Nearly Done")
+        if channels is not None:
+            self.OnChannelMeasurementRatios(None,channels=channels,cals=cals)
+        prog.Update(100)
+        prog.Destroy()
 
     def OnMeasureVol(self, event):
         from PYMEcs.recipes import localisations

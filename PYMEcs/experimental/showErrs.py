@@ -16,7 +16,8 @@ class WindowPopup(wx.PopupWindow):
       sizer.Add(self.st, 0, wx.EXPAND)
       self.SetSizer(sizer)
       self.Layout()
-
+import  wx
+from  wx.lib.dialogs import ScrolledMessageDialog
 
 
 class ShowErr:
@@ -26,7 +27,8 @@ class ShowErr:
    def __init__(self, visFr):
       self.visFr = visFr
       self.txtwin = None
-      visFr.AddMenuItem('Experimental', 'Toggle Error Log Display\tCtrl+E', self.OnToggleErrVisibility)
+      visFr.AddMenuItem('Experimental', 'Toggle Error Log Display', self.OnToggleErrVisibility)
+      visFr.AddMenuItem('Experimental', 'Errors in scrolled message dialog\tCtrl+E', self.OnErrScrolledDialog)
 
 
    def OnToggleErrVisibility(self, event=None):
@@ -44,6 +46,17 @@ class ShowErr:
          self.txtwin.st.SetValue(self.txt)
          self.txtwin.Layout()
          self.txtwin.Show()
+
+
+   def OnErrScrolledDialog(self, event=None):
+      import os
+      pid = int(os.getpid()) - 1
+      with open(os.path.join('/tmp','visgui-%d.tmp' % pid),"r") as f:
+         txt = "\n".join(f.readlines())
+         dlg = ScrolledMessageDialog(self.visFr, txt, "VisGUI Error Output", size=(900,400),
+                                     style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE )
+      dlg.ShowModal()
+      dlg.Destroy()
 
 def Plug(visFr):
     """Plugs this module into the gui"""
