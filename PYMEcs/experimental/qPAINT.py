@@ -429,13 +429,13 @@ class QPCalc:
 
         prog = wx.ProgressDialog("Process Multicolour Data", "Setting Drift...", 100,
                                  style=wx.PD_ELAPSED_TIME | wx.PD_AUTO_HIDE)
-        prog.Update(10)
+        prog.Update(15)
         self.OnSetDriftPars(None,img=img)
 
-        prog.Update(25,"Setting IDs...")        
+        prog.Update(55,"Setting IDs...")        
         self.OnGetIDsfromImage(None,img=img)
 
-        prog.Update(35,"Calculating qIndices...")        
+        prog.Update(65,"Calculating qIndices...")        
         for chan in self.pipeline.colourFilter.getColourChans():
             self.OnChannelMeasureTau(None,chan=chan)
 
