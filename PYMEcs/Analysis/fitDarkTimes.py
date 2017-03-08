@@ -101,6 +101,17 @@ def safeRatio(mmeas, div11, div22):
 def makeRatio(meas, key, div1, div2):
     meas.addColumn(key,safeRatio(meas, div1, div2))
 
+def makeSum(meas, key, add11, add22):
+    mzeros = meas.getZeroColumn(dtype='float')
+    add1 = mzeros+add11
+    add2 = mzeros+add22
+    msum = np.zeros_like(add1)
+    a1good = (np.logical_not(np.isnan(add1)))
+    a2good = (np.logical_not(np.isnan(add2)))
+    allgood = a1good*a2good
+    msum[allgood] = add1[allgood] + add2[allgood]
+    meas.addColumn(key,msum)
+
 def channelName(key, chan):
     return '%s_%s' % (key,chan)
 
@@ -110,8 +121,8 @@ def channelColumn(meas,key,chan):
 
 def mergedMeasurementsRatios(mmeas, chan1, chan2, cal1, cal2):
     for chan, cal in zip([chan1,chan2],[cal1,cal2]):
-        if  channelName('qIndex',chan) not in mmeas.keys():
-            makeRatio(mmeas, channelName('qIndex',chan), 100.0, channelColumn(mmeas,'tau1',chan))
+#        if  channelName('qIndex',chan) not in mmeas.keys():
+#            makeRatio(mmeas, channelName('qIndex',chan), 100.0, channelColumn(mmeas,'tau1',chan))
         if  channelName('qIndexC',chan) not in mmeas.keys():
             makeRatio(mmeas, channelName('qIndexC',chan), channelColumn(mmeas,'qIndex',chan), cal)
         if  (channelName('qDensity',chan) not in mmeas.keys()) and (channelName('area',chan) in mmeas.keys()):
@@ -151,8 +162,8 @@ def cumuhistBinned(timeintervals):
     binedges = 0.5+np.arange(0,timeintervals.max())
     binctrs = 0.5*(binedges[0:-1]+binedges[1:])
     h,be2 = np.histogram(timeintervals,bins=binedges)
-    hc = np.cumsum(h)
-    hcg = hc[h>0]/float(timeintervals.shape[0]) # only nonzero bins and normalise
+    hc = np.cumsum(h)/float(timeintervals.shape[0]) # normalise
+    hcg = hc[h>0] # only nonzero bins
     binctrsg = binctrs[h>0]
 
     return (binctrs, hc, binctrsg, hcg)
@@ -178,11 +189,11 @@ def fitDarktimes(t):
         success = True
         # fit theoretical distributions
         try:
-            popth,pcovh,infodicth,errmsgh,ierrh  = curve_fit(cumuexpfit,binctrsg,hcg, p0=(tauEstH),full_output=True)
+            popth,pcovh,infodicth,errmsgh,ierrh  = curve_fit(cumuexpfit,binctrs,hc, p0=(tauEstH),full_output=True)
         except:
             success = False
         else:
-            chisqredh = ((hcg - infodicth['fvec'])**2).sum()/(hcg.shape[0]-1)
+            chisqredh = ((hc - infodicth['fvec'])**2).sum()/(hc.shape[0]-1)
         try:
             popt,pcov,infodict,errmsg,ierr = curve_fit(cumuexpfit,cumux,cumuy, p0=(tauEst),full_output=True)
         except:

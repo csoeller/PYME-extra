@@ -6,6 +6,45 @@ from scipy import ndimage
 import logging
 logger = logging.getLogger(__file__)
 
+from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float
+from traitsui.api import View, Item, Group
+from traitsui.menu import OKButton, CancelButton, OKCancelButtons
+
+class myCChoice(HasTraits):
+    clist = List([])
+    RatioChannel1 = Enum(values='clist')
+    RatioChannel2 = Enum(values='clist')
+    Channel1Calibration = Float(1.0)
+    Channel2Calibration = Float(1.0)
+
+    traits_view = View(Group(Item(name = 'RatioChannel1'),
+                             Item(name = 'Channel1Calibration'),
+                             Item('_'),
+                             Item(name = 'RatioChannel2'),
+                             Item(name = 'Channel2Calibration'),
+                             label = 'Select Channels and Calibration',
+                             show_border = True),
+                       buttons = OKCancelButtons)
+
+    cal_view = View(Group(Item(name = 'Channel1Calibration'),
+                          Item('_'),
+                          Item(name = 'Channel2Calibration'),
+                          label = 'Select Calibration',
+                          show_border = True),
+                    buttons = OKCancelButtons)
+
+    one_view = View(Group(Item(name = 'RatioChannel1'),
+                          Item(name = 'Channel1Calibration'),
+                          label = 'Select Channel and Calibration',
+                          show_border = True),
+                    buttons = OKCancelButtons)
+
+    def add_channels(self,chans):
+        for chan in chans:
+            if chan not in self.clist:
+                self.clist.append(chan)
+
+                
 def uniqueByID(ids,column):
     uids, idx = np.unique(ids, return_index=True)
     ucol = column[idx]
@@ -34,7 +73,21 @@ class QPCalc:
         self.visFr = visFr
         self.pipeline = visFr.pipeline
         self.qpMeasurements = {}
+        self.useTau = 2 # we change to using the proper histogram for fitting
+        if self.useTau == 1:
+            self.tausrc = {
+                'tau'    : 'tau1',
+                'tauerr' : 'tau1err',
+                'chisq'  : 'chisqr1'}
+        elif self.useTau == 2:
+            self.tausrc = {
+                'tau'    : 'tau2',
+                'tauerr' : 'tau2err',
+                'chisq'  : 'chisqr2'}
+        else:
+            raise RuntimeError("Invalid useTau mode %d (must be 1 or 2)" % self.useTau)
 
+        
         visFr.AddMenuItem('qPAINT', "From Image - Set driftpars",self.OnSetDriftPars)
         visFr.AddMenuItem('qPAINT', "From Image - Set objectIDs",self.OnGetIDsfromImage)
         visFr.AddMenuItem('qPAINT', "From Image - Get Areas by ID",self.OnAreaFromLabels)
@@ -45,10 +98,9 @@ class QPCalc:
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
         visFr.AddMenuItem('qPAINT', "Multicolour - set timed species from image",self.OnTimedSpeciesFromImage)
         visFr.AddMenuItem('qPAINT', "Multicolour - qIndex by channel",self.OnChannelMeasureTau)
-        visFr.AddMenuItem('qPAINT', "Multicolour - qIndex by channel",self.OnChannelMeasureTau)
         visFr.AddMenuItem('qPAINT', "Multicolour - Merge Channel Measures", self.OnMergeChannelMeasures)
         visFr.AddMenuItem('qPAINT', "Multicolour - Calculate Channel Ratios", self.OnChannelMeasurementRatios)
-        # visFr.AddMenuItem('qPAINT', "Multicolour - calibrate channel qIndices",self.OnChannelCalibrate)
+        visFr.AddMenuItem('qPAINT', "Multicolour - calibrate channel qIndices (Pseudo test function)",self.OnChannelCalibrate)
         visFr.AddMenuItem('qPAINT', "Multicolour - in 1 go: select Image, set drift, IDs, areas, species, qIndex & merge & ratio",
                           self.OnSelectImgAndProcessMulticol)
         
@@ -58,7 +110,7 @@ class QPCalc:
         visFr.AddMenuItem('qPAINT', "Points based: Measure object ID volumes (area if 2D) by convex hull",self.OnMeasureVol)
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
-        visFr.AddMenuItem('qPAINT', "Darktime distribution of selected events",self.OnDarkT)
+        visFr.AddMenuItem('qPAINT', "Darktime distribution of selected events\tCtrl+T",self.OnDarkT)
         visFr.AddMenuItem('qPAINT', "Calibrate a qIndex (or any column)",self.OnQindexCalibrate)
         visFr.AddMenuItem('qPAINT', "Ratio two qIndices (or any two columns)",self.OnQindexRatio)
 
@@ -278,19 +330,20 @@ class QPCalc:
 
         pipeline.colourFilter.setColour(chan)
 
+        tausrc = self.tausrc
         self.qpMeasurements[chan] = fitDarkTimes.measureObjectsByID(pipeline, set(idsnz))
         fitDarkTimes.makeRatio(self.qpMeasurements[chan], 'qIndex',
-                               100.0, self.qpMeasurements[chan]['tau1'])
+                               100.0, self.qpMeasurements[chan][tausrc['tau']])
         
         if mapMeasuresToEvents:
             # switch back to all channels
             pipeline.colourFilter.setColour('Everything')
             colmapNames = {
-                'tau1':'taudark_%s' % chan,
+                tausrc['tau'] :'taudark_%s' % chan,
+                tausrc['tauerr']:'taudark_error_%s' % chan,
+                tausrc['chisq']:'taudark_chisq2_%s' % chan,
                 'NDarktimes':'NDarktimes_%s' % chan,
-                'qIndex':'qIndex_%s' % chan,
-                'tau1err':'taudark_error_%s' % chan,
-                'chisqr1':'taudark_chisq2_%s' % chan}
+                'qIndex':'qIndex_%s' % chan}
 
             newcols =  fitDarkTimes.retrieveMeasuresForIDs(self.qpMeasurements[chan],pipeline['objectID'],
                                                            columns=colmapNames.keys())       
@@ -319,16 +372,11 @@ class QPCalc:
 
         if channels is None:
             chans = self.pipeline.colourFilter.getColourChans()
-            class myChanChoice(HasTraits):
-                RatioChannel1 = Enum(*chans)
-                RatioChannel2 = Enum(*chans)
-                RC1Calibration = Float(1.0)
-                RC2Calibration = Float(1.0)
-                
-            cChoice = myChanChoice()
+            cChoice = myCChoice()
+            cChoice.add_channels(chans)
             if cChoice.configure_traits(kind='modal'):
                 channels = (cChoice.Channel1, cChoice.Channel2)
-                cals = (cChoice.RC1Calibration,cChoice.RC2Calibration)
+                cals = (cChoice.Channel1Calibration,cChoice.Channel2Calibration)
                 
         # here if cancel from configure_traits
         if channels is None:
@@ -345,13 +393,14 @@ class QPCalc:
         dispColor = pipeline.colourFilter.currentColour
         pipeline.colourFilter.setColour('Everything')
         
+        tausrc = self.tausrc
         colmapNames = {
-            'tau1':       'taudark',
+            tausrc['tau']:       'taudark',
             'NDarktimes': 'NDarktimes',
             'qIndex':     'qIndex',
             'qIndexC':    'qIndexC',
-            'tau1err':    'taudark',
-            'chisqr1':    'taudark_chisq2',
+            tausrc['tauerr']:    'taudark',
+            tausrc['chisq']:    'taudark_chisq2',
             'qDensity':   'qDensity',
             'qDensityC':   'qDensityC'}
 
@@ -369,25 +418,30 @@ class QPCalc:
                                                          columns=[ratiokey])
             pipeline.addColumn(ratiokey, newcol[ratiokey])
 
+        meas = self.qpMeasurements['Everything']
+        chisq_chan1 = meas[chanName(self.tausrc['chisq'],channels[0])]
+        chisq_chan2 = meas[chanName(self.tausrc['chisq'],channels[0])]
+        ratioChisq = 'qRatio_chisq2'
+        fitDarkTimes.makeSum(meas,ratioChisq,chisq_chan1,chisq_chan2)
+        newcol = fitDarkTimes.retrieveMeasuresForIDs(self.qpMeasurements['Everything'],pipeline['objectID'],
+                                                     columns=[ratioChisq])
+        pipeline.addColumn(ratioChisq, newcol[ratioChisq])
+
         # restore original display settings
         pipeline.colourFilter.setColour(dispColor)
 
     def OnChannelCalibrate(self, event, channels=None):
         from PYMEcs.Analysis import fitDarkTimes
-        from PYME.recipes.traits import HasTraits, Enum, Float
-
-        if not len(self.pipeline.colourFilter.getColourChans()) > 0:
-            return
-
+        # currently just an interface test function
+        
+        chans = ['ryrtest','jphtest']
         if channels is None:
-            class myCalibChoice(HasTraits):
-                RChanCalibration1 = Float(1.0)
-                RChanCalibration2 = Float(1.0)
-                
-            cChoice = myCalibChoice()
-            if cChoice.configure_traits(kind='modal'):
-                calibs = (cChoice.RChanCalibration1, cChoice.RChanCalibration2)
-
+            cChoice = myCChoice()
+            cChoice.add_channels(chans)
+            if cChoice.configure_traits(view='one_view', kind='modal'):
+                channels = (cChoice.RatioChannel1, cChoice.RatioChannel2)
+                cals = (cChoice.Channel1Calibration,cChoice.Channel2Calibration)
+ 
 
     def OnSelectImgAndProcess(self, event):
         from PYME.DSView import dsviewer
@@ -410,19 +464,15 @@ class QPCalc:
 
         img = dsviewer.openViewers[selection].image
         self.OnTimedSpeciesFromImage(None,img=img)
+
         # get channel ratio info
         if len(self.pipeline.colourFilter.getColourChans()) > 0:
             chans = self.pipeline.colourFilter.getColourChans()
-            class myChanChoice(HasTraits):
-                RatioChannel1 = Enum(*chans)
-                RatioChannel2 = Enum(*chans)
-                RC1Calibration = Float(1.0)
-                RC2Calibration = Float(1.0)
-
-            cChoice = myChanChoice()
+            cChoice = myCChoice()
+            cChoice.add_channels(chans)
             if cChoice.configure_traits(kind='modal'):
                 channels = (cChoice.RatioChannel1, cChoice.RatioChannel2)
-                cals = (cChoice.RC1Calibration,cChoice.RC2Calibration)
+                cals = (cChoice.Channel1Calibration,cChoice.Channel2Calibration)
             else:
                 channels = None
                 cals = None
@@ -432,10 +482,10 @@ class QPCalc:
         prog.Update(15)
         self.OnSetDriftPars(None,img=img)
 
-        prog.Update(55,"Setting IDs...")        
+        prog.Update(40,"Setting IDs...")        
         self.OnGetIDsfromImage(None,img=img)
 
-        prog.Update(65,"Calculating qIndices...")        
+        prog.Update(50,"Calculating qIndices...")        
         for chan in self.pipeline.colourFilter.getColourChans():
             self.OnChannelMeasureTau(None,chan=chan)
 
@@ -535,7 +585,7 @@ class QPCalc:
         mdh = pipeline.mdh
 
         NTMIN = 5
-        maxPts = 1e4
+        maxPts = 1e5
         t = pipeline['t']
         if len(t) > maxPts:
             Warn(None,'aborting darktime analysis: too many events, current max is %d' % maxPts)
@@ -567,8 +617,8 @@ class QPCalc:
 
             idx = (np.abs(hcg - 0.63)).argmin()
             tauesth = binctrsg[idx]
-            popth,pcovh,infodicth,errmsgh,ierrh = curve_fit(fitDarkTimes.cumuexpfit,binctrsg,hcg, p0=(tauesth),full_output=True)
-            chisqredh = ((hcg - infodicth['fvec'])**2).sum()/(hcg.shape[0]-1)
+            popth,pcovh,infodicth,errmsgh,ierrh = curve_fit(fitDarkTimes.cumuexpfit,binctrs,hc, p0=(tauesth),full_output=True)
+            chisqredh = ((hc - infodicth['fvec'])**2).sum()/(hc.shape[0]-1)
             idx = (np.abs(cumuy - 0.63)).argmin()
             tauest = cumux[idx]
             popt,pcov,infodict,errmsg,ierr = curve_fit(fitDarkTimes.cumuexpfit,cumux,cumuy, p0=(tauest),full_output=True)
@@ -580,13 +630,13 @@ class QPCalc:
             plt.subplot(211)
             plt.plot(cumux,cumuy,'o')
             plt.plot(cumux,fitDarkTimes.cumuexpfit(cumux,popt[0]))
-            plt.plot(binctrs,hc/float(nts),'o')
+            plt.plot(binctrs,hc,'o')
             plt.plot(binctrs,fitDarkTimes.cumuexpfit(binctrs,popth[0]))
             plt.ylim(-0.2,1.2)
             plt.subplot(212)
             plt.semilogx(cumux,cumuy,'o')
             plt.semilogx(cumux,fitDarkTimes.cumuexpfit(cumux,popt[0]))
-            plt.semilogx(binctrs,hc/float(nts),'o')
+            plt.semilogx(binctrs,hc,'o')
             plt.semilogx(binctrs,fitDarkTimes.cumuexpfit(binctrs,popth[0]))
             plt.ylim(-0.2,1.2)
             plt.show()
