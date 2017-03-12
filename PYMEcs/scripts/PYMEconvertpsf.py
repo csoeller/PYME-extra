@@ -16,7 +16,8 @@ def main():
         import cPickle as pickle
     except ImportError:
         import pickle
-
+    from PYME.IO.image import ImageStack
+    
     # we need to trick pickle into thinking that
     #    PYME.Acquire.MetaDataHandler is still available
     import PYME.IO.MetaDataHandler as MD
@@ -29,8 +30,18 @@ def main():
         print psf[1]
 
     del sys.modules['PYME.Acquire.MetaDataHandler']
-    with open(args.outname,'wb') as outfi:
-        pickle.dump(psf,outfi)
 
+    psfdata = psf[0]
+    psfvox = psf[1]
+    mdh = MD.NestedClassMDHandler()
+    mdh['voxelsize'] = psfvox
+    import os
+    filename, file_extension = os.path.splitext(args.outname)
+    if file_extension.startswith('.tif'):
+        mdh['ImageType'] = 'PSF'
+    # print(mdh)
+    ImageStack(psfdata,mdh=mdh).Save(filename=args.outname)
+
+    
 if __name__ == "__main__":
     main()
