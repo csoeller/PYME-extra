@@ -45,6 +45,51 @@ class myCChoice(HasTraits):
                 self.clist.append(chan)
 
                 
+class TimedSpecies(HasTraits):
+    Species1 = CStr()
+    Species1FromTime = Float()
+    Species1ToTime = Float()
+    
+    Species2 = CStr()
+    Species2FromTime = Float()
+    Species2ToTime = Float()
+
+    Species3 = CStr()
+    Species3FromTime = Float()
+    Species3ToTime = Float()
+
+
+    traits_view = View(Group(Item(name = 'Species1'),
+                             Item(name = 'Species1FromTime'),
+                             Item(name = 'Species1ToTime'),
+                             Item('_'),
+                             Item(name = 'Species2'),
+                             Item(name = 'Species2FromTime'),
+                             Item(name = 'Species2ToTime'),
+                             Item('_'),
+                             Item(name = 'Species3'),
+                             Item(name = 'Species3FromTime'),
+                             Item(name = 'Species3ToTime'),
+                             label = 'Specify Timed Species',
+                             show_border = True),
+                       buttons = OKCancelButtons)
+
+    def getSpeciesDescriptor(self):
+        speclist = {}
+        if self.Species1: # empty strings will be ignored
+            speclist[self.Species1] = (self.Species1FromTime,
+                                               self.Species1ToTime)
+        if self.Species2: # empty strings will be ignored
+            speclist[self.Species2] = (self.Species2FromTime,
+                                               self.Species2ToTime)
+        if self.Species3: # empty strings will be ignored
+            speclist[self.Species3] = (self.Species3FromTime,
+                                               self.Species3ToTime)
+
+        logger.info('speclist is ' + repr(speclist))
+        return speclist
+
+                
 def uniqueByID(ids,column):
     uids, idx = np.unique(ids, return_index=True)
     ucol = column[idx]
@@ -96,6 +141,7 @@ class QPCalc:
                           self.OnSelectImgAndProcess)
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
+        visFr.AddMenuItem('qPAINT', "Multicolour - set timed species by Dialog",self.OnTimedSpecies)
         visFr.AddMenuItem('qPAINT', "Multicolour - set timed species from image",self.OnTimedSpeciesFromImage)
         visFr.AddMenuItem('qPAINT', "Multicolour - qIndex by channel",self.OnChannelMeasureTau)
         visFr.AddMenuItem('qPAINT', "Multicolour - Merge Channel Measures", self.OnMergeChannelMeasures)
@@ -209,6 +255,27 @@ class QPCalc:
                     destp[key] = srcp[key]
             dpn.OnDriftApply(None)
             dpn.OnDriftExprChange(None)
+
+    def OnTimedSpecies(self, event):
+        # a reworked version that uses a simpler TraitsUI interface
+        timedSpecies = TimedSpecies()
+        if timedSpecies.configure_traits(kind='modal'):
+            from PYME.LMVis import renderers
+            speclist = timedSpecies.getSpeciesDescriptor()
+            if len(speclist.keys())>0:
+                # not sure if this should be Source.TimedSpecies or just TimedSpecies 
+                renderers.renderMetadataProviders.append(lambda mdh:
+                                                         mdh.setEntry('Source.TimedSpecies', speclist))
+            
+                pipeline = self.visFr.pipeline
+                if pipeline.selectedDataSource is not None:
+                    pipeline.selectedDataSource.setMapping('ColourNorm', '1.0 + 0*t')
+                    for species in speclist.keys():
+                        pipeline.selectedDataSource.setMapping('p_%s' % species,
+                                                               '(t>= %d)*(t<%d)' % speclist[species])
+                    self.visFr.RegenFilter()
+                    self.visFr.CreateFoldPanel()
+
 
     def OnTimedSpeciesFromImage(self, event, img=None):
         from PYME.DSView import dsviewer
