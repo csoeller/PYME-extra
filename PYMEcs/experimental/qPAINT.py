@@ -264,10 +264,11 @@ class QPCalc:
             speclist = timedSpecies.getSpeciesDescriptor()
             if len(speclist.keys())>0:
                 # not sure if this should be Source.TimedSpecies or just TimedSpecies 
-                renderers.renderMetadataProviders.append(lambda mdh:
-                                                         mdh.setEntry('Source.TimedSpecies', speclist))
+                #renderers.renderMetadataProviders.append(lambda mdh:
+                #                                         mdh.setEntry('Source.TimedSpecies', speclist))
             
                 pipeline = self.visFr.pipeline
+                pipeline.mdh.setEntry('TimedSpecies', speclist)
                 if pipeline.selectedDataSource is not None:
                     pipeline.selectedDataSource.setMapping('ColourNorm', '1.0 + 0*t')
                     for species in speclist.keys():

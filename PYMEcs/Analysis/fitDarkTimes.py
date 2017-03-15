@@ -8,6 +8,9 @@ import numpy as np
 # should just received 1D vectors and be completely
 # ignorant of any pipeline/datasource origin
 
+import logging
+logger = logging.getLogger(__name__)
+
 import PYME.IO.tabular as tabular
 # quick tabular class that wraps a recarray
 # and allows adding new columns
@@ -51,21 +54,26 @@ class TabularRecArrayWrap(tabular.TabularBase):
 
         self.new_columns[name] = values
 
+        
     def getZeroColumn(self, dtype='float64'):
         return np.zeros(self._recarray.shape, dtype=dtype)
 
+    
     def addNewColumnByID(self, fromids, colname, valsByID):
         if not np.all(np.in1d(fromids,self['objectID'])):
-            raise RuntimeError('some ids not present in measurements')
+            logger.warn('some ids not present in measurements')
+        # limit everything below to those IDs present in the events
+        fromids1 = fromids[np.in1d(fromids,self['objectID'])]
         # this expression finds the lookup table to locate
         # ids in fromids in self['objectID']
         # i.e. we should have self['objectID'][idx] == fromids
-        idx = np.nonzero((fromids[None,:] == self['objectID'][:,None]).T)[1]
-        if not np.all(self['objectID'][idx] == fromids):
+        idx = np.nonzero((fromids1[None,:] == self['objectID'][:,None]).T)[1]
+        if not np.all(self['objectID'][idx] == fromids1):
             raise RuntimeError('Lookup error - this should not happen')
     
         newcol = self.getZeroColumn(dtype='float64')
-        newcol[idx] = valsByID
+        # make sure we match fromids1 shape in assignment
+        newcol[idx] = valsByID[np.in1d(fromids,self['objectID'])]
         self.addColumn(colname,newcol)
 
 
@@ -87,6 +95,7 @@ def mergeChannelMeasurements(channels,measures):
 
     return mergedMeas
 
+
 def safeRatio(mmeas, div11, div22):
     mzeros = mmeas.getZeroColumn(dtype='float')
     div1 = mzeros+div11 # this converts scalars if needed
@@ -98,9 +107,11 @@ def safeRatio(mmeas, div11, div22):
     ratio[allgood] = div1[allgood] / div2[allgood]
     return ratio
 
+
 def makeRatio(meas, key, div1, div2):
     meas.addColumn(key,safeRatio(meas, div1, div2))
 
+    
 def makeSum(meas, key, add11, add22):
     mzeros = meas.getZeroColumn(dtype='float')
     add1 = mzeros+add11
@@ -112,12 +123,15 @@ def makeSum(meas, key, add11, add22):
     msum[allgood] = add1[allgood] + add2[allgood]
     meas.addColumn(key,msum)
 
+    
 def channelName(key, chan):
     return '%s_%s' % (key,chan)
+
 
 def channelColumn(meas,key,chan):
     fullkey = channelName(key,chan)
     return meas[fullkey]
+
 
 def mergedMeasurementsRatios(mmeas, chan1, chan2, cal1, cal2):
     for chan, cal in zip([chan1,chan2],[cal1,cal2]):
@@ -139,9 +153,12 @@ def mergedMeasurementsRatios(mmeas, chan1, chan2, cal1, cal2):
               channelColumn(mmeas,'qIndexC',chan2))
 
 
+
+# darktime fitting section
 from scipy.optimize import curve_fit
 def cumuexpfit(t,tau):
     return 1-np.exp(-t/tau)
+
 
 def notimes(ndarktimes):
     analysis = {
@@ -151,13 +168,15 @@ def notimes(ndarktimes):
     }
     return analysis
 
+
 def cumuhist(timeintervals):
     ti = timeintervals
     nIntervals = ti.shape[0]
     cumux = np.sort(ti+0.01*np.random.random(nIntervals)) # hack: adding random noise helps us ensure uniqueness of x values
     cumuy = (1.0+np.arange(nIntervals))/np.float(nIntervals)
     return (cumux,cumuy)
-    
+
+
 def cumuhistBinned(timeintervals):
     binedges = 0.5+np.arange(0,timeintervals.max())
     binctrs = 0.5*(binedges[0:-1]+binedges[1:])
@@ -167,6 +186,7 @@ def cumuhistBinned(timeintervals):
     binctrsg = binctrs[h>0]
 
     return (binctrs, hc, binctrsg, hcg)
+
 
 def fitDarktimes(t):
     # determine darktime from gaps and reject zeros (no real gaps) 
@@ -244,6 +264,7 @@ def measure(object, measurements = np.zeros(1, dtype=measureDType)):
     
     return measurements
 
+
 def measureObjectsByID(filter, ids):
     x = filter['x'] #+ 0.1*random.randn(filter['x'].size)
     y = filter['y'] #+ 0.1*random.randn(x.size)
@@ -267,6 +288,7 @@ def measureObjectsByID(filter, ids):
     # wrap recarray in tabular that allows us to
     # easily add columns and save using tabular methods
     return TabularRecArrayWrap(measurements)
+
 
 def retrieveMeasuresForIDs(measurements,idcolumn,columns=['tau1','NDarktimes','qIndex']):
     newcols = {key: np.zeros_like(idcolumn, dtype = 'float64') for key in columns}
