@@ -49,14 +49,15 @@ try:
 except:
     zt = ZeroconfServiceTypes()
 
-def servicesPresent(timeOut=5):
+def servicesPresent(timeOut=5, showServices=False):
     services = zt.find(timeout=timeOut)
-    print(services)
+    if showServices:
+        print("Available Services: %s" % repr(services))
 
     return len(services) > 0
 
-def checkServer():
-    if servicesPresent():
+def checkServer(showServices=False):
+    if servicesPresent(showServices=showServices):
         logger.info('zeroconf services detected')
     else:
         logger.error('no zeroconf services detected - this should not happen')
