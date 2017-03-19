@@ -201,11 +201,17 @@ def fitDarktimes(t):
     if nts > NTMIN:
         # now make a cumulative histogram from these
         cumux, cumuy = cumuhist(dtg)
-        tauEst = cumux[(np.abs(cumuy - 0.63)).argmin()]
+        try:
+            tauEst = cumux[(np.abs(cumuy - 0.63)).argmin()]
+        except ValueError:
+            tauEst = 100.0
         # generate alternative histogram with binning
         binctrs, hc, binctrsg, hcg = cumuhistBinned(dtg)
-        tauEstH = binctrsg[(np.abs(hcg - 0.63)).argmin()]
-        
+        try:
+            tauEstH = binctrsg[(np.abs(hcg - 0.63)).argmin()]
+        except ValueError:
+            tauEstH = 100.0
+
         success = True
         # fit theoretical distributions
         try:
@@ -213,7 +219,10 @@ def fitDarktimes(t):
         except:
             success = False
         else:
-            chisqredh = ((hc - infodicth['fvec'])**2).sum()/(hc.shape[0]-1)
+            if hc.shape[0] > 1:
+                chisqredh = ((hc - infodicth['fvec'])**2).sum()/(hc.shape[0]-1)
+            else:
+                chisqredh = 0
         try:
             popt,pcov,infodict,errmsg,ierr = curve_fit(cumuexpfit,cumux,cumuy, p0=(tauEst),full_output=True)
         except:
@@ -237,7 +246,8 @@ def fitDarktimes(t):
 measureDType = [('objectID', 'i4'), ('t', 'i4'), ('x', 'f4'), ('y', 'f4'),
                 ('NEvents', 'i4'), ('NDarktimes', 'i4'), ('tau1', 'f4'),
                 ('tau2', 'f4'), ('tau1err', 'f4'), ('tau2err', 'f4'),
-                ('chisqr1', 'f4'), ('chisqr2', 'f4'), ('tau1est', 'f4'), ('tau2est', 'f4')]
+                ('chisqr1', 'f4'), ('chisqr2', 'f4'), ('tau1est', 'f4'), ('tau2est', 'f4'),
+                ('NDefocused', 'i4'), ('NDefocusedFrac', 'f4')]
 
 
 def measure(object, measurements = np.zeros(1, dtype=measureDType)):
@@ -265,11 +275,14 @@ def measure(object, measurements = np.zeros(1, dtype=measureDType)):
     return measurements
 
 
-def measureObjectsByID(filter, ids):
+def measureObjectsByID(filter, ids, sigDefocused = None):
+    # IMPORTANT: repeated filter access is extremely costly!
+    # need to cache any filter access here first
     x = filter['x'] #+ 0.1*random.randn(filter['x'].size)
     y = filter['y'] #+ 0.1*random.randn(x.size)
     id = filter['objectID'].astype('i')
     t = filter['t']
+    sig = filter['sig'] # we must do our own caching!
 
     measurements = np.zeros(len(ids), dtype=measureDType)
 
@@ -280,6 +293,10 @@ def measureObjectsByID(filter, ids):
                 obj = {'x': x[ind], 'y': y[ind], 't': t[ind]}
                 #print obj.shape
                 measure(obj, measurements[j])
+                # here we measure the fraction of defocused localisations to give us an idea how 3D something is
+                if sigDefocused is not None:
+                    measurements[j]['NDefocused'] = np.sum(sig[ind] > sigDefocused)
+                    measurements[j]['NDefocusedFrac'] = float(measurements[j]['NDefocused'])/measurements[j]['NEvents'] 
             else:
                 for key in  measurements[j].dtype.fields.keys():
                     measurements[j][key]=0

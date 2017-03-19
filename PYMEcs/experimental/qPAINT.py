@@ -399,7 +399,7 @@ class QPCalc:
         pipeline.colourFilter.setColour(chan)
 
         tausrc = self.tausrc
-        self.qpMeasurements[chan] = fitDarkTimes.measureObjectsByID(pipeline, set(idsnz))
+        self.qpMeasurements[chan] = fitDarkTimes.measureObjectsByID(pipeline, set(idsnz), sigDefocused=165.0)
         fitDarkTimes.makeRatio(self.qpMeasurements[chan], 'qIndex',
                                100.0, self.qpMeasurements[chan][tausrc['tau']])
         
@@ -407,11 +407,14 @@ class QPCalc:
             # switch back to all channels
             pipeline.colourFilter.setColour('Everything')
             colmapNames = {
-                tausrc['tau'] :'taudark_%s' % chan,
-                tausrc['tauerr']:'taudark_error_%s' % chan,
-                tausrc['chisq']:'taudark_chisq2_%s' % chan,
-                'NDarktimes':'NDarktimes_%s' % chan,
-                'qIndex':'qIndex_%s' % chan}
+                tausrc['tau']     : 'taudark_%s' % chan,
+                tausrc['tauerr']  : 'taudark_error_%s' % chan,
+                tausrc['chisq']   : 'taudark_chisq2_%s' % chan,
+                'NDarktimes'      : 'NDarktimes_%s' % chan,
+                'qIndex'          : 'qIndex_%s' % chan,
+                'NEvents'         : 'NEvents_%s' % chan,
+                'NDefocusedFrac'  : 'NDefocusedFrac_%s' % chan
+            }
 
             newcols =  fitDarkTimes.retrieveMeasuresForIDs(self.qpMeasurements[chan],pipeline['objectID'],
                                                            columns=colmapNames.keys())       
