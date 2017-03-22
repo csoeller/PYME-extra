@@ -5,13 +5,34 @@ from scipy import ndimage
 import logging
 logger = logging.getLogger(__file__)
 
-def zshift(t,data,navg=50):
+from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float
+from traitsui.api import View, Item, Group
+from traitsui.menu import OKButton, CancelButton, OKCancelButtons
+
+class FilterChoice(HasTraits):
+    windowSize = Int(11)
+    filterType = Enum(['Gaussian','Median'])
+    funcmap = {
+        'Gaussian' : ndimage.gaussian_filter1d,
+        'Median'   : ndimage.median_filter}
+    
+    def get_filter(self):
+        
+        def filterfunc(data):
+            return self.funcmap[self.filterType](data,self.windowSize)
+
+        return filterfunc
+
+
+def zeroshift(t,data,navg=50):
     ti,idx = np.unique(t.astype('int'),return_index=True)
     di = data[idx]
     nm = min(navg,di.shape[0])
     offset = di[0:nm].mean()
     return data - offset
 
+
+# this should be replaced with a quick traits interface
 def myfilter(d,width=11):
     return ndimage.gaussian_filter(d,width)
 
@@ -75,32 +96,43 @@ class ClusterTracker:
             t_id = pipeline['t'][thiscluster]
             x_id = pipeline['x'][thiscluster]
             y_id = pipeline['y'][thiscluster]
+            z_id = pipeline['z'][thiscluster]
             I = np.argsort(t_id)
-            self.clusterTracks.append([t_id[I],x_id[I],y_id[I]])
+            self.clusterTracks.append([t_id[I],x_id[I],y_id[I],z_id[I]])
 
     def OnShowTracks(self, event=None):
         import matplotlib.pyplot as plt
         if len(self.clusterTracks) > 0:
             plt.figure()
             for entry in self.clusterTracks:
-                t,x,y = entry
-                plt.plot(t,zshift(t,x))
+                t,x,y,z = entry
+                plt.plot(t,zeroshift(t,x))
             plt.figure()
             for entry in self.clusterTracks:
-                t,x,y = entry
-                plt.plot(t,zshift(t,y))
+                t,x,y,z = entry
+                plt.plot(t,zeroshift(t,y))
+            plt.figure()
+            for entry in self.clusterTracks:
+                t,x,y,z = entry
+                plt.plot(t,zeroshift(t,z))
 
     def OnShowTracksFiltered(self, event=None):
         import matplotlib.pyplot as plt
-        if len(self.clusterTracks) > 0:
+        fc = FilterChoice()
+        if len(self.clusterTracks) > 0 and fc.configure_traits(kind='modal'):
+            filterfunc = fc.get_filter()
             plt.figure()
             for entry in self.clusterTracks:
-                t,x,y = entry
-                plt.plot(t,myfilter(zshift(t,x)))
+                t,x,y,z = entry
+                plt.plot(t,filterfunc(zeroshift(t,x)))
             plt.figure()
             for entry in self.clusterTracks:
-                t,x,y = entry
-                plt.plot(t,myfilter(zshift(t,y)))
+                t,x,y,z = entry
+                plt.plot(t,filterfunc(zeroshift(t,y)))
+            plt.figure()
+            for entry in self.clusterTracks:
+                t,x,y,z = entry
+                plt.plot(t,filterfunc(zeroshift(t,z)))
 
     def OnClearTracks(self, event=None):
         self.clusterTracks = []
