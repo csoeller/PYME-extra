@@ -10,6 +10,23 @@ from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float
 from traitsui.api import View, Item, Group
 from traitsui.menu import OKButton, CancelButton, OKCancelButtons
 
+class KeyChoice(HasTraits):
+    clist = List([])
+    Key = Enum(values='clist')
+
+    traits_view = View(
+        'Key',
+        title = 'Select Measure',
+        resizable = True,
+        buttons = OKCancelButtons
+    )
+
+    def add_keys(self,chans):
+        for chan in chans:
+            if chan not in self.clist:
+                self.clist.append(chan)
+
+
 class myCChoice(HasTraits):
     clist = List([])
     RatioChannel1 = Enum(values='clist')
@@ -163,6 +180,8 @@ class QPCalc:
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
         visFr.AddMenuItem('qPAINT', "Plot histogram of one data column",self.OnGeneralHist)
         visFr.AddMenuItem('qPAINT', "Scatter plot by ID",self.OnScatterByID)
+        visFr.AddMenuItem('qPAINT', "Image of qPAINT measure from label image",self.OnLabelLookupByID)
+        visFr.AddMenuItem('qPAINT', "Load Measurements",self.OnLoadMeasurements)
         visFr.AddMenuItem('qPAINT', "Save Measurements",self.OnSaveMeasurements)
 
         
@@ -527,9 +546,35 @@ class QPCalc:
             # areas last so that qpMeasures get the area info 
             self.OnAreaFromLabels(None,img=img)
 
+
+    def OnLabelLookupByID(self, event):
+        from PYME.DSView import dsviewer, ViewIm3D
+        import PYME.IO.image as im
+        
+        if ('Everything' in self.qpMeasurements):
+            meas = self.qpMeasurements['Everything']
+            selection = selectWithDialog(dsviewer.openViewers.keys())
+            if selection is None:
+                return
+            keyChoice = KeyChoice()
+            keyChoice.add_keys(sorted(meas.keys()))
+            if not keyChoice.configure_traits(kind='modal'):
+                return
+
+            labelimg = dsviewer.openViewers[selection].image
+            labels = labelimg.data[:,:,:].squeeze()
+            measures = meas.lookupByID(labels,keyChoice.Key)
+            newimg = im.ImageStack(measures, titleStub = 'Measure %s' % (keyChoice.Key))
+            newimg.mdh.copyEntriesFrom(labelimg.mdh)
+            newimg.mdh['Parent'] = labelimg.filename
+            newimg.mdh['Processing.qpMeasure'] = keyChoice.Key
+
+            ViewIm3D(newimg, mode='visGUI', title='Measure %s' % (keyChoice.Key),
+                     glCanvas=self.visFr.glCanvas, parent=self.visFr)
+
+            
     def OnSelectImgAndProcessMulticol(self, event):
         from PYME.DSView import dsviewer
-        from PYME.recipes.traits import HasTraits, Enum, Float
 
         selection = selectWithDialog(dsviewer.openViewers.keys())
         if selection is None:
@@ -648,6 +693,17 @@ class QPCalc:
                 base, ext = os.path.splitext(filename)
                 for chan in self.qpMeasurements.keys():
                     runRecipe.saveOutput(self.qpMeasurements[chan], base + '_' + chan + ext)
+
+    def OnLoadMeasurements(self,event):
+        import PYMEcs.IO.tabular as tb
+        import os.path
+        
+        filename = wx.FileSelector('Load measurements (select basename)...',
+                                   wildcard="CSV files (*.csv)|*.csv", 
+                                   flags = wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
+                                   
+        if not filename == '':
+            self.qpMeasurements['Everything'] = tb.tabularFromCSV(filename)
 
     def OnDarkT(self,event):
         import StringIO

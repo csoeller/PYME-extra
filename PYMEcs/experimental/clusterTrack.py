@@ -22,7 +22,7 @@ class FilterChoice(HasTraits):
             return self.funcmap[self.filterType](data,self.windowSize)
 
         return filterfunc
-
+    
 
 def zeroshift(t,data,navg=50):
     ti,idx = np.unique(t.astype('int'),return_index=True)
@@ -31,10 +31,6 @@ def zeroshift(t,data,navg=50):
     offset = di[0:nm].mean()
     return data - offset
 
-
-# this should be replaced with a quick traits interface
-def myfilter(d,width=11):
-    return ndimage.gaussian_filter(d,width)
 
 class ClusterTracker:
     """

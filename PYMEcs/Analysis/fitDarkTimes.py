@@ -76,6 +76,22 @@ class TabularRecArrayWrap(tabular.TabularBase):
         newcol[idx] = valsByID[np.in1d(fromids,self['objectID'])]
         self.addColumn(colname,newcol)
 
+    def lookupByID(self, ids, key):
+        idi = ids.astype('int')
+        uids = np.unique(idi[idi.nonzero()])
+        uids_avail = uids[np.in1d(uids,self['objectID'])]
+        idx = np.nonzero((uids_avail[None,:] == self['objectID'][:,None]).T)[1]
+        valsByID = self[key][idx] # these are the values from column 'key' matching uids_avail
+        
+        lut = np.zeros(uids_avail.max()+1,dtype='float64')
+        lut[uids_avail] = valsByID
+        
+        lu = np.zeros_like(idi,dtype='float64')
+        idiflat = idi.ravel()
+        luflat = lu.ravel()
+        luflat[np.in1d(idiflat,uids_avail)] = lut[idiflat[np.in1d(idiflat,uids_avail)]]
+        return lu
+
 
 def mergeChannelMeasurements(channels,measures):
     master = measures[0]['objectID']
