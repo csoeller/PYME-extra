@@ -400,8 +400,9 @@ class QPCalc:
 
         tausrc = self.tausrc
         self.qpMeasurements[chan] = fitDarkTimes.measureObjectsByID(pipeline, set(idsnz), sigDefocused=165.0)
-        fitDarkTimes.makeRatio(self.qpMeasurements[chan], 'qIndex',
-                               100.0, self.qpMeasurements[chan][tausrc['tau']])
+        qmc = self.qpMeasurements[chan]
+        fitDarkTimes.makeRatio(qmc, 'qIndex', 100.0, qmc[tausrc['tau']])
+        fitDarkTimes.makeRatio(qmc, 'NTauDiff', np.abs(qmc['tau1']-qmc['tau2']), qmc['tau2'])     
         
         if mapMeasuresToEvents:
             # switch back to all channels
@@ -413,7 +414,8 @@ class QPCalc:
                 'NDarktimes'      : 'NDarktimes_%s' % chan,
                 'qIndex'          : 'qIndex_%s' % chan,
                 'NEvents'         : 'NEvents_%s' % chan,
-                'NDefocusedFrac'  : 'NDefocusedFrac_%s' % chan
+                'NDefocusedFrac'  : 'NDefocusedFrac_%s' % chan,
+                'NTauDiff'        : 'NTauDiff_%s' % chan
             }
 
             newcols =  fitDarkTimes.retrieveMeasuresForIDs(self.qpMeasurements[chan],pipeline['objectID'],

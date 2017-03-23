@@ -30,9 +30,14 @@ def genRef(refimage):
 
 	return calImages, calFTs, dz, dzn, mask, X, Y
 
-def compare(calImages, calFTs, dz, dzn, posInd, image, mask, X, Y):
+def compare(calImages, calFTs, dz, dzn, posInd, image, mask, X, Y, normalised=False):
 	d = 1.0*image
-	dm = d/d.mean() - 1
+
+	if not normalised:
+                dm = d/d.mean() - 1
+        else:
+                dm = d
+                
 	FA = calFTs[:,:,posInd]
 	refA = calImages[:,:,posInd] 
 
@@ -52,7 +57,7 @@ def compare(calImages, calFTs, dz, dzn, posInd, image, mask, X, Y):
 	ds = ndimage.shift(dm, [-dx, -dy])*mask
 	ds_A = (ds - refA)
 
-	dz = 0.2*np.dot(ds_A.ravel(), ddz)*dznn
+	dz = 0.2*np.dot(ds_A.ravel(), ddz)*dznn # presumably the 0.2 is for the dz spacing in um from the calibration stack
 
 	return dx, dy, dz, Cm
 
