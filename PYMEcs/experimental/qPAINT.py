@@ -797,7 +797,7 @@ class QPCalc:
             plt.annotate(labelstr, xy=(0.5, 0.1), xycoords='axes fraction',
                          fontsize=10)
         else:
-            Warn(None, 'not enough data points (<%d)' % NTMIN, 'Error')
+            Warn(None, 'not enough data points, only found %d dark times (need at least  %d)' % (nts,NTMIN), 'Error')
 
 
 def Plug(visFr):
