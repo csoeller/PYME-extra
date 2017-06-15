@@ -151,6 +151,7 @@ class QPCalc:
 
         
         visFr.AddMenuItem('qPAINT', "From Image - Set driftpars",self.OnSetDriftPars)
+        visFr.AddMenuItem('qPAINT', "From Image - Set ROI clipping",self.OnClipFromImage)
         visFr.AddMenuItem('qPAINT', "From Image - Set objectIDs",self.OnGetIDsfromImage)
         visFr.AddMenuItem('qPAINT', "From Image - Get Areas by ID",self.OnAreaFromLabels)
         visFr.AddMenuItem('qPAINT', "Qindex - Measure object ID dark times",self.OnMeasureTau)
@@ -295,6 +296,33 @@ class QPCalc:
                                                                '(t>= %d)*(t<%d)' % speclist[species])
                     self.visFr.RegenFilter()
                     self.visFr.CreateFoldPanel()
+
+
+    def OnClipFromImage(self, event, img=None):
+        from PYME.DSView import dsviewer
+        
+        if img is None:
+            selection = selectWithDialog(dsviewer.openViewers.keys())
+            if selection is not None:
+                img = dsviewer.openViewers[selection].image
+
+        if img is not None:
+            if img.mdh.getOrDefault('Filter.Keys',None) is None:
+                logger.debug('no Filter.Keys in image metadata')
+                return
+            try:
+                self.pipeline.filterKeys['x'] = img.mdh['Filter.Keys']['x']
+            except:
+                logger.debug('cannot read or set filterKeys x-component')
+                return
+            try:
+                self.pipeline.filterKeys['y'] = img.mdh['Filter.Keys']['y']
+            except:
+                logger.debug('cannot read or set filterKeys y-component')
+                return
+                
+            self.visFr.RegenFilter()
+            self.visFr.CreateFoldPanel()
 
 
     def OnTimedSpeciesFromImage(self, event, img=None):
