@@ -23,12 +23,18 @@ class FilterChoice(HasTraits):
 
         return filterfunc
     
+class GetTime(HasTraits):
+    alignmentTime = Int(0)
+    averagePeriod = Int(50)
 
-def zeroshift(t,data,navg=50):
+def zeroshift(t,data,navg=50, alignmentTime=0):
     ti,idx = np.unique(t.astype('int'),return_index=True)
     di = data[idx]
-    nm = min(navg,di.shape[0])
-    offset = di[0:nm].mean()
+    if alignmentTime<0:
+        alignmentTime = 0
+    nmin = min(alignmentTime,di.shape[0])
+    nmax = min(alignmentTime+navg,di.shape[0])
+    offset = di[nmin:nmax].mean()
     return data - offset
 
 
@@ -40,6 +46,8 @@ class ClusterTracker:
         self.visFr = visFr
         self.pipeline = visFr.pipeline
         self.clusterTracks = []
+        self.alignmentTime = 0
+        self.averagePeriod = 50
 
         visFr.AddMenuItem('Experimental>Clusters', 'DBSCAN Clump', self.OnClumpDBSCAN,
                           helpText='Calculate ClumpIndex using DBSCAN algorithm')
@@ -51,6 +59,8 @@ class ClusterTracker:
                           helpText='plot filtered tracks of clusters (clumps) that we found')
         visFr.AddMenuItem('Experimental>Clusters', 'Clear Tracks', self.OnClearTracks,
                           helpText='clear tracks from memory')
+        visFr.AddMenuItem('Experimental>Clusters', 'Set Alignment Time', self.OnSetAlignmentTime,
+                          helpText='set alignment time')
         
 
     def OnClumpDBSCAN(self, event=None):
@@ -99,40 +109,49 @@ class ClusterTracker:
     def OnShowTracks(self, event=None):
         import matplotlib.pyplot as plt
         if len(self.clusterTracks) > 0:
+            navg = self.averagePeriod
+            atime = self.alignmentTime
             plt.figure()
             for entry in self.clusterTracks:
                 t,x,y,z = entry
-                plt.plot(t,zeroshift(t,x))
+                plt.plot(t,zeroshift(t,x, navg, atime))
             plt.figure()
             for entry in self.clusterTracks:
                 t,x,y,z = entry
-                plt.plot(t,zeroshift(t,y))
+                plt.plot(t,zeroshift(t,y, navg, atime))
             plt.figure()
             for entry in self.clusterTracks:
                 t,x,y,z = entry
-                plt.plot(t,zeroshift(t,z))
+                plt.plot(t,zeroshift(t,z, navg, atime))
 
     def OnShowTracksFiltered(self, event=None):
         import matplotlib.pyplot as plt
         fc = FilterChoice()
         if len(self.clusterTracks) > 0 and fc.configure_traits(kind='modal'):
+            navg = self.averagePeriod
+            atime = self.alignmentTime
             filterfunc = fc.get_filter()
             plt.figure()
             for entry in self.clusterTracks:
                 t,x,y,z = entry
-                plt.plot(t,filterfunc(zeroshift(t,x)))
+                plt.plot(t,filterfunc(zeroshift(t,x, navg, atime)))
             plt.figure()
             for entry in self.clusterTracks:
                 t,x,y,z = entry
-                plt.plot(t,filterfunc(zeroshift(t,y)))
+                plt.plot(t,filterfunc(zeroshift(t,y, navg, atime)))
             plt.figure()
             for entry in self.clusterTracks:
                 t,x,y,z = entry
-                plt.plot(t,filterfunc(zeroshift(t,z)))
+                plt.plot(t,filterfunc(zeroshift(t,z, navg, atime)))
 
     def OnClearTracks(self, event=None):
         self.clusterTracks = []
 
+    def OnSetAlignmentTime(self, event=None):
+        gtime = GetTime()
+        if gtime.configure_traits(kind='modal'):
+            self.alignmentTime = gtime.alignmentTime
+            self.averagePeriod = gtime.averagePeriod
             
 def Plug(visFr):
     """Plugs this module into the gui"""
