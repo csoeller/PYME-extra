@@ -75,9 +75,12 @@ class FiducialTracker:
         t = pipeline['t']
         x = pipeline['fiducial_x']
         y = pipeline['fiducial_y']
+        z = pipeline['fiducial_z']
+        
         tu,idx = np.unique(t.astype('int'), return_index=True)
         xu = x[idx]
         yu = y[idx]
+        zu = z[idx]
 
         hasdp = True
         try:
@@ -87,8 +90,10 @@ class FiducialTracker:
 
         import matplotlib.pyplot as plt
         plt.figure()
-        plt.plot(tu, xu)
-        plt.plot(tu, yu)
+        plt.plot(tu, xu, label='x')
+        plt.plot(tu, yu, label='y')
+        plt.plot(tu, zu, label='z')
+        plt.legend()
         if hasdp:
             if 'driftx' in driftPane.dp.driftExprX:
                 indepVars = { 't': t, 'driftx': pipeline['driftx'], 'drifty': pipeline['drifty'] }

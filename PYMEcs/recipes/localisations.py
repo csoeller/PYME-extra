@@ -43,11 +43,12 @@ class FiducialTrack(ModuleBase):
         inp = namespace[self.inputName]
         mapped = tabular.mappingFilter(inp)
 
-        tracks = tfs.extractAverageTrajectory(inp, clumpRadiusVar = 'error_x',
-                                              clumpRadiusMultiplier=self.radiusMultiplier,
-                                              timeWindow=self.timeWindow, filter=self.filterMethod,
-                                              filterScale=self.filterScale)
-
+        rawtracks = tfs.extractTrajectoriesClump(inp, clumpRadiusVar = 'error_x',
+                                                 clumpRadiusMultiplier=self.radiusMultiplier,
+                                                 timeWindow=self.timeWindow)
+        tracks = tfs.AverageTrack(inp, rawtracks, filter=self.filterMethod,
+                                         filterScale=self.filterScale)
+        
         # add tracks for all calculated dims to output
         for dim in tracks.keys():
             mapped.addColumn('fiducial_%s' % dim, tracks[dim])

@@ -36,8 +36,8 @@ FILTER_FUNCS = {
     'Median' : makeFilter(ndimage.median_filter)
     } 
 
-def extractAverageTrajectory(ds, clumpRadiusVar = 'error_x', clumpRadiusMultiplier=5.0, 
-                                  timeWindow=25, filter='Gaussian', filterScale=10.0):
+def extractTrajectoriesClump(ds, clumpRadiusVar = 'error_x', clumpRadiusMultiplier=5.0, 
+                                  timeWindow=25):
                                       
     import PYME.Analysis.points.DeClump.deClump as deClump
     #track beads through frames
@@ -49,6 +49,7 @@ def extractAverageTrajectory(ds, clumpRadiusVar = 'error_x', clumpRadiusMultipli
     t = ds['t'].astype('i')
     x = ds['x'].astype('f4')
     y = ds['y'].astype('f4')
+    z = ds['z'].astype('f4')
     delta_x = delta_x.astype('f4')
     
     I = np.argsort(t)
@@ -62,6 +63,7 @@ def extractAverageTrajectory(ds, clumpRadiusVar = 'error_x', clumpRadiusMultipli
 
     x_f = []
     y_f = []
+    z_f = []
     clump_sizes = []
     
     t_f = np.arange(0, tMax + 1, dtype='i')
@@ -75,6 +77,7 @@ def extractAverageTrajectory(ds, clumpRadiusVar = 'error_x', clumpRadiusMultipli
             
             if clump_size > 50:
                 y_i = y[clump_mask]
+                z_i = z[clump_mask]
                 t_i = t[clump_mask].astype('i')
                 
                 x_i_f = np.NaN*np.ones_like(t_f)
@@ -82,16 +85,28 @@ def extractAverageTrajectory(ds, clumpRadiusVar = 'error_x', clumpRadiusMultipli
                 
                 y_i_f = np.NaN*np.ones_like(t_f)
                 y_i_f[t_i]= y_i - y_i.mean()
+
+                z_i_f = np.NaN*np.ones_like(t_f)
+                z_i_f[t_i]= z_i - z_i.mean()
                 
                 #clumps.append((x_i_f, y_i_f))
                 x_f.append(x_i_f)
                 y_f.append(y_i_f)
+                z_f.append(z_i_f)
                 clump_sizes.append(len(x_i))
     
     #re-order to start with the largest clump
     clumpOrder = np.argsort(clump_sizes)[::-1]
     x_f = np.array(x_f)[clumpOrder,:]
     y_f = np.array(y_f)[clumpOrder,:]
+    z_f = np.array(z_f)[clumpOrder,:]
+
+    return (t_f, x_f, y_f, z_f)
+
+def AverageTrack(ds, tracks, filter='Gaussian', filterScale=10.0):
+
+    t_f, x_f, y_f, z_f = tracks # this needs to allow z in future
+    t = ds['t'].astype('i')
     
     def _mf(p, meas):
         '''calculate the offset between trajectories'''
@@ -122,8 +137,9 @@ def extractAverageTrajectory(ds, clumpRadiusVar = 'error_x', clumpRadiusMultipli
         
     x_corr = _align(x_f)
     y_corr = _align(y_f)
-     
-    filtered_corr_woffs = FILTER_FUNCS[filter](t_f, {'x' : x_corr, 'y':y_corr}, filterScale)
+    z_corr = _align(z_f)
+    
+    filtered_corr_woffs = FILTER_FUNCS[filter](t_f, {'x' : x_corr, 'y':y_corr, 'z':z_corr}, filterScale)
     
     dims = filtered_corr_woffs.keys()
     filtered_corr = {}
