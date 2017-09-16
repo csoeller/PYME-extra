@@ -1,6 +1,7 @@
 import numpy as np
 import sys
 from scipy import ndimage
+import matplotlib.pyplot as plt
 
 import logging
 logger = logging.getLogger(__file__)
@@ -37,6 +38,12 @@ def zeroshift(t,data,navg=50, alignmentTime=0):
     offset = di[nmin:nmax].mean()
     return data - offset
 
+def atLeastRange(rmin=-20,rmax=-20):
+    ymin,ymax = plt.ylim()
+    if ymin > rmin:
+        plt.ylim(ymin=rmin)
+    if ymax < rmax:
+        plt.ylim(ymax=rmax)
 
 class ClusterTracker:
     """
@@ -106,6 +113,7 @@ class ClusterTracker:
             I = np.argsort(t_id)
             self.clusterTracks.append([t_id[I],x_id[I],y_id[I],z_id[I]])
 
+
     def OnShowTracks(self, event=None):
         import matplotlib.pyplot as plt
         if len(self.clusterTracks) > 0:
@@ -115,14 +123,20 @@ class ClusterTracker:
             for entry in self.clusterTracks:
                 t,x,y,z = entry
                 plt.plot(t,zeroshift(t,x, navg, atime))
+            plt.title('x tracks')
+            atLeastRange(-20,20)
             plt.figure()
             for entry in self.clusterTracks:
                 t,x,y,z = entry
                 plt.plot(t,zeroshift(t,y, navg, atime))
+            plt.title('y tracks')
+            atLeastRange(-20,20)
             plt.figure()
             for entry in self.clusterTracks:
                 t,x,y,z = entry
                 plt.plot(t,zeroshift(t,z, navg, atime))
+            plt.title('z tracks')
+            atLeastRange(-20,20)
 
     def OnShowTracksFiltered(self, event=None):
         import matplotlib.pyplot as plt
@@ -135,14 +149,20 @@ class ClusterTracker:
             for entry in self.clusterTracks:
                 t,x,y,z = entry
                 plt.plot(t,filterfunc(zeroshift(t,x, navg, atime)))
+            plt.title('x tracks')
+            atLeastRange(-20,20)
             plt.figure()
             for entry in self.clusterTracks:
                 t,x,y,z = entry
                 plt.plot(t,filterfunc(zeroshift(t,y, navg, atime)))
+            plt.title('y tracks')
+            atLeastRange(-20,20)
             plt.figure()
             for entry in self.clusterTracks:
                 t,x,y,z = entry
                 plt.plot(t,filterfunc(zeroshift(t,z, navg, atime)))
+            plt.title('z tracks')
+            atLeastRange(-20,20)
 
     def OnClearTracks(self, event=None):
         self.clusterTracks = []
