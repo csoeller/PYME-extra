@@ -22,7 +22,7 @@ or look at the [online version](http://www.python-microscopy.org/doc/api/PYME.co
 
 A quick hack, in so far as I do not have a proper installation setup, but rather use the PYME.config system to pick up the relevant bits, as well as Python's PYTHONPATH:
 
-- add the parent directory of this repo to your PYTHONPATH
+- add the directory containing the working copy of this repo to your PYTHONPATH
 - add the plugin entries into a suitable config file
 
 On my machine, in the per user PYME config file for visgui (~/.PYME/plugins/visgui/myplugins.txt) I currently have
