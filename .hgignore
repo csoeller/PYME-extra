@@ -28,3 +28,4 @@ patches/*
 *Pyro_NS_URI
 *.sqlite3
 *\#*\#
+PYMEcs/experimental/tmptest/*
