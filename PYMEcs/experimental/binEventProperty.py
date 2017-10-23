@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import wx
 
 import logging
 logger = logging.getLogger(__file__)
@@ -7,6 +8,8 @@ logger = logging.getLogger(__file__)
 from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float
 from traitsui.api import View, Item, Group
 from traitsui.menu import OKButton, CancelButton, OKCancelButtons
+
+from PYME.DSView.dsviewer import ViewIm3D, ImageStack
 
 class propertyChoice(HasTraits):
     clist = List([])
@@ -81,12 +84,34 @@ class PropertyBinning:
         avmean[good] = avbin[good]/bybin[good]
         avmean[bad] = np.nan
 
-        plt.figure()
-        plt.plot(binctrs, avmean)
-        plt.xlabel(byProperty)
-        plt.ylabel('mean of %s' % avProperty)
+        # direct matplotlib plotting scrapped for ImageStack approach
+        # which allows saving of data
+        #plt.figure()
+        #plt.plot(binctrs, avmean)
+        #plt.xlabel(byProperty)
+        #plt.ylabel('mean of %s' % avProperty)
 
+        plots = []
+        plots.append(avmean.reshape(-1, 1,1))
 
+        im = ImageStack(plots, titleStub='mean of %s' % avProperty)
+        im.xvals = binctrs
+        im.xlabel = byProperty
+
+        im.ylabel = 'mean of %s' % avProperty
+        im.defaultExt = '*.txt'
+
+        im.mdh['voxelsize.x'] = binwidth
+        im.mdh['ChannelNames'] = [avProperty]
+        im.mdh['Profile.XValues'] = im.xvals
+        im.mdh['Profile.XLabel'] = im.xlabel
+        im.mdh['Profile.YLabel'] = im.ylabel
+
+        im.mdh['OriginalImage'] = self.pipeline.filename
+
+        ViewIm3D(im, mode='graph', parent=wx.GetTopLevelParent(self.visFr))
+
+        
 def Plug(visFr):
     """Plugs this module into the gui"""
     visFr.propBin = PropertyBinning(visFr)

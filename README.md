@@ -20,12 +20,12 @@ or look at the [online version](http://www.python-microscopy.org/doc/api/PYME.co
 
 ### Installation ###
 
-A quick hack, in so far as I do not have a proper installation setup, but rather use the PYME.config system to pick up the relevant bits, as well as Python's PYTHONPATH:
+A quick hack, in so far as I do not have a proper setuptools/distutils installation setup, but rather use the PYME.config system to pick up the costom plugins, as well as Python's PYTHONPATH to allow the required modules to be loaded at runtime:
 
 - add the parent directory of this repo to your PYTHONPATH
-- add the plugin entries into a suitable config file
+- add the plugin entries into suitable config files into a directory searched by PYME.config
 
-On my machine, in the per user PYME config file for visgui (~/.PYME/plugins/visgui/myplugins.txt) I currently have
+On my machine, in the per user PYME config file for visgui (~/.PYME/plugins/visgui/myplugins.txt), I currently have
 
 
 ```
@@ -37,10 +37,11 @@ PYMEcs.experimental.fiducialsNew
 PYMEcs.experimental.qPAINT
 PYMEcs.experimental.showErrs
 PYMEcs.experimental.showShiftMap
+PYMEcs.experimental.binEventProperty
 
 ```
 
-There is only one plugin for the dsviewer (AKA dh5view), I have  
+There is currently only one plugin for the dsviewer (AKA dh5view), I have in a dsviewer plugin file (~/.PYME/plugins/dsviewer/myplugins.txt)
 
 ```
 #!python
