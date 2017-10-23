@@ -49,7 +49,12 @@ There is currently only one plugin for the dsviewer (AKA dh5view), I have in a d
 PYMEcs.experimental.showErrsDh5view
 
 ```
-Note that the showErrs modules rely on my mac installation which uses bash scripts and the [platypus app](https://sveinbjorn.org/platypus) to capture STDERR into a temporary file which these modules access. Bottom line is that these modules will likely not work on anything but my local mac. It would be nice to build capturing STDIO/STDERR capture into the basic VisGUI and dh5View scripts as this would enable similar GUI based error inspection.
+### Issues ###
+
+Note that the showErrs modules rely on my mac installation which uses bash scripts and the [platypus app](https://sveinbjorn.org/platypus)
+to capture STDERR into a temporary file which these modules access. Bottom line is that these modules will likely not work on anything but my local mac. It would be nice to build capturing STDIO/STDERR capture into the basic VisGUI and dh5View scripts as this would enable similar GUI based error inspection.
+
+The PYME mac app wrappers are available at the [python-microscopy-osxapps bitpucket repository](http://bitbucket.org/christian_soeller/python-microscopy-osxapps) if somebody would like to inspect the approach.
 
 ### Contact ###
 
