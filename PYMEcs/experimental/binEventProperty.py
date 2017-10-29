@@ -39,7 +39,9 @@ class PropertyBinning:
         self.visFr = visFr
         self.pipeline = visFr.pipeline
 
-        visFr.AddMenuItem('Experimental', 'Bin Event Property by coordinate', self.OnBinProperty,
+        visFr.AddMenuItem('Experimental>Event Processing',
+                          'Bin Event Property by coordinate',
+                          self.OnBinProperty,
                           helpText='Bin average an event property, e.g. background,  as a function of another property, e.g. x')
 
     def OnBinProperty(self, event=None):

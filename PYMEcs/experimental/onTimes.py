@@ -6,6 +6,11 @@ from scipy import ndimage
 import logging
 logger = logging.getLogger(__file__)
 
+def Warn(parent, message, caption = 'Warning!'):
+    dlg = wx.MessageDialog(parent, message, caption, wx.OK | wx.ICON_WARNING)
+    dlg.ShowModal()
+    dlg.Destroy()
+
 class onTimer:
     """
 
@@ -14,7 +19,8 @@ class onTimer:
         self.visFr = visFr
         self.pipeline = visFr.pipeline
 
-        visFr.AddMenuItem('Experimental', "onTimes from selected coalesced events",self.OnTimes)
+        visFr.AddMenuItem('Experimental>Event Processing', "onTimes from selected coalesced events",
+                          self.OnTimes)
 
 
         
@@ -37,7 +43,12 @@ class onTimer:
 
         # determine darktime from gaps and reject zeros (no real gaps) 
 
-        dtg = pipeline['nFrames']
+        try:
+            dtg = pipeline['nFrames']
+        except KeyError:
+            Warn(None,'aborting analysis: could not find "nFrames" property, needs "Coalesced" Data Source','Error')
+            return
+
         nts = dtg.shape[0]
 
         if nts > NTMIN:

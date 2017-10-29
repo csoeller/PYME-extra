@@ -2,6 +2,16 @@ import  wx
 from  wx.lib.dialogs import ScrolledMessageDialog
 
 
+def isDarwin():
+   import os
+   from sys import platform
+   return platform == "darwin"
+
+def Warn(parent, message, caption = 'Warning!'):
+    dlg = wx.MessageDialog(parent, message, caption, wx.OK | wx.ICON_WARNING)
+    dlg.ShowModal()
+    dlg.Destroy()
+
 class ShowErr:
    """
 
@@ -17,6 +27,10 @@ class ShowErr:
       return os.path.join('/tmp','visgui-%d.tmp' % pid)
 
    def OnErrScrolledDialog(self, event=None):
+      if not isDarwin():
+         Warn('aborting: functionality only available on mac','Error')
+         return
+      
       with open(self.getLogFileName(),"r") as f:
          txt = "\n".join(f.readlines())
       dlg = ScrolledMessageDialog(self.visFr, txt, "VisGUI Error Output", size=(900,400),
