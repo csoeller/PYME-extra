@@ -19,8 +19,14 @@ class onTimer:
         self.visFr = visFr
         self.pipeline = visFr.pipeline
 
-        visFr.AddMenuItem('Experimental>Event Processing', "onTimes from selected coalesced events",
-                          self.OnTimes)
+        visFr.AddMenuItem('Experimental>Event Processing',
+                          "onTimes from selected coalesced events",
+                          self.OnTimes,
+                          helpText='analyse the on time distribution of events in a region - needs the coalesced data source with nFrames event property')
+        visFr.AddMenuItem('Experimental>Event Processing',
+                          "plot time series of clumps",
+                          self.OnPlotClumps,
+                          helpText='plots the time course of the selected events in a "single channel trace" - needs the clumpIndex event property')
 
 
         
@@ -123,6 +129,23 @@ class onTimer:
         else:
             Warn(None, 'not enough data points, only found %d on times (need at least  %d)' % (nts,NTMIN), 'Error')
 
+    def OnPlotClumps(self,event):
+        import PYMEcs.Analysis.timeSeries as ts
+        try:
+            ci = self.pipeline['clumpIndex']
+        except KeyError:
+            Warn(None,'aborting analysis: could not find "clumpIndex" property','Error')
+            return
+        t = self.pipeline['t']
+
+        maxPts = 1e4
+        if len(t) > maxPts:
+            Warn(None,'aborting analysis: too many events, current max is %d' % maxPts)
+            return
+
+        ts.plotClumpSeries(t, ci)
+        
+            
 def Plug(visFr):
     """Plugs this module into the gui"""
     visFr.onTimer = onTimer(visFr)
