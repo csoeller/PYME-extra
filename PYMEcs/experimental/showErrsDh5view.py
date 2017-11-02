@@ -15,10 +15,10 @@ class ShowErr:
    """
 
    """
-   def __init__(self, visFr):
-      self.visFr = visFr
+   def __init__(self, dsviewer):
+      self.dsviewer = dsviewer
       self.txtwin = None
-      visFr.AddMenuItem('Experimental', 'Errors in scrolled message dialog\tCtrl+E', self.OnErrScrolledDialog)
+      dsviewer.AddMenuItem('Experimental', 'Errors in scrolled message dialog\tCtrl+E', self.OnErrScrolledDialog)
 
    def getLogFileName(self):
       import os
@@ -27,15 +27,15 @@ class ShowErr:
 
    def OnErrScrolledDialog(self, event=None):
       if not isDarwin():
-         Warn('aborting: functionality only available on mac','Error')
+         Warn(None,'aborting: functionality only available on mac','Error')
          return
       with open(self.getLogFileName(),"r") as f:
          txt = "\n".join(f.readlines())
-      dlg = ScrolledMessageDialog(self.visFr, txt, "VisGUI Error Output", size=(900,400),
+      dlg = ScrolledMessageDialog(self.dsviewer, txt, "VisGUI Error Output", size=(900,400),
                                   style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE )
       dlg.ShowModal()
       dlg.Destroy()
 
-def Plug(visFr):
+def Plug(dsviewer):
     """Plugs this module into the gui"""
-    visFr.showErr = ShowErr(visFr)
+    dsviewer.showErr = ShowErr(dsviewer)

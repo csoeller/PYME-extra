@@ -28,7 +28,7 @@ class ShowErr:
 
    def OnErrScrolledDialog(self, event=None):
       if not isDarwin():
-         Warn('aborting: functionality only available on mac','Error')
+         Warn(None,'aborting: functionality only available on mac','Error')
          return
       
       with open(self.getLogFileName(),"r") as f:
