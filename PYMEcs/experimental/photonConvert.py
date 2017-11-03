@@ -23,7 +23,7 @@ def getInstalledMapList():
 
     return result
 
-class photonConverter:
+class mapTools:
     """
 GUI class to convert a single PYME frame to photoelectron units
     """
@@ -33,13 +33,13 @@ GUI class to convert a single PYME frame to photoelectron units
         self.image = dsviewer.image
         self.ci = CameraInfoManager()
        
-        dsviewer.AddMenuItem('Experimental>Maps',
+        dsviewer.AddMenuItem('Experimental>Map Tools',
                              'Convert current frame to photo-electron counts',
                              self.OnPhotonConvert)
-        dsviewer.AddMenuItem('Experimental>Maps',
+        dsviewer.AddMenuItem('Experimental>Map Tools',
                              'Show dark map',
                              self.OnShowDark)
-        dsviewer.AddMenuItem('Experimental>Maps',
+        dsviewer.AddMenuItem('Experimental>Map Tools',
                              'List installed maps',
                              self.OnListMaps)
 
@@ -118,4 +118,4 @@ GUI class to convert a single PYME frame to photoelectron units
 
 
 def Plug(dsviewer):
-    dsviewer.photonConv = photonConverter(dsviewer)
+    dsviewer.mapTool = mapTools(dsviewer)
