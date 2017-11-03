@@ -47,6 +47,7 @@ There is currently only one plugin for the dsviewer (AKA dh5view), I have in a d
 #!python
 
 PYMEcs.experimental.showErrsDh5view
+PYMEcs.experimental.mapTools
 
 ```
 ### Issues ###
