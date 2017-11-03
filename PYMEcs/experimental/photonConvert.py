@@ -7,6 +7,8 @@ from PYME.IO.MetaDataHandler import NestedClassMDHandler
 from PYME.IO.image import ImageStack
 from PYME.DSView import ViewIm3D
 
+# import PYMEcs.Analysis.pyNCS.denoisetools as ncs
+
 def Warn(parent, message, caption = 'Warning!'):
     dlg = wx.MessageDialog(parent, message, caption, wx.OK | wx.ICON_WARNING)
     dlg.ShowModal()
@@ -22,10 +24,10 @@ GUI class to convert a single PYME frame to photoelectron units
         self.image = dsviewer.image
         self.ci = CameraInfoManager()
        
-        dsviewer.AddMenuItem('Experimental',
+        dsviewer.AddMenuItem('Experimental>Maps',
                              'Convert current frame to photo-electron counts',
                              self.OnPhotonConvert)
-        dsviewer.AddMenuItem('Experimental',
+        dsviewer.AddMenuItem('Experimental>Maps',
                              'Show dark map',
                              self.OnShowDark)
 
@@ -89,6 +91,15 @@ GUI class to convert a single PYME frame to photoelectron units
             mode = 'lite'
 
         dv = ViewIm3D(im, mode=mode, glCanvas=self.dsviewer.glCanvas, parent=wx.GetTopLevelParent(self.dsviewer))
+
+    # def OnListMaps(self, event=None):
+      
+    #   with open(self.getLogFileName(),"r") as f:
+    #      txt = "\n".join(f.readlines())
+    #   dlg = ScrolledMessageDialog(self.visFr, txt, "VisGUI Error Output", size=(900,400),
+    #                               style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE )
+    #   dlg.ShowModal()
+    #   dlg.Destroy()
 
 def Plug(dsviewer):
     dsviewer.photonConv = photonConverter(dsviewer)
