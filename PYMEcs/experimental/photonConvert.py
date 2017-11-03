@@ -14,6 +14,15 @@ def Warn(parent, message, caption = 'Warning!'):
     dlg.ShowModal()
     dlg.Destroy()
 
+def getInstalledMapList():
+    from PYME.IO.FileUtils import nameUtils
+    from glob import glob
+    import os
+    rootdir = nameUtils.getCalibrationDir('',create=False)
+    result = [y for x in os.walk(rootdir) for y in glob(os.path.join(x[0], '*.tif'))]
+
+    return result
+
 class photonConverter:
     """
 GUI class to convert a single PYME frame to photoelectron units
@@ -30,6 +39,9 @@ GUI class to convert a single PYME frame to photoelectron units
         dsviewer.AddMenuItem('Experimental>Maps',
                              'Show dark map',
                              self.OnShowDark)
+        dsviewer.AddMenuItem('Experimental>Maps',
+                             'List installed maps',
+                             self.OnListMaps)
 
     def check_mapexists(self, mdh, type = 'dark'):
         import os
@@ -92,14 +104,18 @@ GUI class to convert a single PYME frame to photoelectron units
 
         dv = ViewIm3D(im, mode=mode, glCanvas=self.dsviewer.glCanvas, parent=wx.GetTopLevelParent(self.dsviewer))
 
-    # def OnListMaps(self, event=None):
+        
+    def OnListMaps(self, event=None):
       
-    #   with open(self.getLogFileName(),"r") as f:
-    #      txt = "\n".join(f.readlines())
-    #   dlg = ScrolledMessageDialog(self.visFr, txt, "VisGUI Error Output", size=(900,400),
-    #                               style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE )
-    #   dlg.ShowModal()
-    #   dlg.Destroy()
+      maps = getInstalledMapList()
+      if len(maps) > 0:
+          dlg = ScrolledMessageDialog(self.dsviewer, "\n".join(maps), "Installed maps", size=(900,400),
+                                      style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE )
+          dlg.ShowModal()
+          dlg.Destroy()
+      else:
+          Warn(None,'no suitable maps found')
+
 
 def Plug(dsviewer):
     dsviewer.photonConv = photonConverter(dsviewer)
