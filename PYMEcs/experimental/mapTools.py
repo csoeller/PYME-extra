@@ -14,6 +14,107 @@ def Warn(parent, message, caption = 'Warning!'):
     dlg.ShowModal()
     dlg.Destroy()
 
+def defaultMapName(source, createPath=False):
+    resname = source.mdh.getOrDefault('Analysis.resultname',None)
+    if resname is None:
+        return None
+
+    if resname == 'mean':
+        maptype = 'dark'
+    else:
+        maptype = 'variance'
+
+    mapname = gmaps.mkDefaultPath(maptype, source.mdh, create=createPath)
+    return mapname
+    
+    
+# source passed as PYME ImageStack
+def install_map(source):
+    """Installs a map file to its default location"""
+
+    import os
+    if source.mdh.getOrDefault('Analysis.name', '') != 'mean-variance':
+        msg = 'map %s, Analysis.name is not equal to "mean-variance" - probably not a map' % source.filename
+        return msg
+
+    validROIHeight = source.mdh.getOrDefault('Analysis.valid.ROIHeight',
+                                             source.mdh['Camera.ROIHeight'])
+    validROIWidth = source.mdh.getOrDefault('Analysis.valid.ROIWidth',
+                                             source.mdh['Camera.ROIWidth'])
+    if not (validROIHeight == source.mdh['Camera.ROIHeight']
+            and validROIWidth == source.mdh['Camera.ROIWidth']):
+        msg = 'Partial (ROI based) maps cannot be installed to the default location'
+        return msg
+
+    if source.mdh.getOrDefault('Analysis.isuniform', False):
+        msg = 'Uniform maps cannot be installed to the default location'
+        return msg
+
+    if source.mdh['Analysis.resultname'] == 'mean':
+        maptype = 'dark'
+    else:
+        maptype = 'variance'
+
+    mapname = gmaps.mkDefaultPath(maptype, source.mdh, create=True)
+    if os.path.isfile(mapname):
+        msg = 'map %s exists, not overwriting' % mapname
+        return msg
+    
+    source.Save(filename=mapname)
+    return None
+    
+# attempt to install a map in the default location but check a few things
+# 1) does it have the .tif extension? If not give suitable message and return
+# 2) can it be opened as a tiffstack
+# 3) if so pass on to install_map which does additional checks; note that
+#    this function does not overwrite
+def checkAndInstallMap(mapf):
+    import os
+    inst = 0
+    
+    ext = os.path.splitext(mapf)[-1].lower()
+    if ext != ".tif":
+        msg = 'asked to install %s, not a tif extension' % mapf
+        return (inst, msg)
+    try:
+        source = ImageStack(filename=mapf)
+    except:
+        msg = 'asked to install %s, could not open as PYME ImageStack, not a map?' % mapf
+        return (inst, msg)
+
+    msg = install_map(source)
+    if msg is None:
+        msg = 'installed map %s in default location' % mapf
+        msg += "\n\t-> %s" % defaultMapName(source)
+        inst = 1
+
+    return (inst, msg)
+
+# install maps, potentially several
+# if fromfile is a directory attempt to install all maps below that directory
+# if fromfile is a file, attempt to install that single file
+def installMapsFrom(fromfile):
+    from glob import glob
+    import os
+
+    msgs = []
+    ntotal = 0
+    if os.path.isdir(fromfile):
+        # this is a directory, walk it
+        msgs.append('installing maps from directory %s' % fromfile)
+        mapfiles = [y for x in os.walk(fromfile) for y in glob(os.path.join(x[0], '*.tif'))]
+        for mapf in mapfiles:
+            ninst, msg = checkAndInstallMap(mapf)
+            ntotal += ninst
+            msgs.append(msg)
+    else:
+        ninst, msg = checkAndInstallMap(fromfile)
+        ntotal = 1
+        msgs.append(msg)
+    msgs.append("\ninstalled %d maps" % ntotal)
+    return ntotal, "\n".join(msgs)
+
+    
 def getInstalledMapList():
     from PYME.IO.FileUtils import nameUtils
     from glob import glob
@@ -25,7 +126,7 @@ def getInstalledMapList():
 
 class mapTools:
     """
-GUI class to convert a single PYME frame to photoelectron units
+GUI class to supply various map tools
     """
     def __init__(self, dsviewer):
         self.dsviewer = dsviewer
@@ -40,9 +141,16 @@ GUI class to convert a single PYME frame to photoelectron units
                              'Show dark map',
                              self.OnShowDark)
         dsviewer.AddMenuItem('Experimental>Map Tools',
+                             'Show variance map',
+                             self.OnShowVariance)
+        dsviewer.AddMenuItem('Experimental>Map Tools',
                              'List installed maps',
                              self.OnListMaps)
+        dsviewer.AddMenuItem('Experimental>Map Tools',
+                             'Install maps from location...',
+                             self.OnInstallMaps)
 
+        
     def check_mapexists(self, mdh, type = 'dark'):
         import os
         if type == 'dark':
@@ -57,15 +165,20 @@ GUI class to convert a single PYME frame to photoelectron units
         else:
             return None
 
-    def OnShowDark(self, event=None):
+
+    def showMap(self, type='dark'):
         mdh2 = NestedClassMDHandler(self.image.mdh)
         # overwrite the map location with default maps if exist
-        if self.check_mapexists(mdh2,type='dark') is None:
+        if self.check_mapexists(mdh2,type=type) is None:
             Warn(None,'no suitable map in default location')
             return
 
-        darkf = self.ci.getDarkMap(mdh2)
-        im = ImageStack(darkf, titleStub = 'Dark Map')
+        if type == 'dark':
+            darkf = self.ci.getDarkMap(mdh2)
+        else:
+            darkf = self.ci.getVarianceMap(mdh2)
+
+        im = ImageStack(darkf, titleStub = '%s Map' % type.capitalize())
         im.mdh.copyEntriesFrom(mdh2)
         #im.mdh['Parent'] = self.image.filename
         #im.mdh['Units'] = 'PhotoElectrons'
@@ -77,6 +190,12 @@ GUI class to convert a single PYME frame to photoelectron units
 
         dv = ViewIm3D(im, mode=mode, glCanvas=self.dsviewer.glCanvas, parent=wx.GetTopLevelParent(self.dsviewer))
         
+
+    def OnShowDark(self, event=None):
+        self.showMap(type='dark')
+
+    def OnShowVariance(self, event=None):
+        self.showMap(type='variance')
 
         
     def OnPhotonConvert(self, event=None):
@@ -116,6 +235,23 @@ GUI class to convert a single PYME frame to photoelectron units
       else:
           Warn(None,'no suitable maps found')
 
+
+    def OnInstallMaps(self, event=None):
+        fdialog = wx.DirDialog(None, 'Install maps from ...',
+                               style=wx.DD_DEFAULT_STYLE|wx.DD_DIR_MUST_EXIST|wx.DD_CHANGE_DIR)
+
+        if fdialog.ShowModal() == wx.ID_OK:
+            fromfile = fdialog.GetPath().encode()
+            fdialog.Destroy()
+        else:
+            fdialog.Destroy()
+            return
+
+        inst, msg = installMapsFrom(fromfile)
+        dlg = ScrolledMessageDialog(self.dsviewer, msg, "Installed maps from...", size=(900,400),
+                                      style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE )
+        dlg.ShowModal()
+        dlg.Destroy()
 
 def Plug(dsviewer):
     dsviewer.mapTool = mapTools(dsviewer)
