@@ -182,6 +182,9 @@ GUI class to supply various map tools
                              'Show variance map',
                              self.OnShowVariance)
         dsviewer.AddMenuItem('Experimental>Map Tools',
+                             'Show flatfield map',
+                             self.OnShowFlatField)
+        dsviewer.AddMenuItem('Experimental>Map Tools',
                              'List installed maps',
                              self.OnListMaps)
         dsviewer.AddMenuItem('Experimental>Map Tools',
@@ -196,9 +199,13 @@ GUI class to supply various map tools
         import os
         if type == 'dark':
             id = 'Camera.DarkMapID'
-        else:
+        elif type == 'variance':
             id = 'Camera.VarianceMapID'
-            
+        elif type == 'flatfield':
+            id = 'Camera.FlatfieldMapID'
+        else:
+            raise RuntimeError('unknown map type %s' % type)
+        
         mapPath = gmaps.mkDefaultPath(type,mdh,create=False)
         if os.path.exists(mapPath):
             mdh[id] = mapPath
@@ -216,9 +223,13 @@ GUI class to supply various map tools
 
         if type == 'dark':
             darkf = self.ci.getDarkMap(mdh2)
-        else:
+        elif type == 'variance':
             darkf = self.ci.getVarianceMap(mdh2)
-
+        elif type == 'flatfield':
+            darkf = self.ci.getFlatfieldMap(mdh2)
+        else:
+            raise RuntimeError('unknown type %s' % type)
+            
         im = ImageStack(darkf, titleStub = '%s Map' % type.capitalize())
         im.mdh.copyEntriesFrom(mdh2)
         #im.mdh['Parent'] = self.image.filename
@@ -238,6 +249,9 @@ GUI class to supply various map tools
     def OnShowVariance(self, event=None):
         self.showMap(type='variance')
 
+    def OnShowFlatField(self, event=None):
+        self.showMap(type='flatfield')
+
         
     def OnPhotonConvert(self, event=None):
 
@@ -248,6 +262,7 @@ GUI class to supply various map tools
         mdh2 = NestedClassMDHandler(self.image.mdh)
         # overwrite the map location with default maps if exist
         self.check_mapexists(mdh2,type='dark')
+        self.check_mapexists(mdh2,type='flatfield')
 
         darkf = self.ci.getDarkMap(mdh2)
         corrFrame = float(mdh2['Camera.ElectronsPerCount'])*self.ci.correctImage(mdh2, curFrame)
