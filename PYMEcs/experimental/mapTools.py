@@ -43,7 +43,10 @@ def defaultMapName(source, createPath=False, calibrationDir=defaultCalibrationDi
         return None
 
     if resname == 'mean':
-        maptype = 'dark'
+        if source.mdh.getOrDefault('Analysis.FlatField',False):
+            maptype = 'flatfield'
+        else:
+            maptype = 'dark'
     else:
         maptype = 'variance'
 
@@ -88,7 +91,10 @@ def install_map(source, calibrationDir=defaultCalibrationDir):
         return msg
 
     if source.mdh['Analysis.resultname'] == 'mean':
-        maptype = 'dark'
+        if source.mdh.getOrDefault('Analysis.FlatField',False):
+            maptype = 'flatfield'
+        else:
+            maptype = 'dark'
     else:
         maptype = 'variance'
 
@@ -139,7 +145,7 @@ def installMapsFrom(fromfile, calibrationDir=defaultCalibrationDir):
     ntotal = 0
     if os.path.isdir(fromfile):
         # this is a directory, walk it
-        msgs.append("Installing maps from directory %s -> System Folder\n" % fromfile)
+        msgs.append("Installing maps from directory %s -> %s Folder\n" % (fromfile,calibrationDir))
         mapfiles = [y for x in os.walk(fromfile) for y in glob(os.path.join(x[0], '*.tif'))]
         for mapf in mapfiles:
             ninst, msg = checkAndInstallMap(mapf, calibrationDir=calibrationDir)
