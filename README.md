@@ -38,6 +38,7 @@ PYMEcs.experimental.qPAINT
 PYMEcs.experimental.showErrs
 PYMEcs.experimental.showShiftMap
 PYMEcs.experimental.binEventProperty
+PYMEcs.experimental.onTime
 
 ```
 

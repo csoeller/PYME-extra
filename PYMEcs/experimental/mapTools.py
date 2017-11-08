@@ -266,6 +266,13 @@ GUI class to supply various map tools
 
         # this makes a new metadata structure that copies all entries from the argument
         mdh2 = NestedClassMDHandler(self.image.mdh)
+        # some old files do not have a camera serialname
+        # fake one, which ensures no map is found and we get uniform maps
+        try:
+            t = mdh2['Camera.SerialNumber']
+        except AttributeError:
+             mdh2['Camera.SerialNumber'] = 'XXXXX'
+
         # overwrite the map location with default maps if exist
         self.check_mapexists(mdh2,type='dark')
         self.check_mapexists(mdh2,type='flatfield')
