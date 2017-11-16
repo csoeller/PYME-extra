@@ -18,6 +18,10 @@ As it is it serves as a nice testbed of the newish Python config system. For det
 
 or look at the [online version](http://www.python-microscopy.org/doc/api/PYME.config.html) at [python-microscopy.org](http://www.python-microscopy.org/) (which can be slightly out of date at times).
 
+## Important Note
+
+The PYME extra code in this repository requires some code changes to the python-microscopy code for all parts to become fully functional. These code changes have been implemented in the [python-microscopy-exeter](https://bitbucket.org/christian_soeller/python-microscopy-exeter) fork. All further instructions assume that python-microscopy-exeter has been installed.
+
 ### Installation ###
 
 A quick hack, in so far as I do not have a proper setuptools/distutils installation setup, but rather use the PYME.config system to pick up the costom plugins, as well as Python's PYTHONPATH to allow the required modules to be loaded at runtime:
