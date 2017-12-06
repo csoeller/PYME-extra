@@ -43,6 +43,7 @@ PYMEcs.experimental.showErrs
 PYMEcs.experimental.showShiftMap
 PYMEcs.experimental.binEventProperty
 PYMEcs.experimental.onTime
+PYMEcs.experimental.snrEvents
 
 ```
 

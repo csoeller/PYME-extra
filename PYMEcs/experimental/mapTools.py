@@ -9,6 +9,20 @@ from PYME.DSView import ViewIm3D
 from PYME.IO.FileUtils import nameUtils
 import numpy as np
 
+# FUNCTIONAILITY that would be good to add
+# - check all installed maps for sanity etc
+# - install a single map file (rather than whole directory)
+# - force option for install maps commands
+# generally: better API for map functions than current ones in
+#        PYME.Analysis.gen_sCMOS_maps
+#        CameraInfoManager in PYME.localization.remFitBuf
+
+
+# the NCS functionality needs the pyNCS in the path, either linked
+# into the PYMEcs.Analysis directory (e.g. via symlink) or as pyNCS in the PYTHONPATH
+# the code can be obtained from https://github.com/HuanglabPurdue/NCS,
+#   in the python3-6 directory
+# my testing shows that the implementation runs fine under python-2.7
 try:
     import PYMEcs.Analysis.pyNCS.denoisetools as ncs
 except ImportError:
@@ -56,7 +70,6 @@ def Warn(parent, message, caption = 'Warning!'):
 
 defaultCalibrationDir = nameUtils.getCalibrationDir('',create=False)
 
-# FIXME: needs to learn to deal with flatfield maps
 def defaultMapName(source, createPath=False, calibrationDir=defaultCalibrationDir):
     resname = source.mdh.getOrDefault('Analysis.resultname',None)
     if resname is None:
