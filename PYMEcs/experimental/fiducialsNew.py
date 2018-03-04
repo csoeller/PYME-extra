@@ -115,19 +115,19 @@ class FiducialTracker:
         plt.plot(tu, xu, label='x')
         plt.plot(tu, yu, label='y')
         plt.plot(tu, zu, label='z')
-        plt.legend()
         if hasdp:
             if 'driftx' in driftPane.dp.driftExprX:
                 indepVars = { 't': t, 'driftx': pipeline['driftx'], 'drifty': pipeline['drifty'] }
                 dx,dy,tt = cf.xyDriftCurves(driftPane.dp.driftCorrFcn,driftPane.dp.driftCorrParams,indepVars,t)
-                plt.plot(tt,-zshift(tt,dx))
-                plt.plot(tt,-zshift(tt,dy))
+                plt.plot(tt,-zshift(tt,dx), '--', label='x-drift')
+                plt.plot(tt,-zshift(tt,dy), '--', label='y-drift')
                 ti = np.arange(tt.min(),tt.max(),dtype=t.dtype)
                 tu,iu = np.unique(t,return_index=True)
                 dzi = zshift(ti,np.interp(ti,tu,pipeline['driftz'][iu]),navg=self.zeroAlignFrames)
                 dzir = self.scaleFactor*np.roll(dzi,self.shiftFrames)
                 self.zDrift = [ti, dzir]
-                plt.plot(ti, dzir)
+                plt.plot(ti, dzir, '--', label='z-drift')
+        plt.legend()
 
 
     def OnSetZPars(self, event=None):

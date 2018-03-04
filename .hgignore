@@ -29,3 +29,4 @@ patches/*
 *.sqlite3
 *\#*\#
 PYMEcs/experimental/tmptest/*
+PYMEcs/Analysis/pyNCS
