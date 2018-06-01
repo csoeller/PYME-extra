@@ -5,6 +5,7 @@ import time
 import logging
 logger = logging.getLogger(__name__)
 
+TIMEOUTDEFAULT = 10
 class ZeroconfServiceTypes(object):
     """
     Return all of the advertised services on any local networks
@@ -19,7 +20,7 @@ class ZeroconfServiceTypes(object):
         pass
 
     @classmethod
-    def find(cls, zc=None, timeout=5):
+    def find(cls, zc=None, timeout=TIMEOUTDEFAULT):
         """
         Return all of the advertised services on any local networks.
 
@@ -49,15 +50,15 @@ try:
 except:
     zt = ZeroconfServiceTypes()
 
-def servicesPresent(timeOut=5, showServices=False):
+def servicesPresent(timeOut=TIMEOUTDEFAULT, showServices=False):
     services = zt.find(timeout=timeOut)
     if showServices:
         print("Available Services: %s" % repr(services))
 
     return len(services) > 0
 
-def checkServer(showServices=False):
-    if servicesPresent(showServices=showServices):
+def checkServer(timeOut=TIMEOUTDEFAULT, showServices=False):
+    if servicesPresent(timeOut=timeOut, showServices=showServices):
         logger.info('zeroconf services detected')
     else:
         logger.error('no zeroconf services detected - this should not happen')
