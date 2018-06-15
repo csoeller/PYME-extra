@@ -3,7 +3,18 @@ import PYME.misc.pyme_zeroconf as pzc
 import time
 
 import logging
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
+# logger = logging.getLogger(__name__)
+# logger.setLevel(logging.DEBUG)
+
+# # create console handler and set level to debug
+# ch = logging.StreamHandler()
+# ch.setLevel(logging.INFO)
+
+# # add ch to logger
+# logger.addHandler(ch)
+
 
 TIMEOUTDEFAULT = 10
 class ZeroconfServiceTypes(object):
@@ -59,13 +70,20 @@ def servicesPresent(timeOut=TIMEOUTDEFAULT, showServices=False):
 
 def checkServer(timeOut=TIMEOUTDEFAULT, showServices=False):
     if servicesPresent(timeOut=timeOut, showServices=showServices):
-        logger.info('zeroconf services detected')
+        logging.info('zeroconf services detected')
     else:
-        logger.error('no zeroconf services detected - this should not happen')
+        logging.error('no zeroconf services detected - this should not happen')
         
     ns = pzc.getNS()
-    if len(ns.advertised_services) > 0:
-        logger.info(repr(ns.advertised_services))
+    if len(get_advertised_services(ns)) > 0:
+        logging.info(repr(get_advertised_services(ns)))
     else:
-        logger.error('no advertised pyro services - apparently there is no server running on this network')
+        logging.error('no advertised pyro services - apparently there is no server running on this network')
     
+def get_advertised_services(ns):
+    try:
+        services = ns.get_advertised_services()
+    except:
+        services = ns.advertised_services
+
+    return services
