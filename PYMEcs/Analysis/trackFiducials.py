@@ -37,7 +37,7 @@ FILTER_FUNCS = {
     } 
 
 def extractTrajectoriesClump(ds, clumpRadiusVar = 'error_x', clumpRadiusMultiplier=5.0, 
-                                  timeWindow=25):
+                                  timeWindow=25, clumpMinSize=50):
                                       
     import PYME.Analysis.points.DeClump.deClump as deClump
     #track beads through frames
@@ -55,6 +55,7 @@ def extractTrajectoriesClump(ds, clumpRadiusVar = 'error_x', clumpRadiusMultipli
     I = np.argsort(t)
 
     clumpIndex = np.zeros(len(x), dtype='i')
+    isFiducial = np.zeros(len(x), dtype='i')
     clumpIndex[I] = deClump.findClumpsN(t[I], x[I], y[I], delta_x[I], timeWindow)
     
     tMax = t.max()
@@ -75,10 +76,11 @@ def extractTrajectoriesClump(ds, clumpRadiusVar = 'error_x', clumpRadiusMultipli
             x_i = x[clump_mask]
             clump_size = len(x_i)
             
-            if clump_size > 50:
+            if clump_size > clumpMinSize:
                 y_i = y[clump_mask]
                 z_i = z[clump_mask]
                 t_i = t[clump_mask].astype('i')
+                isFiducial[clump_mask] = 1 # mark the event mask that this is a fiducial
                 
                 x_i_f = np.NaN*np.ones_like(t_f)
                 x_i_f[t_i]= x_i - x_i.mean()
@@ -101,11 +103,11 @@ def extractTrajectoriesClump(ds, clumpRadiusVar = 'error_x', clumpRadiusMultipli
     y_f = np.array(y_f)[clumpOrder,:]
     z_f = np.array(z_f)[clumpOrder,:]
 
-    return (t_f, x_f, y_f, z_f)
+    return (t_f, x_f, y_f, z_f, isFiducial)
 
 def AverageTrack(ds, tracks, filter='Gaussian', filterScale=10.0):
 
-    t_f, x_f, y_f, z_f = tracks # this needs to allow z in future
+    t_f, x_f, y_f, z_f = tracks
     t = ds['t'].astype('i')
     
     def _mf(p, meas):

@@ -74,6 +74,11 @@ class FiducialTracker:
                                                                finterpDS(self.pipeline,
                                                                          ds,
                                                                          fiducial))
+            pds = self.pipeline.selectedDataSource
+            isfid = np.zeros(len(pds['x']), dtype='i')
+            isfid[self.pipeline.filter.Index] = ds['isFiducial']
+            pds.addColumn('isFiducial',isfid)
+
 
     def OnFiducialCorrectDS(self, event=None):
         """

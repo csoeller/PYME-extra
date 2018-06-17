@@ -34,6 +34,7 @@ class FiducialTrack(ModuleBase):
     timeWindow = Int(25)
     filterScale = Float(11)
     filterMethod = Enum(tfs.FILTER_FUNCS.keys())
+    clumpMinSize = Int(50)
 
     outputName = Output('fiducialAdded')
 
@@ -43,16 +44,18 @@ class FiducialTrack(ModuleBase):
         inp = namespace[self.inputName]
         mapped = tabular.mappingFilter(inp)
 
-        rawtracks = tfs.extractTrajectoriesClump(inp, clumpRadiusVar = 'error_x',
-                                                 clumpRadiusMultiplier=self.radiusMultiplier,
-                                                 timeWindow=self.timeWindow)
+        t, x, y, z, isFiducial = tfs.extractTrajectoriesClump(inp, clumpRadiusVar = 'error_x',
+                                                              clumpRadiusMultiplier=self.radiusMultiplier,
+                                                              timeWindow=self.timeWindow, clumpMinSize=self.clumpMinSize)
+        rawtracks = (t, x, y, z)
         tracks = tfs.AverageTrack(inp, rawtracks, filter=self.filterMethod,
                                          filterScale=self.filterScale)
         
         # add tracks for all calculated dims to output
         for dim in tracks.keys():
             mapped.addColumn('fiducial_%s' % dim, tracks[dim])
-
+        mapped.addColumn('isFiducial', isFiducial)
+        
         # propogate metadata, if present
         try:
             mapped.mdh = inp.mdh
