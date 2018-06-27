@@ -1,3 +1,8 @@
+from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float
+
+class clusterParam(HasTraits):
+    Ryrminsize = Float(1.0)
+
 class Meas2DPlotter:
     """
 
@@ -6,7 +11,8 @@ class Meas2DPlotter:
         self.dsviewer = dsviewer
         dsviewer.AddMenuItem('Experimental>Meas2D', 'Plot cluster measurements', self.OnPlotClust)
         dsviewer.AddMenuItem('Experimental>Meas2D', 'Plot per cluster colocalisation', self.OnClusterColoc)
-
+        self.clusterPar = clusterParam() # initialise parameter selector
+        
 
     def OnPlotClust(self, event=None):
         nodata = False
@@ -21,12 +27,17 @@ class Meas2DPlotter:
             print('no area column found - returning')
             return
         
+        if not self.clusterPar.configure_traits(kind='modal'):
+            return
+
         mdh = self.dsviewer.image.mdh
         vx = 1e3*mdh['voxelsize.x']
         vy = 1e3*mdh['voxelsize.y']
         RyRsz = 900.0 # RyR footprint in nm
+        ryrmin = self.clusterPar.Ryrminsize # minimal size of cluster to check
         
-        ryrs = pipeline['area']*vx*vy/RyRsz
+        ryrsall = pipeline['area']*vx*vy/RyRsz
+        ryrs = ryrsall[ryrsall > ryrmin]
         ryrmean = ryrs.mean()
         
         import matplotlib.pyplot as plt
@@ -52,12 +63,15 @@ class Meas2DPlotter:
         if nodata:
             print('no area column found - returning')
             return
+
+        if not self.clusterPar.configure_traits(kind='modal'):
+            return
         
         mdh = self.dsviewer.image.mdh
         vx = 1e3*mdh['voxelsize.x']
         vy = 1e3*mdh['voxelsize.y']
         RyRsz = 900.0 # RyR footprint in nm
-        ryrmin = 5 # minimal size of cluster to check
+        ryrmin = self.clusterPar.Ryrminsize # minimal size of cluster to check
         
         ryrs = pipeline['area']*vx*vy/RyRsz
         ryrgtmin = ryrs > ryrmin
