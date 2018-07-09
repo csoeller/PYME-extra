@@ -75,8 +75,12 @@ class CSVOutputFileBrowse2(OutputModule):
     @property
     def default_view(self):
         from traitsui.api import View, Group, Item, HGroup
+        from PYME.ui.custom_traits_editors import CBEditor
+
+        editable = self.class_editable_traits()
+        inputs = [tn for tn in editable if tn.startswith('input')]
         return View(
-            Group(Item('inputName'),
+            Group(Item('inputName', editor=CBEditor(choices=self._namespace_keys)),
                   HGroup(
                       Item('saveAs', show_label=False),
                       '_',
@@ -84,7 +88,6 @@ class CSVOutputFileBrowse2(OutputModule):
                   )
             ), buttons=['OK'])
 
-import wx
 @register_module('CSVOutputFileBrowse')
 class CSVOutputFileBrowse(OutputModule):
     """
@@ -160,13 +163,15 @@ class CSVOutputFileBrowse(OutputModule):
     @property
     def default_view(self):
         from traitsui.api import View, Group, Item, HGroup
+        from PYME.ui.custom_traits_editors import CBEditor
+
+        editable = self.class_editable_traits()
+        inputs = [tn for tn in editable if tn.startswith('input')]
         return View(
-            Group(Item('inputName'),
+            Group(Item('inputName', editor=CBEditor(choices=self._namespace_keys)),
                   HGroup(
                       Item('saveAs', show_label=False),
                       '_',
                       Item('fileName', style='readonly', springy=True)
                   )
             ), buttons=['OK'])
-
-

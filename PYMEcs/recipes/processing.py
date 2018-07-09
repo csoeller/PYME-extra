@@ -11,6 +11,7 @@ class FlexiThreshold(Filter):
     """
     method = Enum('simple','fractional','otsu','isodata')
     parameter = Float(0.5)
+    clipAt = Float(10.0)
 
     def fractionalThreshold(self, data):
         N, bins = np.histogram(data, bins=5000)
@@ -24,13 +25,13 @@ class FlexiThreshold(Filter):
     def applyFilter(self, data, chanNum, frNum, im):
 
         if self.method == 'fractional':
-            threshold = self.fractionalThreshold(data)
+            threshold = self.fractionalThreshold(np.clip(data,None,self.clipAt))
         if self.method == 'simple':
             threshold = self.parameter
         if self.method == 'otsu':
-            threshold = skf.threshold_otsu(data)
+            threshold = skf.threshold_otsu(np.clip(data,None,self.clipAt))
         if self.method == 'isodata':
-            threshold = skf.threshold_isodata(data)
+            threshold = skf.threshold_isodata(np.clip(data,None,self.clipAt))
 
         mask = data > threshold
         return mask
