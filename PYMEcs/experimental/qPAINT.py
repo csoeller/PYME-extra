@@ -294,7 +294,8 @@ class QPCalc:
                     for species in speclist.keys():
                         pipeline.selectedDataSource.setMapping('p_%s' % species,
                                                                '(t>= %d)*(t<%d)' % speclist[species])
-                    self.visFr.RegenFilter()
+                    pipeline.Rebuild()
+                    # self.visFr.RegenFilter()
                     self.visFr.CreateFoldPanel()
 
 
@@ -321,7 +322,8 @@ class QPCalc:
                 logger.debug('cannot read or set filterKeys y-component')
                 return
                 
-            self.visFr.RegenFilter()
+            self.pipeline.Rebuild()
+            #self.visFr.RegenFilter()
             self.visFr.CreateFoldPanel()
 
 

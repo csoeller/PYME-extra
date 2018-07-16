@@ -29,7 +29,7 @@ A quick hack, in so far as I do not have a proper setuptools/distutils installat
 - add the parent directory of this repo to your PYTHONPATH
 - add the plugin entries into suitable config files into a directory searched by PYME.config
 
-On my machine, in the per user PYME config file for visgui (~/.PYME/plugins/visgui/myplugins.txt), I currently have
+On my machine, in the per user PYME config file for visgui (~/.PYME/plugins/visgui/visguiPlugins.txt), I currently have
 
 
 ```
@@ -44,16 +44,29 @@ PYMEcs.experimental.showShiftMap
 PYMEcs.experimental.binEventProperty
 PYMEcs.experimental.onTime
 PYMEcs.experimental.snrEvents
+PYMEcs.experimental.randMap
 
 ```
 
-There is currently only one plugin for the dsviewer (AKA dh5view), I have in a dsviewer plugin file (~/.PYME/plugins/dsviewer/myplugins.txt)
+There there are fewer plugin modules for the dsviewer (AKA dh5view), I have in a dsviewer plugin file (~/.PYME/plugins/dsviewer/dsviewerPlugins.txt):
 
 ```
 #!python
 
 PYMEcs.experimental.showErrsDh5view
 PYMEcs.experimental.mapTools
+PYMEcs.experimental.meas2DplotDh5view
+
+```
+
+Finally, there is a file listing recipe plugins, currently in my recipes plugin file (~/.PYME/plugins/recipes/recipePlugins.txt) I have:
+
+```
+#!python
+
+PYMEcs.recipes.processing
+PYMEcs.recipes.output
+
 
 ```
 ### Issues ###

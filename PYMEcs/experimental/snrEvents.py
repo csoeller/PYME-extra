@@ -11,8 +11,8 @@ class SNRcalculator:
         self.visFr = visFr
         self.pipeline = visFr.pipeline
 
-        visFr.AddMenuItem('Experimental>Testing', 'Add SNR property', self.OnAddSNR,
-                          helpText='Add an event property that provides some measure of SNR for events')
+        visFr.AddMenuItem('Experimental>ExtraColumns', 'Add SNR property', self.OnAddSNR,
+                          helpText='Add an event property that provides some measure of SNR for events (from background and amplitude)')
         
 
     def OnAddSNR(self, event=None):
