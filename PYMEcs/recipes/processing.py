@@ -9,7 +9,8 @@ class FlexiThreshold(Filter):
     """Chose a threshold using a range of available thresholding methods.
        Currently we can chose from: simple, fractional, otsu, isodata
     """
-    method = Enum('simple','fractional','otsu','isodata')
+    method = Enum('simple','fractional','otsu','isodata',
+                  'li','yen') # newer skimage has minimum, mean and triangle as well
     parameter = Float(0.5)
     clipAt = Float(10.0)
 
@@ -26,12 +27,11 @@ class FlexiThreshold(Filter):
 
         if self.method == 'fractional':
             threshold = self.fractionalThreshold(np.clip(data,None,self.clipAt))
-        if self.method == 'simple':
+        elif self.method == 'simple':
             threshold = self.parameter
-        if self.method == 'otsu':
-            threshold = skf.threshold_otsu(np.clip(data,None,self.clipAt))
-        if self.method == 'isodata':
-            threshold = skf.threshold_isodata(np.clip(data,None,self.clipAt))
+        else:
+            method = getattr(skf,'threshold_%s' % self.method)
+            threshold = method(np.clip(data,None,self.clipAt))
 
         mask = data > threshold
         return mask
