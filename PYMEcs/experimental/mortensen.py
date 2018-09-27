@@ -1,5 +1,14 @@
 import numpy as np
 # you may need a lot more imports depending what functionality your require in your plugin
+
+from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float
+#from traitsui.api import View, Item, Group
+#from traitsui.menu import OKButton, CancelButton, OKCancelButtons
+
+class PlotOptions(HasTraits):
+    plotMode = Enum(('Compare with and without background',
+                     'Colour errors by photon number'))
+
 class MortensenFormula:
     """
     A plugin, very simple to demonstrate the concept. Also providing a simple
@@ -11,9 +20,9 @@ class MortensenFormula:
         self.visFr = visFr
         self.pipeline = visFr.pipeline
 
-        visFr.AddMenuItem('Experimental>ExtraColumns', 'Add Mortensen Formula', self.OnAddMort,
+        visFr.AddMenuItem('Experimental>ExtraColumns>Errors', 'Add Mortensen Formula', self.OnAddMort,
                           helpText='Add an event property that provides an estimate by the Mortensen Formula (from background and amplitude)')
-        visFr.AddMenuItem('Experimental>ExtraColumns', 'Plot Mortensen Error', self.OnPlotMort,
+        visFr.AddMenuItem('Experimental>ExtraColumns>Errors', 'Plot Mortensen Error', self.OnPlotMort,
                           helpText='Scatterplot estimate by the Mortensen Formula')
         
 
@@ -47,16 +56,28 @@ class MortensenFormula:
     def OnPlotMort(self, event=None):
         import matplotlib.pyplot as plt
         pipeline = self.pipeline
-        plt.figure()
-        ebg = plt.scatter(pipeline['error_x'],pipeline['mortensenError'],
-                    c='g',alpha=0.5)
-        enobg = plt.scatter(pipeline['error_x'],pipeline['mortensenErrorNoBG'],
-                    c='r',alpha=0.5)
-        plt.legend((ebg,enobg),('error with bg','error assuming zero bg'))
-        plt.plot([0,20],[0,20])
-        plt.xlabel('Fit error x')
-        plt.ylabel('Error from Mortensen Formula')
-        
+
+        popt = PlotOptions()
+        if popt.configure_traits(kind='modal'):
+            if popt.plotMode == 'Compare with and without background':
+                plt.figure()
+                ebg = plt.scatter(pipeline['error_x'],pipeline['mortensenError'],
+                                  c='g',alpha=0.5)
+                enobg = plt.scatter(pipeline['error_x'],pipeline['mortensenErrorNoBG'],
+                                    c='r',alpha=0.5)
+                plt.legend((ebg,enobg),('error with bg','error assuming zero bg'))
+                plt.plot([0,20],[0,20])
+                plt.xlabel('Fit error x')
+                plt.ylabel('Error from Mortensen Formula')
+            elif popt.plotMode == 'Colour errors by photon number':
+                nph = pipeline['nPhotons']
+                nph5 = np.percentile(nph,5)
+                nph95 = np.percentile(nph,95)
+                plt.figure()
+                plt.scatter(pipeline['error_x'],pipeline['mortensenError'],
+                            c=nph,vmin=nph5,vmax=nph95,cmap=plt.cm.jet)
+                plt.colorbar()
+                
 def Plug(visFr):
     """Plugs this module into the gui"""
     visFr.mortForm = MortensenFormula(visFr)
