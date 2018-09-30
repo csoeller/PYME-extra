@@ -5,9 +5,12 @@ from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float
 #from traitsui.api import View, Item, Group
 #from traitsui.menu import OKButton, CancelButton, OKCancelButtons
 
+import PYMEcs.misc.shellutils as su
+
 class PlotOptions(HasTraits):
     plotMode = Enum(('Compare with and without background',
-                     'Colour errors by photon number'))
+                     'Colour errors by photon number',
+                     'Scatter Density Plot'))
 
 class MortensenFormula:
     """
@@ -57,6 +60,14 @@ class MortensenFormula:
         import matplotlib.pyplot as plt
         pipeline = self.pipeline
 
+        err = pipeline['mortensenError']
+        err1 = np.percentile(err,1)
+        err99 = np.percentile(err,99)
+
+        errnbg = pipeline['mortensenErrorNoBG']
+        errnbg1 = np.percentile(errnbg,1)
+        errnbg99 = np.percentile(errnbg,99)
+
         popt = PlotOptions()
         if popt.configure_traits(kind='modal'):
             if popt.plotMode == 'Compare with and without background':
@@ -66,7 +77,7 @@ class MortensenFormula:
                 enobg = plt.scatter(pipeline['error_x'],pipeline['mortensenErrorNoBG'],
                                     c='r',alpha=0.5)
                 plt.legend((ebg,enobg),('error with bg','error assuming zero bg'))
-                plt.plot([0,20],[0,20])
+                plt.plot([errnbg1,err99],[errnbg1,err99])
                 plt.xlabel('Fit error x')
                 plt.ylabel('Error from Mortensen Formula')
             elif popt.plotMode == 'Colour errors by photon number':
@@ -76,7 +87,17 @@ class MortensenFormula:
                 plt.figure()
                 plt.scatter(pipeline['error_x'],pipeline['mortensenError'],
                             c=nph,vmin=nph5,vmax=nph95,cmap=plt.cm.jet)
+                plt.plot([err1,err99],[err1,err99])
+                plt.xlabel('Fit error x')
+                plt.ylabel('Error from Mortensen Formula')
+                plt.title('error coloured with nPhotons')
                 plt.colorbar()
+            elif popt.plotMode == 'Scatter Density Plot':
+                plt.figure()
+                su.scatterdens(pipeline['error_x'],pipeline['mortensenError'],
+                               subsample=0.2, xlabel='Fit error x',
+                               ylabel='Error from Mortensen Formula',s=20)
+                plt.plot([err1,err99],[err1,err99])
                 
 def Plug(visFr):
     """Plugs this module into the gui"""

@@ -13,7 +13,7 @@ class ExtractChannelByName(ModuleBase):
     inputName = Input('input')
     outputName = Output('filtered_image')
 
-    channelName = CStr('channel0')
+    channelNamePattern = CStr('channel0')
     caseInsensitive = Bool(True)
     
     def _pickChannel(self, image):
@@ -24,10 +24,10 @@ class ExtractChannelByName(ModuleBase):
         channelNames = image.mdh['ChannelNames']
         idx = -1
         for i, c in enumerate(channelNames):
-            if re.search(self.channelName,c,flags):
+            if re.search(self.channelNamePattern,c,flags):
                 idx = i
         if idx < 0:
-            raise RuntimeError("Expression %s did not maych any channel names" % self.channelName)
+            raise RuntimeError("Expression %s did not maych any channel names" % self.channelNamePattern)
         
         chan = image.data[:,:,:,idx]
         
