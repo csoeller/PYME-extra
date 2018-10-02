@@ -12,12 +12,20 @@ class PlotOptions(HasTraits):
                      'Colour errors by photon number',
                      'Scatter Density Plot'))
 
+# We use the formula (S30) from Mortensen et al, 2010 [1] which provides a nice closed-form expression for the localisation error;
+# note that this is likely a lower bound on actual error due to simplifying model assumptions (no read noise etc) 
+
+# Reference
+
+# 1. Optimized localization analysis for single-molecule tracking and super-resolution microscopy.
+#    Kim I Mortensen, L Stirling Churchman, James A Spudich, and Henrik Flyvbjerg.
+#    Nat Meth, 2017 vol. 18 (5) pp. 377-381.
+#    http://www.nature.com/doifinder/10.1038/nmeth.1447
+
 class MortensenFormula:
     """
-    A plugin, very simple to demonstrate the concept. Also providing a simple
-    measure of some kind of SNR, the formula used is probably debatable.
-    For example, low background estimates cause very high SNRs which may or may not
-    be reasonable given the uncertainty in determining the background etc
+    A plugin that calculates errors according to the Mortensen formula using photon number and background
+    estimates that event analysis has provided.
     """
     def __init__(self, visFr):
         self.visFr = visFr
