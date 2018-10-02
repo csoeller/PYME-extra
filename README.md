@@ -2,29 +2,26 @@
 
 Plugins and associated code for PYME.
 
-This is currently used as a testbed for
+This is a mixed bag of extensions/additions to standard PYME and also used as a testbed for
 
 * the new plugin system
 * the recipe based processing of SMLM data
 * new ideas for data processing
 
-Once sufficiently mature and deemed of broad enough interest parts could migrate into more permanent core PYME code but that is entirely up to David's views.
-
-As it is it serves as a nice testbed of the newish Python config system. For details on that either consult the docs in your local PYME installation, using a command like:
+As mentioned it serves as testbed for the newish PYME config system. For details on that either consult the docs in your local PYME installation, using a command like:
 
 ```
     pydoc PYME.config
 ```
 
-or look at the [online version](http://www.python-microscopy.org/doc/api/PYME.config.html) at [python-microscopy.org](http://www.python-microscopy.org/) (which can be slightly out of date at times).
-
-## Important Note
-
-The PYME extra code in this repository requires some code changes to the python-microscopy code for all parts to become fully functional. These code changes have been implemented in the [python-microscopy-exeter](https://bitbucket.org/christian_soeller/python-microscopy-exeter) fork. All further instructions assume that python-microscopy-exeter has been installed.
+or look at the [online version](http://www.python-microscopy.org/doc/api/PYME.config.html) at [python-microscopy.org](http://www.python-microscopy.org/) (which in theory could be slightly out of date if the latest build has been a while ago).
 
 ### Installation ###
 
-A quick hack, in so far as I do not have a proper setuptools/distutils installation setup, but rather use the PYME.config system to pick up the costom plugins, as well as Python's PYTHONPATH to allow the required modules to be loaded at runtime:
+_[Work is in progress to make installation smoother, the plugin configuration files are now in the etc/plugins subfolder, next on
+the list is a setup.py type setup]_
+
+A quick hack, in so far as I do not have a proper setuptools/distutils installation setup, but rather uses Python's PYTHONPATH to allow the required modules to be loaded at runtime:
 
 - add the parent directory of this repo to your PYTHONPATH
 - add the plugin entries into suitable config files into a directory searched by PYME.config
