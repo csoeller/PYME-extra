@@ -17,7 +17,7 @@ class ExtractChannelByName(ModuleBase):
     caseInsensitive = Bool(True)
     
     def _matchChannels(self,channelNames):
-        # we put this into its own static function so that we can call it externally for testing
+        # we put this into its own function so that we can call it externally for testing
         import re
         flags = 0
         if self.caseInsensitive:
