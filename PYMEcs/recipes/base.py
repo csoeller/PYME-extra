@@ -16,18 +16,24 @@ class ExtractChannelByName(ModuleBase):
     channelNamePattern = CStr('channel0')
     caseInsensitive = Bool(True)
     
-    def _pickChannel(self, image):
+    def _matchChannels(self,channelNames):
+        # we put this into its own static function so that we can call it externally for testing
         import re
         flags = 0
         if self.caseInsensitive:
             flags |= re.I
+        idxs = [i for i, c in enumerate(channelNames) if re.search(self.channelNamePattern,c,flags)]
+        return idxs
+        
+    def _pickChannel(self, image):     
         channelNames = image.mdh['ChannelNames']
-        idx = -1
-        for i, c in enumerate(channelNames):
-            if re.search(self.channelNamePattern,c,flags):
-                idx = i
-        if idx < 0:
-            raise RuntimeError("Expression %s did not maych any channel names" % self.channelNamePattern)
+        idxs = self._matchChannels(channelNames)
+        if len(idxs) < 1:
+            raise RuntimeError("Expression '%s' did not match any channel names" % self.channelNamePattern)
+        if len(idxs) > 1:
+            raise RuntimeError(("Expression '%s' did match more than one channel name: " % self.channelNamePattern) +
+                               ', '.join([channelNames[i] for i in idxs]))
+        idx = idxs[0]
         
         chan = image.data[:,:,:,idx]
         
