@@ -51,7 +51,7 @@ class TrackerPlotPanel(PlotPanel):
                     self.subplotc = self.figure.add_subplot(414)
     
             #try:
-            t, dx, dy, dz, corr, corrmax, poffset, pos, nomPos, posInd, posDelta  = np.array(self.dt.get_history(1000)).T
+            t, dx, dy, dz, corr, corrmax, poffset, pos, focusoffset, nomPos, posInd, posDelta  = np.array(self.dt.get_history(1000)).T
 
             self.subplotxy.cla()
             self.subplotxy.plot(t, dx, 'r')
@@ -61,6 +61,7 @@ class TrackerPlotPanel(PlotPanel):
                         
             self.subplotz.cla()
             self.subplotz.plot(t, 1000*dz, 'b')
+            self.subplotz.plot(t, 1000*focusoffset, 'r--')
             self.subplotz.set_ylabel('dz [nm]')
             self.subplotz.set_xlim(t.min(), t.max())
             
@@ -264,6 +265,15 @@ class DriftTrackingControl(wx.Panel):
         hsizer.Add(self.bCalcZfactor, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2) 
         self.bCalcZfactor.Bind(wx.EVT_BUTTON, self.OnBCalculateZfactor)
         sizer_1.Add(hsizer,0, wx.EXPAND, 0)
+
+        hsizer = wx.BoxSizer(wx.HORIZONTAL)
+        hsizer.Add(wx.StaticText(self, -1, "Focus offset [nm]:"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
+        self.tFocusoffset = wx.TextCtrl(self, -1, '%3.0f'% self.dt.focusoffset, size=[30,-1])
+        hsizer.Add(self.tFocusoffset, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
+        self.bFocusoffset = wx.Button(self, -1, 'Set', style=wx.BU_EXACTFIT)
+        hsizer.Add(self.bFocusoffset, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2) 
+        self.bFocusoffset.Bind(wx.EVT_BUTTON, self.OnBSetFocusoffset)
+        sizer_1.Add(hsizer,0, wx.EXPAND, 0)
         
         hsizer = wx.BoxSizer(wx.HORIZONTAL)
         hsizer.Add(wx.StaticText(self, -1, "feedback delay [frames]:"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
@@ -369,6 +379,9 @@ class DriftTrackingControl(wx.Panel):
         ret = dlg.ShowModal()
         dlg.Destroy()
 
+    def OnBSetFocusoffset(self, event):
+        self.dt.focusoffset = float(self.tFocusoffset.GetValue())/1e3
+
     def OnBSetMinDelay(self, event):
         self.dt.minDelay = int(self.tMinDelay.GetValue())
 
@@ -383,10 +396,11 @@ class DriftTrackingControl(wx.Panel):
             calibState, NStates = self.dt.get_calibration_state()
             self.gCalib.SetRange(NStates + 1)
             self.gCalib.SetValue(calibState)
-            t, dx, dy, dz, corr, corrmax,poffset,pos, nomPos, posInd, posDelta = self.dt.get_history(1)[-1]
+            t, dx, dy, dz, corr, corrmax,poffset,pos, focusoffset, nomPos, posInd, posDelta = self.dt.get_history(1)[-1]
+            vx, vy = self.dt.scope.GetPixelSize()
             self.stError.SetLabel(("Error: x = %s nm y = %s nm\n" +
                                   "z = %s nm noffs = %s nm c/cm = %4.2f") %
-                                  ("{:>+3.2f}".format(dx), "{:>+3.2f}".format(dy),
+                                  ("{:>+3.2f}".format(1e3*vx*dx), "{:>+3.2f}".format(1e3*vy*dy),
                                    "{:>+6.1f}".format(1e3*dz), "{:>+6.1f}".format(1e3*poffset),
                                    corr/corrmax))
             self.cbLock.SetValue(self.dt.get_focus_lock())

@@ -82,6 +82,7 @@ class correlator(Pyro.core.ObjBase):
         self.minDelay = 10
         self.maxfac = 1.5e3
         self.Zfactor = 1.0
+        self.focusoffset = 0.0
         
     def initialise(self):
         d = 1.0*self.scope.frameWrangler.currentFrame.squeeze()        
@@ -330,7 +331,7 @@ class correlator(Pyro.core.ObjBase):
             #print dx, dy, dz
             
             #FIXME: logging shouldn't call piezo.GetOffset() etc ... for performance reasons
-            self.history.append((time.time(), dx, dy, dz, cCoeff, self.corrRef, self.piezo.GetOffset(), self.piezo.GetPos(0), nomPos, posInd, posDelta))
+            self.history.append((time.time(), dx, dy, dz, cCoeff, self.corrRef, self.piezo.GetOffset(), self.piezo.GetPos(0), self.focusoffset, nomPos, posInd, posDelta))
             eventLog.logEvent('PYME2ShiftMeasure', '%3.4f, %3.4f, %3.4f' % (dx, dy, dz))
             
             self.lockActive = self.lockFocus and (cCoeff > .5*self.corrRef)
@@ -338,8 +339,8 @@ class correlator(Pyro.core.ObjBase):
                 if abs(self.piezo.GetOffset()) > 20.0:
                     self.lockFocus = False
                     print "focus lock released"
-                if abs(dz) > self.focusTolerance and self.lastAdjustment >= self.minDelay:
-                    zcorr = self.piezo.GetOffset() - dz
+                if abs(dz-self.focusoffset) > self.focusTolerance and self.lastAdjustment >= self.minDelay:
+                    zcorr = self.piezo.GetOffset() - (dz-self.focusoffset)
                     if zcorr < - self.maxfac*self.focusTolerance:
                         zcorr = - self.maxfac*self.focusTolerance
                     if zcorr >  self.maxfac*self.focusTolerance:
