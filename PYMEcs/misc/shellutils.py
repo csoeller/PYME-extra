@@ -969,7 +969,11 @@ def setSelectionFromFilterKeys(visFr,img):
     glcv.selectionStart = (x0,y0)
     glcv.selectionFinish = (x1,y1)
 
-import PYMEnf.DriftCorrection.compactFit as cf
+try:
+    import PYMEnf.DriftCorrection.compactFit as cf
+except ImportError:
+    pass
+
 def getdriftcurves(driftPane,pipeline,t=None):
     if t is None:
         t = pipeline['t']
