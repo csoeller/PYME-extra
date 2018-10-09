@@ -6,7 +6,7 @@ $PYTHON setup.py install
 
 echo "Installing plugin files into PYME config"
 
-$PYTHON install_plugin.py dist
+$PYTHON install_plugins.py dist
 
 
 # See

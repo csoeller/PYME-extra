@@ -18,61 +18,39 @@ or look at the [online version](http://www.python-microscopy.org/doc/api/PYME.co
 
 ### Installation ###
 
-_[Work is in progress to make installation smoother, the plugin configuration files are now in the etc/plugins subfolder, next on
-the list is a setup.py type setup]_
+With the new installation support the installation should be as easy as
 
-A quick hack, in so far as I do not have a proper setuptools/distutils installation setup, but rather uses Python's PYTHONPATH to allow the required modules to be loaded at runtime:
+```
+   # cd to PYME-extra subdirectory
+   python setup.py install
+   python install_plugins.py dist
+```
 
-- add the parent directory of this repo to your PYTHONPATH
-- add the plugin entries into suitable config files into a directory searched by PYME.config
+Alternatively, if you want to edit code in place you may want to use
 
-On my machine, in the per user PYME config file for visgui (~/.PYME/plugins/visgui/visguiPlugins.txt), I currently have
+```
+   # cd to PYME-extra subdirectory
+   python setup.py develop
+   python install_plugins.py dist
+```
+
+For user installs, plugin files can be installed in the per user config directory by leaving out the `dist` argument to install_plugins.py:
 
 
 ```
-#!python
-
-PYMEcs.experimental.clusterTrack
-PYMEcs.experimental.fiducials
-PYMEcs.experimental.fiducialsNew
-PYMEcs.experimental.qPAINT
-PYMEcs.experimental.showErrs
-PYMEcs.experimental.showShiftMap
-PYMEcs.experimental.binEventProperty
-PYMEcs.experimental.onTime
-PYMEcs.experimental.snrEvents
-PYMEcs.experimental.randMap
-
+   python install_plugins.py
 ```
 
-There there are fewer plugin modules for the dsviewer (AKA dh5view), I have in a dsviewer plugin file (~/.PYME/plugins/dsviewer/dsviewerPlugins.txt):
 
-```
-#!python
-
-PYMEcs.experimental.showErrsDh5view
-PYMEcs.experimental.mapTools
-PYMEcs.experimental.meas2DplotDh5view
-
-```
-
-Finally, there is a file listing recipe plugins, currently in my recipes plugin file (~/.PYME/plugins/recipes/recipePlugins.txt) I have:
-
-```
-#!python
-
-PYMEcs.recipes.processing
-PYMEcs.recipes.output
-
-
-```
 ### Issues ###
 
-Note that the showErrs modules rely on my mac installation which uses bash scripts and the [platypus app](https://sveinbjorn.org/platypus)
-to capture STDERR into a temporary file which these modules access. Bottom line is that these modules will likely not work on anything but my local mac. It would be nice to build capturing STDIO/STDERR capture into the basic VisGUI and dh5View scripts as this would enable similar GUI based error inspection.
+Note that the showErrs modules rely on a mac installation which uses bash scripts and the [platypus app](https://sveinbjorn.org/platypus) app
+to capture STDERR into a temporary file which these modules access. 
+
+Bottom line is that these modules will likely not work on anything but a mac with my PYMEapps wrappers. On other systems they will just generate a message that this functionality is not supported.
 
 The PYME mac app wrappers are available at the [python-microscopy-osxapps bitpucket repository](http://bitbucket.org/christian_soeller/python-microscopy-osxapps) if somebody would like to inspect the approach.
 
 ### Contact ###
 
-Christian Soeller (c.soeller at exeter.ac.uk)
+Christian Soeller (c.soeller _at_ gmail _dot_ com)
