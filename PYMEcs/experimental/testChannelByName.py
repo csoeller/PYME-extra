@@ -17,12 +17,12 @@ class TestChannelByName:
         self.dsviewer = dsviewer
         self.ec = ExtractChannelByName()
         dsviewer.AddMenuItem('Experimental>Misc',
-                          'Test Match Channel Names',
+                          'Test Channel Name Matching by RegEx',
                           self.OnMatch,
                           helpText='test the regex matching of the ExtracChannelByName module')
 
-    def OnMatch(self, event=None):
         
+    def OnMatch(self, event=None):        
         if not self.ec.configure_traits(kind='modal'):
             return
         mdh = self.dsviewer.image.mdh
@@ -30,6 +30,7 @@ class TestChannelByName:
         matches = self.ec._matchChannels(channelNames)
         Msg(None,"ChannelNames: \n\t%s\n\nMatches :\n \t%s" % (channelNames, [channelNames[i] for i in matches]))
 
+        
 def Plug(dsviewer):
     """Plugs this module into the gui"""
     dsviewer.tChanByName = TestChannelByName(dsviewer)
