@@ -75,8 +75,9 @@ def checkServer(timeOut=TIMEOUTDEFAULT, showServices=False):
         logging.error('no zeroconf services detected - this should not happen')
         
     ns = pzc.getNS()
-    if len(get_advertised_services(ns)) > 0:
-        logging.info(repr(get_advertised_services(ns)))
+    adserv = get_advertised_services(ns)
+    if len(adserv) > 0:
+        logging.info(repr(adserv))
     else:
         logging.error('no advertised pyro services - apparently there is no server running on this network')
     

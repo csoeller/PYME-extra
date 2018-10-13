@@ -349,9 +349,20 @@ class QPCalc:
             pipeline = self.visFr.pipeline
             if pipeline.selectedDataSource is not None:
                 pipeline.selectedDataSource.setMapping('ColourNorm', '1.0 + 0*t')
-                for species in timedSpecies.keys():
-                    pipeline.selectedDataSource.setMapping('p_%s' % species,
-                                                           '(t>= %d)*(t<%d)' % timedSpecies[species])
+                # there are a couple different formats for timedSpecies, so check which one it is
+                try:
+                    specs = timedSpecies.keys()
+                    isdict = True
+                except AttributeError:
+                    isdict = False
+                if isdict:
+                    for species in timedSpecies.keys():
+                        pipeline.selectedDataSource.setMapping('p_%s' % species,
+                                                               '(t>= %d)*(t<%d)' % timedSpecies[species])
+                else:
+                    for entry in timedSpecies:
+                        pipeline.selectedDataSource.setMapping('p_%s' % entry['name'],
+                                                               '(t>= %d)*(t<%d)' % (entry['t_start'],entry['t_end']))
                         # FIXME: (1) append if exists, (2) assigning to mdh ok?
                     pipeline.selectedDataSource.mdh['TimedSpecies'] = timedSpecies
                 self.visFr.pipeline.Rebuild()
