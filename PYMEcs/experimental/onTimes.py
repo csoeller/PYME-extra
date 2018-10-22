@@ -3,8 +3,27 @@ import numpy as np
 import sys
 from scipy import ndimage
 
+from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float
+from traitsui.api import View, Item, Group
+from traitsui.menu import OKButton, CancelButton, OKCancelButtons
+
+
 import logging
 logger = logging.getLogger(__file__)
+
+class propertyChoice(HasTraits):
+    clist = List([])
+    EventProperty = Enum(values='clist')
+
+    traits_view = View(Group(Item(name = 'EventProperty'),
+                             show_border = True),
+                       buttons = OKCancelButtons)
+
+    def add_channels(self,chans):
+        for chan in chans:
+            if chan not in self.clist:
+                self.clist.append(chan)
+
 
 def Warn(parent, message, caption = 'Warning!'):
     dlg = wx.MessageDialog(parent, message, caption, wx.OK | wx.ICON_WARNING)
@@ -27,6 +46,10 @@ class onTimer:
                           "plot time series of clumps",
                           self.OnPlotClumps,
                           helpText='plots the time course of the selected events in a "single channel trace" - needs the clumpIndex event property')
+        visFr.AddMenuItem('Experimental>Event Processing',
+                          "plot time series of event property",
+                          self.OnPlotProperty,
+                          helpText='plots a time series of the selected events in a "single channel trace" - using a user chosen event property')
 
 
         
@@ -144,7 +167,58 @@ class onTimer:
             return
 
         ts.plotClumpSeries(t, ci)
+
+    def tserFromPipeline(self,key,base=0):
+    # t is on integer times assumed (from pipeline)
+    # val is the corresponding value
+        t = self.pipeline['t']
+        val = self.pipeline[key]
+    
+        tmin = t.min()
+        tmax = t.max()
+        tstart = tmin-1
+        tend = tmax + 1
+        tlen = tend-tstart+1
+
+        to = t-tstart
+        tidx = np.argsort(to)
+        tos = to[tidx]
+        vs = val[tidx]
+
+        tvalid = np.zeros((tlen))
+        tvalid[tos] = 1
+    
+        vals = np.zeros((tlen))
+        vals[tos] = vs
+    
+        tup = tos[1:][(tos[1:]-tos[:-1] > 1)]
+        tvalid[tup-1] = 1
+        vals[tup-1] = base
+
+        tdown = tos[:-1][(tos[1:]-tos[:-1] > 1)]
+        tvalid[tdown+1] = 1
+        vals[tdown+1] = base
+
+        tplot = tvalid.nonzero()[0]
+        vplot = vals[tplot]
         
+        return (tplot+tstart,vplot)
+
+
+    def OnPlotProperty(self,event):
+        pChoice = propertyChoice()
+        pChoice.add_channels(sorted(self.pipeline.keys()))
+        if pChoice.configure_traits(kind='modal'):
+            t,prop = self.tserFromPipeline(pChoice.EventProperty)
+            if t.shape[0] > 2e4:
+                 Warn(None,'aborting analysis: too many events, current max is %d' % 2e4)
+                 return
+            import matplotlib.pyplot as plt
+            plt.figure()
+            plt.plot(t,prop)
+            plt.xlabel('Frame Number')
+            plt.ylabel(pChoice.EventProperty)
+            plt.show()
             
 def Plug(visFr):
     """Plugs this module into the gui"""

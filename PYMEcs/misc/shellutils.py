@@ -4,6 +4,39 @@ import numpy as np
 import math
 
 
+def plotserpipeline(t,val,base=0):
+    # t is on integer times assumed (from pipeline)
+    # val is the corresponding value
+    tmin = t.min()
+    tmax = t.max()
+    tstart = tmin-1
+    tend = tmax + 1
+    tlen = tend-tstart+1
+
+    to = t-tstart
+    tidx = np.argsort(to)
+    tos = to[tidx]
+    vs = val[tidx]
+
+    tvalid = np.zeros((tlen))
+    tvalid[tos] = 1
+    
+    vals = np.zeros((tlen))
+    vals[tos] = vs
+    
+    tup = tos[1:][(tos[1:]-tos[:-1] > 1)]
+    tvalid[tup-1] = 1
+    vals[tup-1] = base
+
+    tdown = tos[:-1][(tos[1:]-tos[:-1] > 1)]
+    tvalid[tdown+1] = 1
+    vals[tdown+1] = base
+
+    tplot = tvalid.nonzero()[0]
+    vplot = vals[tplot]
+
+    return (tplot+tstart,vplot)
+
 # should we do this with f_globals instead of f_locals?
 # function to be used at shell prompt in PYME GUI shells
 # can be used to search through the variable names available in the shell
