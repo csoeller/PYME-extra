@@ -2,6 +2,38 @@ import numpy as np
 from scipy import signal
 from scipy import stats
 
+##################
+# FRC.py
+#
+# Copyright Christian Soeller, 2018
+# c.soeller@gmail.com
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+##################
+
+# in this implementation we follow the principles as coded in the Fiji FRC plugin coded by Alex Herbert
+# the source code is at https://c4science.ch/source/ijp-frc/browse/master/src/main/java/ch/epfl/biop/frc/FRC.java
+# it was crucial to have some implementation to look at since not all details of the FRC approach are made
+# clear in the FRC papers, for example that the real part of F(i0)*conj(F(i1)) is being used (although it turns out
+# that F(i0)*conj(F(i1)) should be real given the symmetry of the Fourier Transform of real valued function)
+
+# also the use of a tukey window is reproduced and the half-bit line formula was copied althoug
+# it would be nice to figure out how the constants where arrived at
+# Note there is some formula in the Nat Meth paper supplementary by
+# Nieuwenhuizen et al 2013
+
 def sigmaline(L):
     thresh = (0.2071 * np.sqrt(L) + 1.9102) / (1.2071 * np.sqrt(L) + 0.9102)
     return np.minimum(thresh,1)
