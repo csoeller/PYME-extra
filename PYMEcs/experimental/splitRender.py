@@ -136,10 +136,10 @@ class splitRenderPlugin:
         self.renderer = SplitRenderer(visFr, visFr.pipeline)
         self.TBchoice = TimeBlock()
 
-        visFr.AddMenuItem('Experimental>ExtraColumns',
-                          'Render Split by Time Blocks',
+        visFr.AddMenuItem('Experimental>Rendering',
+                          'Split Render by Time Blocks',
                           self.OnSplitRender,
-                          helpText='this renders a 2 channel image with events split by time blocks that can be used to run FRC on')
+                          helpText='this renders a 2 channel image with events split by time blocks that can be used to evaluate the FRC; for multi-colour images the correct colour needs to be selected')
 
     def addTimeBlock(self):
         tb = self.TBchoice
