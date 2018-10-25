@@ -13,9 +13,26 @@ from traitsui.menu import OKButton, CancelButton, OKCancelButtons
 
 class TimeBlock(HasTraits):
     BlockSize = Int(100)   
+    Colour = Enum(values='clist')
+    clist = List([])
+
+    traits_view = View(Group(Item(name = 'BlockSize'),
+                             Item(name = 'Colour')),
+                       title = 'Select',
+                       buttons = OKCancelButtons
+    )
+
+    def add_keys(self,chans):
+        for chan in chans:
+            if chan not in self.clist:
+                self.clist.append(chan)
+
 
 class SplitRenderer(TriangleRenderer):
-    """Base class for all other renderers which know about the colour filter"""
+    """A renderer that specialises the TriangleRenderer to generate two images
+       by splitting the events into two groups. It does not iterate over colour channels but rather will do 
+       a single colour which must be selected prior to calling this renderer.
+    """
     
     # def __init__(self, visFr, pipeline, mainWind = None, splitSettings = None):
     #     super(SplitRenderer, self).__init__(visFr, pipeline, mainWind)
@@ -134,7 +151,7 @@ class splitRenderPlugin:
         self.visFr = visFr
         self.pipeline = visFr.pipeline
         self.renderer = SplitRenderer(visFr, visFr.pipeline)
-        self.TBchoice = TimeBlock()
+        self.blockSize = 100
 
         visFr.AddMenuItem('Experimental>Rendering',
                           'Split Render by Time Blocks',
@@ -142,17 +159,34 @@ class splitRenderPlugin:
                           helpText='this renders a 2 channel image with events split by time blocks that can be used to evaluate the FRC; for multi-colour images the correct colour needs to be selected')
 
     def addTimeBlock(self):
-        tb = self.TBchoice
+        tb = TimeBlock(BlockSize=self.blockSize)
+        tb.add_keys(['Everything']+self.pipeline.colourFilter.getColourChans())
         if tb.configure_traits(kind='modal'):
             psd = self.pipeline.selectedDataSource
             blockSel = np.mod((psd['t']/tb.BlockSize).astype('int'),2)
+            self.blockSize = tb.BlockSize # remember choice
+            self.colourChoice = tb.Colour
             self.pipeline.selectedDataSource.addColumn('timeBlock',blockSel)
             self.pipeline.Rebuild()
+            return True
+        else:
+            return False
 
     def OnSplitRender(self,event=None):
-        self.addTimeBlock()
-        self.renderer.GenerateGUI(splitSettings={'Mode':'TimeBlock','ChunkSize':self.TBchoice.BlockSize})
-        
+        if not self.addTimeBlock():
+            return
+        oldCol = self.pipeline.colourFilter.currentColour
+        if self.colourChoice == 'Everything':
+            cChoice = None
+        else:
+            cChoice = self.colourChoice
+
+        if oldCol != cChoice:
+            self.pipeline.colourFilter.setColour(cChoice)
+        self.renderer.GenerateGUI(splitSettings={'Mode':'TimeBlock','ChunkSize':self.blockSize})
+        if oldCol != cChoice:
+            self.pipeline.colourFilter.setColour(oldCol)
+            self.pipeline.Rebuild()
 
 def Plug(visFr):
     '''Plugs this module into the gui'''

@@ -79,6 +79,9 @@ def spectrum_mean_over_R(pspec,vszx,vszy,binwidth=None, debug = False):
     binctrs = 0.5*(binedges[1:]+binedges[:-1])
     return (binctrs,means)
 
+import statsmodels.api as sm
+lowess = sm.nonparametric.lowess
+
 def frc(i0,i1,vszx,vszy,muwidth = 2):
     
     t2d = tukey2d(i0.shape,0.25)
@@ -97,9 +100,13 @@ def frc(i0,i1,vszx,vszy,muwidth = 2):
     
     # in principle should check that bcc, b0, b1 have the same bin locations
     frcv = mcc/np.sqrt(mi0*mi1)
-    
-    return (bcc,frcv,L)
 
+    smoothed = lowess(frcv, bcc, frac=1/20.0, it=3, delta=0.0, is_sorted=False, missing='drop', return_sorted=False)
+    
+    return (bcc,frcv,smoothed,L)
+
+
+import PYMEcs.Analysis.zerocross as zc
 class FRCplotter:
     def __init__(self, dsviewer):
         self.dsviewer = dsviewer
@@ -113,18 +120,42 @@ class FRCplotter:
         mdh = self.dsviewer.image.mdh
         vx = 1e3*mdh['voxelsize.x']
         vy = 1e3*mdh['voxelsize.y']
-
-        freqs,frc1,L = frc(im0,im1,vx,vy,muwidth = 2)
+        chanNames = mdh['ChannelNames']
+        
+        freqs,frc1,smoothed,L = frc(im0,im1,vx,vy,muwidth = 2)
+        halfbit = sigmaline(L)
+        fhb = zc.zerocross1d(freqs,smoothed-halfbit)
+        f7= zc.zerocross1d(freqs,smoothed-1.0/7.0)
+        
         import matplotlib.pyplot as plt
         
         plt.figure()
         plt.plot(freqs,frc1)
-        plt.plot(freqs,sigmaline(L))
+        plt.plot(freqs,smoothed)
+        plt.plot(freqs,halfbit)
         plt.plot(freqs,1/7.0*np.ones(freqs.shape))
+
+        if len(f7) > 0:
+            plt.plot([f7[0],f7[0]],[0,1],'--')
+            plt.text(0.5, 0.8,'res-1/7     = %3.1f nm' % (1.0/f7[0]),horizontalalignment='left',
+                     verticalalignment='center', transform=plt.gca().transAxes)
+        else:
+            plt.text(0.5, 0.8,'res-1/7 - no intercept',horizontalalignment='left',
+                     verticalalignment='center', transform=plt.gca().transAxes)
+
+        if len(fhb) > 0:
+            plt.plot([fhb[0],fhb[0]],[0,1],'--')
+            plt.text(0.5, 0.9,'res-halfbit = %3.1f nm' % (1.0/fhb[0]),horizontalalignment='left',
+                     verticalalignment='center', transform=plt.gca().transAxes)
+        else:
+            plt.text(0.5, 0.9,'res-halfbit - no intercept',horizontalalignment='left',
+                     verticalalignment='center', transform=plt.gca().transAxes)
+
         plt.plot(freqs,np.zeros(freqs.shape),'--')
         plt.xlim(0,freqs[-1])
         plt.xlabel('spatial frequency (nm^-1)')
         plt.ylabel('FRC values')
+        plt.title("FRC for channels %s and %s" % (chanNames[0],chanNames[1]))
         plt.show()
 
 def Plug(dsviewer):
