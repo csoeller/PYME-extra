@@ -118,6 +118,7 @@ requirements:
   run:
     - python 2.7
     - python-microscopy >=17.10.24
+    - statsmodels
 
 
 

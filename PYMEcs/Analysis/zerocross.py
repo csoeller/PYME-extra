@@ -41,7 +41,7 @@ def zerocross1d(x, y, getIndices=False):
         Ordinate and abscissa data values.
     getIndices : boolean, optional
         If True, also the indicies of the points preceding
-        the zero crossing event will be returned. Defeualt is
+        the zero crossing event will be returned. Default is
         False.
     
     Returns
@@ -56,9 +56,8 @@ def zerocross1d(x, y, getIndices=False):
   
   # Check sorting of x-values
   if np.any((x[1:] - x[0:-1]) <= 0.0):
-    raise( RuntimeError("The x-values must be sorted in ascending order!", \
-                         where="zerocross1d", \
-                         solution="Sort the data prior to calling zerocross1d."))
+    raise( RuntimeError("zerocross1d: The x-values must be sorted in ascending order! " +
+                        "Sort the data prior to calling zerocross1d."))
   
   # Indices of points *before* zero-crossing
   indi = np.where(y[1:]*y[0:-1] < 0.0)[0]

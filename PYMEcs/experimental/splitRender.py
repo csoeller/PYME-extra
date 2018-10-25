@@ -12,12 +12,19 @@ from traitsui.api import View, Item, Group
 from traitsui.menu import OKButton, CancelButton, OKCancelButtons
 
 class TimeBlock(HasTraits):
-    BlockSize = Int(100)   
+    TimeBlockSize = Int(100)   
     Colour = Enum(values='clist')
+    PixelSize_in_nm = Float(5.0)
+    JitterFactor = Float(5.0)
+    SamplesToAverage = Int(40)
+    
     clist = List([])
 
-    traits_view = View(Group(Item(name = 'BlockSize'),
-                             Item(name = 'Colour')),
+    traits_view = View(Group(Item(name = 'TimeBlockSize'),
+                             Item(name = 'Colour'),
+                             Item(name = 'PixelSize_in_nm'),
+                             Item(name = 'JitterFactor'),
+                             Item(name = 'SamplesToAverage')),
                        title = 'Select',
                        buttons = OKCancelButtons
     )
@@ -108,36 +115,56 @@ class SplitRenderer(TriangleRenderer):
 
         return GeneratedImage(ims, imb, pixelSize, settings['zSliceThickness'], colnames, mdh=mdh)
 
-    def GenerateGUI(self, event=None, splitSettings=None):
+    def GenerateGUI(self, event=None, renderSettings=None, splitSettings=None):
         import wx
         from PYME.LMVis import genImageDialog
         from PYME.DSView import ViewIm3D
-        
-        jitVars = ['1.0']
-        jitVars += self.colourFilter.keys()
 
-        self.genMeas = self.pipeline.GeneratedMeasures.keys()
-        if not 'neighbourDistances' in self.genMeas:
-            self.genMeas.append('neighbourDistances')
+        if renderSettings is None:
+            jitVars = ['1.0']
+            jitVars += self.colourFilter.keys()
+
+            self.genMeas = self.pipeline.GeneratedMeasures.keys()
+            if not 'neighbourDistances' in self.genMeas:
+                self.genMeas.append('neighbourDistances')
             
-        if not 'neighbourErrorMin' in self.genMeas:
-            self.genMeas.append('neighbourErrorMin')
+            if not 'neighbourErrorMin' in self.genMeas:
+                self.genMeas.append('neighbourErrorMin')
             
-        jitVars += self.genMeas
+            jitVars += self.genMeas
         
         
-        if 'z' in self.pipeline.keys():
-            zvals = self.pipeline['z']
+            if 'z' in self.pipeline.keys():
+                zvals = self.pipeline['z']
+            else:
+                zvals = None
+
+            dlg = genImageDialog.GenImageDialog(self.mainWind, mode=self.mode,
+                                                defaultPixelSize=self._defaultPixelSize,
+                                                colours=self.colourFilter.getColourChans(),
+                                                zvals = zvals,
+                                                jitterVariables = jitVars,
+                                                jitterVarDefault=self._getDefaultJitVar(jitVars),
+                                                jitterVarDefaultZ=self._getDefaultZJitVar(jitVars))
+            ret = dlg.ShowModal()
+            generateSettings = dlg.get_settings()
         else:
-            zvals = None
-
-        dlg = genImageDialog.GenImageDialog(self.mainWind, mode=self.mode, defaultPixelSize=self._defaultPixelSize, colours=self.colourFilter.getColourChans(), zvals = zvals, jitterVariables = jitVars, jitterVarDefault=self._getDefaultJitVar(jitVars), jitterVarDefaultZ=self._getDefaultZJitVar(jitVars))
-        ret = dlg.ShowModal()
-
-        #bCurr = wx.BusyCursor()
-
+            ret = wx.ID_OK
+            generateSettings = {
+                'pixelSize' : renderSettings['PixelSize'],
+                'jitterVariable' : 'neighbourDistances',
+                'jitterScale' : renderSettings['JitterFactor'],
+                'jitterVariableZ' : None,
+                'jitterScaleZ' : None,
+                'MCProbability' : 1.0,
+                'numSamples' : renderSettings['SamplesToAverage'],
+                'colours' : None,
+                'zBounds' : [None,None],
+                'zSliceThickness' : 200,
+                'softRender' : True
+            }
         if ret == wx.ID_OK:
-            im = self.Generate(dlg.get_settings(),splitSettings=splitSettings)
+            im = self.Generate(generateSettings,splitSettings=splitSettings)
             imfc = ViewIm3D(im, mode='visGUI', title='Generated %s - %3.1fnm bins' % (self.name, im.pixelSize),
                             glCanvas=self.visFr.glCanvas, parent=self.mainWind)
         else:
@@ -151,7 +178,14 @@ class splitRenderPlugin:
         self.visFr = visFr
         self.pipeline = visFr.pipeline
         self.renderer = SplitRenderer(visFr, visFr.pipeline)
-        self.blockSize = 100
+        self.splitSettings = {
+            'BlockSize' : 100,
+            'Colour' : 'Everything',
+            'Mode' : 'TimeBlock'}
+        self.renderSettings = {
+            'PixelSize' : 5,
+            'JitterFactor' : 1.0,
+            'SamplesToAverage' : 40}
 
         visFr.AddMenuItem('Experimental>Rendering',
                           'Split Render by Time Blocks',
@@ -159,13 +193,24 @@ class splitRenderPlugin:
                           helpText='this renders a 2 channel image with events split by time blocks that can be used to evaluate the FRC; for multi-colour images the correct colour needs to be selected')
 
     def addTimeBlock(self):
-        tb = TimeBlock(BlockSize=self.blockSize)
+        spSet = self.splitSettings
+        rSet = self.renderSettings
+        tb = TimeBlock(TimeBlockSize=spSet['BlockSize'],
+                       PixelSize_in_nm = rSet['PixelSize'],
+                       JitterFactor = rSet['JitterFactor'],
+                       SamplesToAverage = rSet['SamplesToAverage'])
         tb.add_keys(['Everything']+self.pipeline.colourFilter.getColourChans())
+        tb.Colour = 'Everything'
+
         if tb.configure_traits(kind='modal'):
             psd = self.pipeline.selectedDataSource
-            blockSel = np.mod((psd['t']/tb.BlockSize).astype('int'),2)
-            self.blockSize = tb.BlockSize # remember choice
-            self.colourChoice = tb.Colour
+            blockSel = np.mod((psd['t']/tb.TimeBlockSize).astype('int'),2)
+            
+            spSet['BlockSize'] = tb.TimeBlockSize # remember choices
+            spSet['Colour'] = tb.Colour
+            rSet['PixelSize'] = tb.PixelSize_in_nm
+            rSet['JitterFactor'] = tb.JitterFactor
+            rSet['SamplesToAverage'] = tb.SamplesToAverage
             self.pipeline.selectedDataSource.addColumn('timeBlock',blockSel)
             self.pipeline.Rebuild()
             return True
@@ -176,14 +221,15 @@ class splitRenderPlugin:
         if not self.addTimeBlock():
             return
         oldCol = self.pipeline.colourFilter.currentColour
-        if self.colourChoice == 'Everything':
+        if self.splitSettings['Colour'] == 'Everything':
             cChoice = None
         else:
-            cChoice = self.colourChoice
+            cChoice = self.self.splitSettings['Colour']
 
         if oldCol != cChoice:
             self.pipeline.colourFilter.setColour(cChoice)
-        self.renderer.GenerateGUI(splitSettings={'Mode':'TimeBlock','ChunkSize':self.blockSize})
+        self.renderer.GenerateGUI(renderSettings=self.renderSettings,
+                                  splitSettings=self.splitSettings)
         if oldCol != cChoice:
             self.pipeline.colourFilter.setColour(oldCol)
             self.pipeline.Rebuild()
