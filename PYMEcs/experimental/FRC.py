@@ -29,7 +29,7 @@ from scipy import stats
 # clear in the FRC papers, for example that the real part of F(i0)*conj(F(i1)) is being used (although it turns out
 # that F(i0)*conj(F(i1)) should be real given the symmetry of the Fourier Transform of real valued function)
 
-# also the use of a tukey window is reproduced and the half-bit line formula was copied althoug
+# also the use of a tukey window is reproduced and the half-bit line formula was copied although
 # it would be nice to figure out how the constants where arrived at
 # Note there is some formula in the Nat Meth paper supplementary by
 # Nieuwenhuizen et al 2013
@@ -82,11 +82,37 @@ def spectrum_mean_over_R(pspec,vszx,vszy,binwidth=None, debug = False):
 import statsmodels.api as sm
 lowess = sm.nonparametric.lowess
 
-def frc(i0,i1,vszx,vszy,muwidth = 2):
+def padsquare(image,newsize=None):
+    N, M = image.shape[0:2]
+    if newsize is None:
+        newsize = max(N,M)
+    K = newsize # less typing
+    
+    if N != newsize or M != newsize:
+        if N>newsize or M>newsize:
+            raise RuntimeError('trying to embed image (%d,%d) into smaller container (%d,%d)' % (N,M,newsize,newsize)) 
+        
+        newim = np.zeros((K,K))
+        startn = (K-N)/2
+        startm = (K-M)/2
+        newim[startn:startn+N,startm:startm+M] = image
+        return newim
+    else:
+        return image
+
+def frc(i0,i1,vszx,vszy,muwidth = 2, zeropad = False):
     
     t2d = tukey2d(i0.shape,0.25)
-    I0 = np.fft.fftshift(np.fft.fftn(i0*t2d))
-    I1 = np.fft.fftshift(np.fft.fftn(i1*t2d))
+
+    if zeropad:
+        im0 = padsquare(i0*t2d)
+        im1 = padsquare(i1*t2d)
+    else:
+        im0 = i0*t2d
+        im1 = i1*t2d
+
+    I0 = np.fft.fftshift(np.fft.fftn(im0))
+    I1 = np.fft.fftshift(np.fft.fftn(im1))
     
     CC = np.real(I0 * np.conj(I1))
     PS0 = np.abs(I0)**2
@@ -122,7 +148,7 @@ class FRCplotter:
         vy = 1e3*mdh['voxelsize.y']
         chanNames = mdh['ChannelNames']
         
-        freqs,frc1,smoothed,L = frc(im0,im1,vx,vy,muwidth = 2)
+        freqs,frc1,smoothed,L = frc(im0,im1,vx,vy,muwidth=2,zeropad=True)
         halfbit = sigmaline(L)
         fhb = zc.zerocross1d(freqs,smoothed-halfbit)
         f7= zc.zerocross1d(freqs,smoothed-1.0/7.0)
