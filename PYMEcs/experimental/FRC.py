@@ -2,6 +2,7 @@ import numpy as np
 from scipy import signal
 from scipy import stats
 
+
 ##################
 # FRC.py
 #
@@ -29,10 +30,15 @@ from scipy import stats
 # clear in the FRC papers, for example that the real part of F(i0)*conj(F(i1)) is being used (although it turns out
 # that F(i0)*conj(F(i1)) should be real given the symmetry of the Fourier Transform of real valued function)
 
-# also the use of a tukey window is reproduced and the half-bit line formula was copied although
+# also the use of a tukey window is reproduced (described already in the
+# Nieuwenhuizen et al 2013 paper)
+
+# the half-bit line formula was copied although
 # it would be nice to figure out how the constants where arrived at
 # Note there is some formula in the Nat Meth paper supplementary by
-# Nieuwenhuizen et al 2013
+# Nieuwenhuizen et al 2013, but that is more general and we need to
+# figure out if this one is a version of the general formula with
+# specific parameter settings
 
 def sigmaline(L):
     thresh = (0.2071 * np.sqrt(L) + 1.9102) / (1.2071 * np.sqrt(L) + 0.9102)
@@ -100,7 +106,7 @@ def padsquare(image,newsize=None):
     else:
         return image
 
-def frc(i0,i1,vszx,vszy,muwidth = 2, zeropad = False):
+def frc(i0,i1,vszx,vszy,muwidth = 2, zeropad = False, lowessFraction = 1/20.0):
     
     t2d = tukey2d(i0.shape,0.25)
 
@@ -127,16 +133,29 @@ def frc(i0,i1,vszx,vszy,muwidth = 2, zeropad = False):
     # in principle should check that bcc, b0, b1 have the same bin locations
     frcv = mcc/np.sqrt(mi0*mi1)
 
-    smoothed = lowess(frcv, bcc, frac=1/20.0, it=3, delta=0.0, is_sorted=False, missing='drop', return_sorted=False)
+    smoothed = lowess(frcv, bcc, frac=lowessFraction, it=3, delta=0.0,
+                      is_sorted=False, missing='drop', return_sorted=False)
     
     return (bcc,frcv,smoothed,L)
 
 
 import PYMEcs.Analysis.zerocross as zc
+from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float, Bool
+
+class FRCsettings(HasTraits):
+    ZeroPadding = Bool(True)
+    LowessSmoothingPercentage = Float(5.0)
+    
 class FRCplotter:
     def __init__(self, dsviewer):
         self.dsviewer = dsviewer
         dsviewer.AddMenuItem('Experimental>Analysis', 'FRC of image pair', self.OnFRC)
+        dsviewer.AddMenuItem('Experimental>Analysis', 'adjust FRC settings', self.OnFRCSettings)
+        self.frcSettings = FRCsettings()
+
+    def OnFRCSettings(self, event=None):
+        if self.frcSettings.configure_traits(kind='modal'):
+            pass
 
     def OnFRC(self, event=None):
         image = self.dsviewer.image
@@ -148,7 +167,8 @@ class FRCplotter:
         vy = 1e3*mdh['voxelsize.y']
         chanNames = mdh['ChannelNames']
         
-        freqs,frc1,smoothed,L = frc(im0,im1,vx,vy,muwidth=2,zeropad=True)
+        freqs,frc1,smoothed,L = frc(im0,im1,vx,vy,muwidth=2,zeropad=self.frcSettings.ZeroPadding,
+                                    lowessFraction=self.frcSettings.LowessSmoothingPercentage*0.01)
         halfbit = sigmaline(L)
         fhb = zc.zerocross1d(freqs,smoothed-halfbit)
         f7= zc.zerocross1d(freqs,smoothed-1.0/7.0)
