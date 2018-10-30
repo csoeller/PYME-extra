@@ -4,7 +4,7 @@
 from setuptools import setup, find_packages
 
 setup(name='PYMEcs',
-      version='1.0',
+      version='1.1',
       description='Extra functionality for PYME by CS',
       author='Christian Soeller',
       author_email='c.soeller@gmail.com',

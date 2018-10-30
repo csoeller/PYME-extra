@@ -1,7 +1,11 @@
 import PYME.config as config
 import os
 
-# this trying to replicate what config does
+def get_legacy_scripts_dir():
+    return os.path.join(os.path.dirname(config.__file__), 'Acquire/Scripts')
+
+# this tries to replicate what config.get_init_filename does
+#  if the config function were changed we would need to change this one as well
 def get_init_directories_to_search():
     directories_to_search = [os.path.join(conf_dir, 'init_scripts') for conf_dir in config.config_dirs]
     
@@ -9,8 +13,7 @@ def get_init_directories_to_search():
     if not extra_conf_dir is None:
         directories_to_search.insert(0, extra_conf_dir)
 
-    legacy_scripts_dir = os.path.join(os.path.dirname(config.__file__), 'Acquire/Scripts')
-    directories_to_search.insert(0, legacy_scripts_dir)
+    directories_to_search.insert(0, legacy_scripts_directory=get_legacy_scripts_dir())
     
     return directories_to_search
 
@@ -34,6 +37,8 @@ def main():
                     help='print configuration directories')
     op.add_argument('--protocols', action='store_true',
                     help='print custom protols found')
+    op.add_argument('-i','--initfile', default=None,
+                    help='locate init file and if found print full path')
 
     args = op.parse_args()
 
@@ -58,6 +63,16 @@ def main():
         print('Custom Protocols:')
         pprint.pprint(prots)
         sys.exit(0)
+
+    if args.initfile is not None:
+        inipath = config.get_init_filename(args.initfile, get_legacy_scripts_dir())
+        if inipath is None:
+            print("Initialisation file %s was not found" % args.initfile)
+        else:
+            print("Initialisation file %s was resolved as %s" %
+                  (args.initfile,os.path.abspath(inipath)))
+        sys.exit(0)
+
 
     # if we got here carry out a default action
     list_config_dirs()
