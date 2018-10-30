@@ -12,5 +12,8 @@ setup(name='PYMEcs',
       package_data={
             # include all svg and html files, otherwise conda will miss them
             # '': ['*.svg', '*.html'],
+      },
+      entry_points = {
+        'console_scripts': ['PYMEconfigutils=PYMEcs.misc.configUtils:main'],
       }
      )
