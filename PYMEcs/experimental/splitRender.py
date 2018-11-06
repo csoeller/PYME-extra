@@ -224,7 +224,7 @@ class splitRenderPlugin:
         if self.splitSettings['Colour'] == 'Everything':
             cChoice = None
         else:
-            cChoice = self.self.splitSettings['Colour']
+            cChoice = self.splitSettings['Colour']
 
         if oldCol != cChoice:
             self.pipeline.colourFilter.setColour(cChoice)
