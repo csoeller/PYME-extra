@@ -20,12 +20,18 @@ class SNRcalculator:
         this function adds an 'SNR' property to events - there could be some discussion how that is actually best calculated
         """
 
-        # the formula below is very adhoc
-        # I am not even sure this is remotely correct nor the best way
-        # so use only as a basis for experimentation and/or better plugins
-        A = self.pipeline['A']
-        bg = self.pipeline['fitResults_background']
-        snr = np.sqrt(np.clip(A,0,None)/np.abs(bg))
+        # the original formula was very adhoc
+        # we have now changed to a different way
+        # here we use an approach derived from a formula from Tang et al,
+        # Scientific Reports | 5:11073 | DOi: 10.1038/srep11073
+        mdh = self.pipeline.mdh
+        # there is an issue if we don't have the nPhotons property FIXME!
+        nph = self.pipeline['nPhotons']
+        bgraw = self.pipeline['fitResults_background']
+        bgph = np.clip((bgraw-mdh['Camera.ADOffset'])*mdh['Camera.ElectronsPerCount'],1,None)
+        
+        npixroi = (2*mdh.getOrDefault('Analysis.ROISize',5) + 1)**2
+        snr = 1.0/npixroi * np.clip(nph,0,None)/np.sqrt(bgph)
         self.pipeline.addColumn('SNR', snr)
 
         self.pipeline.Rebuild()
