@@ -1,15 +1,11 @@
 import wx
 from  wx.lib.dialogs import ScrolledMessageDialog
+from PYMEcs.misc.guiMsgBoxes import Warn
 
 def isDarwin():
    import os
    from sys import platform
    return platform == "darwin"
-
-def Warn(parent, message, caption = 'Warning!'):
-    dlg = wx.MessageDialog(parent, message, caption, wx.OK | wx.ICON_WARNING)
-    dlg.ShowModal()
-    dlg.Destroy()
 
 class ShowErr:
    """

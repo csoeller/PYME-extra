@@ -35,19 +35,21 @@ from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float
 from traitsui.api import View, Item, Group
 from traitsui.menu import OKButton, CancelButton, OKCancelButtons
 
+from PYMEcs.misc.guiMsgBoxes import Warn
+
 class cameraChoice(HasTraits):
-    clist = List([])
-    Camera = Enum(values='clist')
+    _clist = List([])
+    Camera = Enum(values='_clist')
 
     traits_view = View(Group(Item(name = 'Camera'),
-                             label = 'Select Camera',
+                              label = 'Select Camera',
                              show_border = True),
                        buttons = OKCancelButtons)
 
     def add_cams(self,camlist):
         for cam in camlist:
-            if cam not in self.clist:
-                self.clist.append(cam)
+            if cam not in self._clist:
+                self._clist.append(cam)
 
 class meanVarianceCalc(HasTraits):
     Start = Int(0)
@@ -61,12 +63,6 @@ class ncsSelect(HasTraits):
     NA = Float(1.49)     # objective NA
     iterations = Int(15)
     alpha = Float(0.2)
-
-
-def Warn(parent, message, caption = 'Warning!'):
-    dlg = wx.MessageDialog(parent, message, caption, wx.OK | wx.ICON_WARNING)
-    dlg.ShowModal()
-    dlg.Destroy()
 
 defaultCalibrationDir = nameUtils.getCalibrationDir('',create=False)
 

@@ -2,6 +2,7 @@ import wx
 import numpy as np
 import sys
 from scipy import ndimage
+from PYMEcs.misc.guiMsgBoxes import Warn
 
 from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float
 from traitsui.api import View, Item, Group
@@ -24,11 +25,6 @@ class propertyChoice(HasTraits):
             if chan not in self.clist:
                 self.clist.append(chan)
 
-
-def Warn(parent, message, caption = 'Warning!'):
-    dlg = wx.MessageDialog(parent, message, caption, wx.OK | wx.ICON_WARNING)
-    dlg.ShowModal()
-    dlg.Destroy()
 
 class onTimer:
     """

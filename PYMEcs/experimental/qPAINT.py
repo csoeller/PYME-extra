@@ -2,6 +2,7 @@ import wx
 import numpy as np
 import sys
 from scipy import ndimage
+from PYMEcs.misc.guiMsgBoxes import Warn
 
 import logging
 logger = logging.getLogger(__file__)
@@ -121,11 +122,6 @@ def selectWithDialog(choices, message='select image from list', caption='Selecti
         item = None
     dlg.Destroy()
     return item
-
-def Warn(parent, message, caption = 'Warning!'):
-    dlg = wx.MessageDialog(parent, message, caption, wx.OK | wx.ICON_WARNING)
-    dlg.ShowModal()
-    dlg.Destroy()
 
 class QPCalc:
     """
