@@ -454,12 +454,15 @@ GUI class to supply various map tools
         check_mapexists(mdh2,type='flatfield')
 
         darkf = self.ci.getDarkMap(mdh2)
-        corrFrame = float(mdh2['Camera.ElectronsPerCount'])*self.ci.correctImage(mdh2, curFrame)
+        corrFrame = float(mdh2['Camera.ElectronsPerCount'])*self.ci.correctImage(mdh2, curFrame)/mdh2.getEntry('Camera.TrueEMGain')
 
         im = ImageStack(corrFrame, titleStub = 'Frame %d in photoelectron units' % self.do.zp)
         im.mdh.copyEntriesFrom(mdh2)
         im.mdh['Parent'] = self.image.filename
         im.mdh['Units'] = 'PhotoElectrons'
+        im.mdh['Camera.ElectronsPerCount'] = 1.0
+        im.mdh['Camera.TrueEMGain'] = 1.0
+        im.mdh['Camera.ADOffset'] = 0
 
         if self.dsviewer.mode == 'visGUI':
             mode = 'visGUI'

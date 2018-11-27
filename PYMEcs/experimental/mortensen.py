@@ -5,12 +5,14 @@ from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float
 #from traitsui.api import View, Item, Group
 #from traitsui.menu import OKButton, CancelButton, OKCancelButtons
 
+from PYMEcs.misc.guiMsgBoxes import Warn
 import PYMEcs.misc.shellutils as su
 
 class PlotOptions(HasTraits):
     plotMode = Enum(('Compare with and without background',
                      'Colour errors by photon number',
-                     'Scatter Density Plot'))
+                     'Scatter Density Plot',
+                     'Plot z errors (colour by photon number)'))
 
 # We use the formula (S30) from Mortensen et al, 2010 [1] which provides a nice closed-form expression for the localisation error;
 # note that this is likely a lower bound on actual error due to simplifying model assumptions (no read noise etc) 
@@ -30,6 +32,7 @@ class MortensenFormula:
     def __init__(self, visFr):
         self.visFr = visFr
         self.pipeline = visFr.pipeline
+        self.plotOptions = PlotOptions()
 
         visFr.AddMenuItem('Experimental>ExtraColumns>Errors', 'Add Mortensen Formula', self.OnAddMort,
                           helpText='Add an event property that provides an estimate by the Mortensen Formula (from background and amplitude)')
@@ -47,7 +50,8 @@ class MortensenFormula:
         # I am not even sure this is remotely correct nor the best way
         # so use only as a basis for experimentation and/or better plugins
         N = self.pipeline['nPhotons']
-        Nb = mdh['Camera.ElectronsPerCount'] * np.maximum(0,self.pipeline['fitResults_background']- mdh['Camera.ADOffset'])
+        # we think we do not need to subtract the camera offset
+        Nb = mdh['Camera.ElectronsPerCount'] * np.maximum(0,self.pipeline['fitResults_background'] / mdh['Camera.TrueEMGain'])
         a = 1e3*mdh['voxelsize.x']
         siga = np.sqrt(self.pipeline['sig']**2+a*a/12.0)
 
@@ -76,7 +80,7 @@ class MortensenFormula:
         errnbg1 = np.percentile(errnbg,1)
         errnbg99 = np.percentile(errnbg,99)
 
-        popt = PlotOptions()
+        popt = self.plotOptions
         if popt.configure_traits(kind='modal'):
             if popt.plotMode == 'Compare with and without background':
                 plt.figure()
@@ -106,6 +110,21 @@ class MortensenFormula:
                                subsample=0.2, xlabel='Fit error x',
                                ylabel='Error from Mortensen Formula',s=20)
                 plt.plot([err1,err99],[err1,err99])
+            elif popt.plotMode == 'Plot z errors (colour by photon number)':
+                if 'fitError_z0' not in pipeline.keys():
+                    Warn('No z error -  works only with fitError_z0 property')
+                    return
+                nph = pipeline['nPhotons']
+                nph5 = np.percentile(nph,5)
+                nph95 = np.percentile(nph,95)
+                plt.figure()
+                plt.scatter(pipeline['fitError_z0'],pipeline['mortensenError'],
+                            c=nph,vmin=nph5,vmax=nph95,cmap=plt.cm.jet)
+                plt.plot([err1,err99],[err1,err99])
+                plt.xlabel('Fit error z')
+                plt.ylabel('Error from Mortensen Formula')
+                plt.title('error coloured with nPhotons')
+                plt.colorbar()
                 
 def Plug(visFr):
     """Plugs this module into the gui"""
