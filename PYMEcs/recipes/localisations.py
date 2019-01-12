@@ -363,3 +363,31 @@ class DBSCANClustering(ModuleBase):
     @property
     def hide_in_overview(self):
         return ['columns']
+
+@register_module('SnrCalculation')
+class SnrCalculation(ModuleBase):
+    inputName = Input('filtered')
+    outputName = Output('snr')
+   
+    def execute(self, namespace):
+        inp = namespace[self.inputName]
+        mapped = tabular.mappingFilter(inp)
+
+        if 'mdh' not in dir(inp):
+            raise RuntimeError('SnrCalculation needs metadata')
+        else:
+            mdh = inp.mdh
+
+        nph = inp['nPhotons']
+        bgraw = inp['fitResults_background']
+        bgph = np.clip((bgraw)*mdh['Camera.ElectronsPerCount']/mdh.getEntry('Camera.TrueEMGain'),1,None)
+        
+        npixroi = (2*mdh.getOrDefault('Analysis.ROISize',5) + 1)**2
+        snr = 1.0/npixroi * np.clip(nph,0,None)/np.sqrt(bgph)
+
+        mapped.addColumn('SNR', snr)
+        mapped.addColumn('backgroundPhotons',bgph)
+        
+        mapped.mdh = inp.mdh
+
+        namespace[self.outputName] = mapped

@@ -85,24 +85,47 @@ class SNRcalculator:
         """
         this function adds an 'SNR' property to events - there could be some discussion how that is actually best calculated
         """
+        from PYMEcs.recipes import localisations
 
-        # the original formula was very adhoc
-        # we have now changed to a different way
-        # here we use an approach derived from a formula from Tang et al,
-        # Scientific Reports | 5:11073 | DOi: 10.1038/srep11073
-        mdh = self.pipeline.mdh
-        # there is an issue if we don't have the nPhotons property FIXME!
-        nph = self.pipeline['nPhotons']
-        bgraw = self.pipeline['fitResults_background']
-        bgph = np.clip((bgraw)*mdh['Camera.ElectronsPerCount']/mdh.getEntry('Camera.TrueEMGain'),1,None)
+        if False: # this way does not make a special recipe module but uses the generic Mapping module and adds a few columns
+            from PYME.IO import tabular
+            from PYME.recipes import tablefilters
+            # the original formula was very adhoc
+            # we have now changed to a different way
+            # here we use an approach derived from a formula from Tang et al,
+            # Scientific Reports | 5:11073 | DOi: 10.1038/srep11073
+            mdh = self.pipeline.mdh
+            pipeline = self.pipeline
+            # there is an issue if we don't have the nPhotons property FIXME!
+            nph = self.pipeline['nPhotons']
+            bgraw = self.pipeline['fitResults_background']
+            bgph = np.clip((bgraw)*mdh['Camera.ElectronsPerCount']/mdh.getEntry('Camera.TrueEMGain'),1,None)
         
-        npixroi = (2*mdh.getOrDefault('Analysis.ROISize',5) + 1)**2
-        snr = 1.0/npixroi * np.clip(nph,0,None)/np.sqrt(bgph)
-        self.pipeline.addColumn('SNR', snr)
-        self.pipeline.addColumn('backgroundPhotons',bgph)
+            npixroi = (2*mdh.getOrDefault('Analysis.ROISize',5) + 1)**2
+            snr = 1.0/npixroi * np.clip(nph,0,None)/np.sqrt(bgph)
+            #dirty copy of the pipeline output
+
+            recipe = pipeline.recipe
+            mapp = tablefilters.Mapping(recipe,inputName=pipeline.selectedDataSourceKey,
+                                  outputName='snr')
+            recipe.add_module(mapp)
+            recipe.execute()
+
+            snrmap = recipe.namespace['snr']
+            snrmap.addColumn('SNR', snr)
+            snrmap.addColumn('backgroundPhotons',bgph)
+
+        else:
+            recipe = self.pipeline.recipe
+            snr = localisations.SnrCalculation(recipe,inputName=self.pipeline.selectedDataSourceKey,
+                                               outputName='snr')
+            recipe.add_module(snr)
+            recipe.execute()
+            
+        self.pipeline.selectDataSource('snr')
 
         self.pipeline.Rebuild()
-        self.visFr.CreateFoldPanel() # to make, for example, new columns show up in filter column selections
+        #self.visFr.CreateFoldPanel() # we should not need this anymore
 
 
     def OnAddnphBPlane(self, event=None):

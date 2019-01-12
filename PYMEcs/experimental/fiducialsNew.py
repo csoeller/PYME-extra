@@ -58,27 +58,33 @@ class FiducialTracker:
         """
         from PYMEcs.recipes import localisations
 
-        fTracker = localisations.FiducialTrack(filterMethod = 'Gaussian')
-        if fTracker.configure_traits(kind='modal'):
-            # we call this with the pipeline to allow filtering etc
-            namespace = {fTracker.inputName: self.pipeline}
-            fTracker.execute(namespace)
+        if False:
+            fTracker = localisations.FiducialTrack(filterMethod = 'Gaussian')
+            if fTracker.configure_traits(kind='modal'):
+                # we call this with the pipeline to allow filtering etc
+                namespace = {fTracker.inputName: self.pipeline}
+                fTracker.execute(namespace)
 
-            # the fiducial needs to be entered for the whole data source
-            # otherwise we have an issue that fiducial data is not available
-            # when filters are changed; this makes the code a bit ugly
-            ds = namespace[fTracker.outputName]
-            for fiducial in ['fiducial_%s' % dim for dim in ['x','y','z']]:
-                if fiducial in ds.keys():
-                    self.pipeline.selectedDataSource.addColumn(fiducial,
-                                                               finterpDS(self.pipeline,
-                                                                         ds,
-                                                                         fiducial))
-            pds = self.pipeline.selectedDataSource
-            isfid = np.zeros(len(pds['x']), dtype='i')
-            isfid[self.pipeline.filter.Index] = ds['isFiducial']
-            pds.addColumn('isFiducial',isfid)
-
+                # the fiducial needs to be entered for the whole data source
+                # otherwise we have an issue that fiducial data is not available
+                # when filters are changed; this makes the code a bit ugly
+                ds = namespace[fTracker.outputName]
+                for fiducial in ['fiducial_%s' % dim for dim in ['x','y','z']]:
+                    if fiducial in ds.keys():
+                        self.pipeline.selectedDataSource.addColumn(fiducial,
+                                                                   finterpDS(self.pipeline,
+                                                                             ds,
+                                                                             fiducial))
+                pds = self.pipeline.selectedDataSource
+                isfid = np.zeros(len(pds['x']), dtype='i')
+                isfid[self.pipeline.filter.Index] = ds['isFiducial']
+                pds.addColumn('isFiducial',isfid)
+        else:
+            recipe = self.pipeline.recipe
+            recipe.add_module(localisations.FiducialTrack(recipe, inputName=self.pipeline.selectedDataSourceKey,
+                                                          outputName='with_fiducial'))
+            recipe.execute()
+            self.pipeline.selectDataSource('with_fiducial')
 
     def OnFiducialCorrectDS(self, event=None):
         """
@@ -86,13 +92,13 @@ class FiducialTracker:
         """
         from PYMEcs.recipes.localisations import FiducialApply
         recipe = self.pipeline.recipe
-        recipe.add_module(FiducialApply(recipe, inputName=self.pipeline.selectedDataSourceKey,
-                                        outputName='with_fiducial'))
+        recipe.add_module(FiducialApply(recipe, inputName='with_fiducial',
+                                        outputName='corrected_from_fiducial'))
         recipe.execute()
-        self.pipeline.selectDataSource('with_fiducial')
+        self.pipeline.selectDataSource('corrected_from_fiducial')
 
-        self.visFr.RefreshView()
-        self.visFr.CreateFoldPanel()
+        #self.visFr.RefreshView()
+        #self.visFr.CreateFoldPanel()
 
 
     def OnPlotFiducial(self, event):
