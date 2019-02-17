@@ -10,3 +10,4 @@ PYMEcs.experimental.snrEvents
 PYMEcs.experimental.randMap
 PYMEcs.experimental.mortensen
 PYMEcs.experimental.splitRender
+PYMEcs.experimental.timedSpecies

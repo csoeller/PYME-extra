@@ -391,3 +391,56 @@ class SnrCalculation(ModuleBase):
         mapped.mdh = inp.mdh
 
         namespace[self.outputName] = mapped
+
+@register_module('TimedSpecies')
+class TimedSpecies(ModuleBase):
+    inputName = Input('filtered')
+    outputName = Output('timedSpecies')
+    Species_1_Name = CStr('Species1')
+    Species_1_Start = Float(0)
+    Species_1_Stop = Float(1e6)
+    
+    Species_2_Name = CStr('')
+    Species_2_Start = Float(0)
+    Species_2_Stop = Float(0)
+    
+    Species_3_Name = CStr('')
+    Species_3_Start = Float(0)
+    Species_3_Stop = Float(0)
+    
+    def execute(self, namespace):
+        inp = namespace[self.inputName]
+        mapped = tabular.mappingFilter(inp)
+        timedSpecies = self.populateTimedSpecies()
+        
+        mapped.addColumn('ColourNorm', np.ones_like(mapped['t'],'float'))
+        for species in timedSpecies:
+            mapped.addColumn('p_%s' % species['name'],
+                             (mapped['t'] >= species['t_start'])*
+                             (mapped['t'] < species['t_end']))
+
+        if 'mdh' in dir(inp):
+            mapped.mdh = inp.mdh
+            mapped.mdh['TimedSpecies'] = timedSpecies
+
+        namespace[self.outputName] = mapped
+
+    def populateTimedSpecies(self):
+        ts = []
+        if self.Species_1_Name:
+            ts.append({'name'   : self.Species_1_Name,
+                       't_start': self.Species_1_Start,
+                       't_end'  : self.Species_1_Stop})
+
+        if self.Species_2_Name:
+            ts.append({'name'   : self.Species_2_Name,
+                       't_start': self.Species_2_Start,
+                       't_end'  : self.Species_2_Stop})
+
+        if self.Species_3_Name:
+            ts.append({'name'   : self.Species_3_Name,
+                       't_start': self.Species_3_Start,
+                       't_end'  : self.Species_3_Stop})
+
+        return ts
+

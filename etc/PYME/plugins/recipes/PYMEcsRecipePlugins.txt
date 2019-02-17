@@ -1,3 +1,4 @@
 PYMEcs.recipes.processing
 PYMEcs.recipes.output
 PYMEcs.recipes.base
+PYMEcs.recipes.localisations
