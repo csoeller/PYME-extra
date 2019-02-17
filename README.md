@@ -47,7 +47,7 @@ For user installs, plugin files can be installed in the per user config director
 Note that the showErrs modules rely on a mac installation which uses bash scripts and the [platypus app](https://sveinbjorn.org/platypus) app
 to capture STDERR into a temporary file which these modules access. 
 
-Bottom line is that these modules will likely not work on anything but a mac with my PYMEapps wrappers. On other systems they will just generate a message that this functionality is not supported.
+Bottom line is that these two error display modules will likely not work on anything but a mac with my PYMEapps wrappers. On other systems they will just generate a message that this functionality is not supported.
 
 The PYME mac app wrappers are available at the [python-microscopy-osxapps bitpucket repository](http://bitbucket.org/christian_soeller/python-microscopy-osxapps) if somebody would like to inspect the approach.
 
