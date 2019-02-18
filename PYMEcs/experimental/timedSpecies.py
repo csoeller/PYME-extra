@@ -11,6 +11,8 @@ class TimedSpecies:
         tsm = localisations.TimedSpecies(recipe,
                                          inputName=self.pipeline.selectedDataSourceKey,
                                          outputName='timedSpecies')
+        if not tsm.configure_traits(kind='modal'):
+            return
         recipe.add_module(tsm)
         recipe.execute()
 
