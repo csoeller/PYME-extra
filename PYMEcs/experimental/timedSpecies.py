@@ -11,6 +11,10 @@ class TimedSpecies:
         tsm = localisations.TimedSpecies(recipe,
                                          inputName=self.pipeline.selectedDataSourceKey,
                                          outputName='timedSpecies')
+        # configure first as subsequent reconfigs could be slow due to
+        # recalculations happening as you type
+        # if you cancel at this stage you will abort this recipe being
+        # inserted and executed
         if not tsm.configure_traits(kind='modal'):
             return
         recipe.add_module(tsm)

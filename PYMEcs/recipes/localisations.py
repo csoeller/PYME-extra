@@ -301,8 +301,8 @@ class HistByID(ModuleBase):
                     Item('outputName'), buttons=['OK'])
 
     # a version of David's module which we include here so that we can test/hack a few things
-@register_module('DBSCANClustering')
-class DBSCANClustering(ModuleBase):
+@register_module('DBSCANClustering2')
+class DBSCANClustering2(ModuleBase):
     """
     Performs DBSCAN clustering on input dictionary
 
