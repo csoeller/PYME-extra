@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 import logging
 logger = logging.getLogger(__file__)
@@ -46,6 +47,8 @@ class FiducialTracker:
                           helpText='Set Z drift compensation from scaled and aligned driftz track')
         visFr.AddMenuItem('Experimental>Fiducials', "Clear Z driftz mapping", self.clearDriftZ,
                           helpText='Remove Z drift mapping by popping any mapping for z')
+        visFr.AddMenuItem('Experimental>Fiducials', "Compare fiducial and drift", self.fiducialvsdrift,
+                          helpText='Compare fiducial and drift information')
         
         self.scaleFactor = -1e3
         self.shiftFrames = 0
@@ -166,7 +169,87 @@ class FiducialTracker:
             pass
 
         self.visFr.pipeline.ClearGenerated()
+
+
+    def fiducialvsdrift(self, event=None):
+        from PYMEcs.misc.guiMsgBoxes import Warn
+        from scipy.optimize import leastsq
+        import PYMEcs.misc.shellutils as su
         
+        dfunc = lambda p, v: -100.0*p[0]*v[0]-100.0*p[1]*v[1]
+        efunc = lambda p, fx, fy, dx, dy: np.append(fx-dfunc(p[:2],[dx,dy]),
+                                                fy-dfunc(p[2:],[dx,dy]))
+        zfunc = lambda p, dz: p[0]*dz + p[1]
+        ezfunc = lambda p, fz, dz: fz-zfunc(p,dz)
+
+        pipeline = self.pipeline
+        if 'corrected_fiducials' not in pipeline.dataSources:
+            Warn(self.visFr,"no 'corrected_fiducials' data source")
+            return
+
+        if 'driftx' not in pipeline.keys():
+            Warn(self.visFr,"no 'driftx' property")
+            return
+        
+        fids = pipeline.dataSources['corrected_fiducials']
+
+        tuq, idx = np.unique(fids['t'], return_index=True)
+        fidz = fids['fiducial_z'][idx]
+        fidy = fids['fiducial_y'][idx]
+        fidx = fids['fiducial_x'][idx]
+
+        # what do we do when these do not exist?
+        # answer: we may have to interpolate onto the times from the normal pipeline -> check that approach
+
+        tup, idxp = np.unique(pipeline['t'], return_index=True)
+        dxp = pipeline['driftx'][idxp]
+        dyp = pipeline['drifty'][idxp]
+        dzp = pipeline['driftz'][idxp]
+    
+        dx = np.interp(tuq, tup, dxp)
+        dy = np.interp(tuq, tup, dyp)
+        dz = np.interp(tuq, tup, dzp)
+    
+        #dy = fids['drifty'][idx]
+        #dx = fids['driftx'][idx]
+
+        fx = su.zs(fidx)
+        fy = su.zs(fidy)
+        fz = su.zs(fidz)
+    
+        dxx = su.zs(dx)
+        dyy = su.zs(dy)
+        p,suc = leastsq(efunc,np.zeros(4),args=(fx,fy,dxx,dyy))
+
+        pz,sucz = leastsq(ezfunc,[-1e3,0],args=(fz,dz))
+
+        plt.figure()
+        plt.plot(tuq,fx,label='fiducial x')
+        plt.plot(tuq,dfunc(p[:2],[dxx,dyy]),label='best fit x drift')
+
+        plt.plot(tuq,fy,label='fiducial y')
+        plt.plot(tuq,dfunc(p[2:],[dxx,dyy]),label='best fit y drift')
+        plt.legend()
+        plt.xlabel('Time (frames)')
+        plt.ylabel('Drift (nm)')
+        plt.title("Best fit params (a11 %.2f,a12 %.2f,a21 %.2f,a22 %.2f): " % tuple(p.tolist()))
+        
+        plt.figure()
+        plt.plot(tuq,fz,label='fiducial z')
+        plt.plot(tuq,zfunc(pz,dz),label='best fit z drift')
+        plt.legend()
+        plt.xlabel('Time (frames)')
+        plt.ylabel('Drift (nm)')
+        plt.title("Best fit parameters (zfactor %.2f, zoffs %.2f): " % tuple(pz.tolist()))
+
+        plt.figure()
+        plt.plot(tuq,fx-dfunc(p[:2],[dxx,dyy]),label='x difference')
+        plt.plot(tuq,fy-dfunc(p[2:],[dxx,dyy]),label='y difference')
+        plt.plot(tuq,fz-zfunc(pz,dz),label='z difference')
+        plt.legend()
+        plt.xlabel('Time (frames)')
+        plt.ylabel('Drift (nm)')
+
 def Plug(visFr):
     """Plugs this module into the gui"""
     FiducialTracker(visFr)
