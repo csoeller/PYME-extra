@@ -47,6 +47,8 @@ class FiducialTracker:
                           helpText='Set Z drift compensation from scaled and aligned driftz track')
         visFr.AddMenuItem('Experimental>Fiducials', "Clear Z driftz mapping", self.clearDriftZ,
                           helpText='Remove Z drift mapping by popping any mapping for z')
+        visFr.AddMenuItem('Experimental>Fiducials', "Diagnose Fiducials", lambda e: self.fiducial_diagnosis(),
+                          helpText='Diagnose quality of fiducial correction')
         visFr.AddMenuItem('Experimental>Fiducials', "Compare fiducial and drift", self.fiducialvsdrift,
                           helpText='Compare fiducial and drift information')
         
@@ -169,6 +171,86 @@ class FiducialTracker:
             pass
 
         self.visFr.pipeline.ClearGenerated()
+
+
+    def fiducial_diagnosis(self):
+        import numpy as np
+        import matplotlib.pyplot as plt
+        from PYME.Analysis.points.fiducials import FILTER_FUNCS
+        pipeline = self.pipeline
+        
+        fids = pipeline.dataSources['corrected_fiducials']
+        ci = fids['clumpIndex']
+        
+        #cis = np.arange(1, ci.max())
+
+        #clump_lengths = [(ci == c).sum() for c in cis]
+
+        #largest_clump = ci == cis[np.argmax(clump_lengths)]
+
+        #x_c = fids['x'][largest_clump]
+        #y_c = fids['y'][largest_clump]
+
+        f1 = plt.figure()
+        a1 = plt.axes()
+        plt.title('Y residuals')
+        plt.grid()
+        f2 = plt.figure()
+        plt.title('X residuuals')
+        a2 = plt.axes()
+        plt.grid()
+        f3 = plt.figure()
+        plt.title('Z residuuals')
+        a3 = plt.axes()
+        plt.grid()
+
+        for i in range(1, ci.max()):
+            mask = fids['clumpIndex'] == i
+            if mask.sum() > 0:
+                f_id = fids['fiducialID'][mask][0]
+
+                fid_m = fids['fiducialID'] == f_id
+
+                ym = fids['y'][fid_m].mean()
+                xm = fids['x'][fid_m].mean()
+                zm = fids['z'][fid_m].mean()
+
+                # also plot a filtered version to see the trend in the noisy trace
+                yfilt = FILTER_FUNCS['Median'](fids['t'][mask],{'y':fids['y'][mask]},13)
+                xfilt = FILTER_FUNCS['Median'](fids['t'][mask],{'x':fids['x'][mask]},13)
+                zfilt = FILTER_FUNCS['Median'](fids['t'][mask],{'z':fids['z'][mask]},13)
+
+                a1.plot(fids['t'][mask], fids['y'][mask] - ym + f_id * 50,
+                        color=plt.cm.hsv( (i % 20.0)/20.))
+                a1.plot(fids['t'][mask], yfilt['y'] - ym + f_id * 50, '--',
+                        color='#b0b0b0', alpha=0.7)
+
+                a2.plot(fids['t'][mask], fids['x'][mask] - xm + f_id * 50,
+                        color=plt.cm.hsv((i % 20.0) / 20.))
+                a2.plot(fids['t'][mask], xfilt['x'] - xm + f_id * 50, '--',
+                        color='#b0b0b0', alpha=0.7)
+
+                a3.plot(fids['t'][mask], fids['z'][mask] - zm + f_id * 150,
+                        color=plt.cm.hsv((i % 20.0) / 20.))
+                a3.plot(fids['t'][mask], zfilt['z'] - zm + f_id * 150, '--',
+                        color='#b0b0b0', alpha=0.7)
+
+
+        # plot the trace derived from the fiducials
+        tuq, idx = np.unique(fids['t'], return_index=True)
+        fidz = fids['fiducial_z'][idx]
+        fidy = fids['fiducial_y'][idx]
+        fidx = fids['fiducial_x'][idx]
+        plt.figure()
+        plt.subplot(311)
+        plt.plot(tuq, -fidz, label = 'fiducial z')
+        plt.title('Fiducial z')
+        plt.subplot(312)
+        plt.plot(tuq, -fidx, label = 'fiducial x')
+        plt.title('Fiducial x')
+        plt.subplot(313)
+        plt.plot(tuq, -fidy, label = 'fiducial y')
+        plt.title('Fiducial y')
 
 
     def fiducialvsdrift(self, event=None):
