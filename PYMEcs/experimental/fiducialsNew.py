@@ -326,11 +326,12 @@ class FiducialTracker:
 
         plt.figure()
         plt.plot(tuq,fx-dfunc(p[:2],[dxx,dyy]),label='x difference')
-        plt.plot(tuq,fy-dfunc(p[2:],[dxx,dyy]),label='y difference')
-        plt.plot(tuq,fz-zfunc(pz,dz),label='z difference')
+        plt.plot(tuq,fy-dfunc(p[2:],[dxx,dyy])+50,label='y difference (+50 nm offset)')
+        plt.plot(tuq,fz-zfunc(pz,dz)+100,label='z difference (+100 nm offset)')
         plt.legend()
         plt.xlabel('Time (frames)')
         plt.ylabel('Drift (nm)')
+        plt.grid()
 
 def Plug(visFr):
     """Plugs this module into the gui"""
