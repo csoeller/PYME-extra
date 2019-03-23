@@ -204,10 +204,17 @@ class FiducialTracker:
         a3 = plt.axes()
         plt.grid()
 
-        for i in range(1, ci.max()):
+        sel_ids = np.unique(fids['fiducialID'])
+        for pos in range(sel_ids.shape[0]):
+            a1.text(-250, pos * 50, "%d" % sel_ids[pos])
+            a2.text(-250, pos * 50, "%d" % sel_ids[pos])
+            a3.text(-250, pos * 150, "%d" % sel_ids[pos])
+            
+        for i in range(1, ci.max()+1):
             mask = fids['clumpIndex'] == i
             if mask.sum() > 0:
                 f_id = fids['fiducialID'][mask][0]
+                pos = np.where(sel_ids==f_id)[0][0] # position in set of selected ids
 
                 fid_m = fids['fiducialID'] == f_id
 
@@ -220,19 +227,19 @@ class FiducialTracker:
                 xfilt = FILTER_FUNCS['Median'](fids['t'][mask],{'x':fids['x'][mask]},13)
                 zfilt = FILTER_FUNCS['Median'](fids['t'][mask],{'z':fids['z'][mask]},13)
 
-                a1.plot(fids['t'][mask], fids['y'][mask] - ym + f_id * 50,
+                a1.plot(fids['t'][mask], fids['y'][mask] - ym + pos * 50,
                         color=plt.cm.hsv( (i % 20.0)/20.))
-                a1.plot(fids['t'][mask], yfilt['y'] - ym + f_id * 50, '--',
+                a1.plot(fids['t'][mask], yfilt['y'] - ym + pos * 50, '--',
                         color='#b0b0b0', alpha=0.7)
 
-                a2.plot(fids['t'][mask], fids['x'][mask] - xm + f_id * 50,
+                a2.plot(fids['t'][mask], fids['x'][mask] - xm + pos * 50,
                         color=plt.cm.hsv((i % 20.0) / 20.))
-                a2.plot(fids['t'][mask], xfilt['x'] - xm + f_id * 50, '--',
+                a2.plot(fids['t'][mask], xfilt['x'] - xm + pos * 50, '--',
                         color='#b0b0b0', alpha=0.7)
 
-                a3.plot(fids['t'][mask], fids['z'][mask] - zm + f_id * 150,
+                a3.plot(fids['t'][mask], fids['z'][mask] - zm + pos * 150,
                         color=plt.cm.hsv((i % 20.0) / 20.))
-                a3.plot(fids['t'][mask], zfilt['z'] - zm + f_id * 150, '--',
+                a3.plot(fids['t'][mask], zfilt['z'] - zm + pos * 150, '--',
                         color='#b0b0b0', alpha=0.7)
 
 
