@@ -7,6 +7,8 @@ from PYME.LMVis import statusLog
 from PYME.IO import MetaDataHandler
 import numpy as np
 
+from PYMEcs.misc.guiMsgBoxes import Warn
+
 from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float, Bool
 from traitsui.api import View, Item, Group
 from traitsui.menu import OKButton, CancelButton, OKCancelButtons
@@ -189,8 +191,12 @@ class splitRenderPlugin:
 
         visFr.AddMenuItem('Experimental>Rendering',
                           'Split Render by Time Blocks',
-                          self.OnSplitRender,
+                          self.deprecated, # self.OnSplitRender,
                           helpText='this renders a 2 channel image with events split by time blocks that can be used to evaluate the FRC; for multi-colour images the correct colour needs to be selected')
+
+    def deprecated(self,event=None):
+        Warn(self.visFr, 'use Extras>Split by timeblocks for FRC instead',
+             caption = 'Function disabled!')
 
     def addTimeBlock(self):
         spSet = self.splitSettings
@@ -236,4 +242,5 @@ class splitRenderPlugin:
 
 def Plug(visFr):
     '''Plugs this module into the gui'''
+    # disable this function for now
     visFr.splitRender = splitRenderPlugin(visFr)
