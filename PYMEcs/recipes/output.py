@@ -1,6 +1,6 @@
 from PYME.recipes.base import register_module, ModuleBase, OutputModule
 from PYME.recipes.traits import Input, Output, Float, Enum, CStr, Bool, Int, DictStrStr, File, Button
-from traitsui.file_dialog import save_file
+#from traitsui.file_dialog import save_file # this call seems to shut down the gui of VisGUI
 
 import numpy as np
 import pandas as pd
