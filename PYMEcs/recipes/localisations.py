@@ -85,6 +85,35 @@ class FiducialApply(ModuleBase):
 
         namespace[self.outputName] = mapped
 
+
+# interpolate the key from the source to the selected target of the pipeline
+def finterpDS(target,source,key):
+    tsource, idx = np.unique(source['t'], return_index=True)
+    fsource = source[key][idx]
+    fDS = np.interp(target['t'], tsource, fsource)
+    return fDS
+
+@register_module('FiducialApplyFromFiducials')
+class FiducialApplyFromFiducials(ModuleBase):
+    inputData = Input('filtered')
+    inputFiducials = Input('Fiducials')
+    outputName = Output('fiducialApplied')
+
+    def execute(self, namespace):
+        inp = namespace[self.inputData]
+        fiducial = namespace[self.inputFiducials]
+        
+        mapped = tabular.mappingFilter(inp)
+
+        for dim in ['x','y','z']:
+            fiducial_dim = finterpDS(inp,fiducial,'fiducial_%s' % dim)
+            mapped.addColumn('fiducial_%s' % dim,fiducial_dim)
+            mapped.addColumn(dim, inp[dim]-fiducial_dim)
+
+        namespace[self.outputName] = mapped
+
+
+
 @register_module('CopyMapped')
 class CopyMapped(ModuleBase):
     inputName = Input('filtered')
