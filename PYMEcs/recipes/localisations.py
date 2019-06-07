@@ -83,6 +83,12 @@ class FiducialApply(ModuleBase):
             except:
                 logger.warn('Could not set dim %s' % dim)
 
+        # propogate metadata, if present
+        try:
+            mapped.mdh = inp.mdh
+        except AttributeError:
+            pass
+        
         namespace[self.outputName] = mapped
 
 
