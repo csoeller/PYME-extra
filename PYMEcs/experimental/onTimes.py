@@ -60,6 +60,11 @@ class onTimer:
         mdh = pipeline.mdh
 
         t = pipeline['t']
+        maxPts = 1e4
+        if len(t) > maxPts:
+            Warn(None,'aborting darktime analysis: too many events, current max is %d' % maxPts)
+            return
+        
         nframes = pipeline.selectedDataSource['t'].max()
 
         tt, v = plotserpipeline(t, np.ones_like(t))
