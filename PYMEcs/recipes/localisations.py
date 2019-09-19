@@ -116,8 +116,13 @@ class FiducialApplyFromFiducials(ModuleBase):
             mapped.addColumn('fiducial_%s' % dim,fiducial_dim)
             mapped.addColumn(dim, inp[dim]-fiducial_dim)
 
-        namespace[self.outputName] = mapped
+        # propogate metadata, if present
+        try:
+            mapped.mdh = inp.mdh
+        except AttributeError:
+            pass
 
+        namespace[self.outputName] = mapped
 
 
 @register_module('CopyMapped')
