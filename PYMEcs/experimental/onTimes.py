@@ -46,8 +46,30 @@ class onTimer:
                           "plot time series of event property",
                           self.OnPlotProperty,
                           helpText='plots a time series of the selected events in a "single channel trace" - using a user chosen event property')
+        visFr.AddMenuItem('Experimental>Event Processing',
+                          "plot time gating from selected events",
+                          self.OnPlotTser,
+                          helpText='plots the time series of gating of detected molecules from the selected group of events')
 
 
+    def OnPlotTser(self,event):
+        from PYMEcs.misc.shellutils import plotserpipeline
+
+        visFr = self.visFr
+        pipeline = visFr.pipeline
+        mdh = pipeline.mdh
+
+        t = pipeline['t']
+        nframes = pipeline.selectedDataSource['t'].max()
+
+        tt, v = plotserpipeline(t, np.ones_like(t))
+
+        import matplotlib.pyplot as plt
+        # plot data and fitted curves
+        plt.figure()
+        plt.plot(tt,v)
+        plt.show()
+        plt.xlim(0,nframes-1)
         
     def OnTimes(self,event):
         import StringIO
