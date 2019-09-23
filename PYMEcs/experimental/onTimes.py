@@ -64,10 +64,23 @@ class onTimer:
         if len(t) > maxPts:
             Warn(None,'aborting darktime analysis: too many events, current max is %d' % maxPts)
             return
+
+        p = pipeline
+
+        # if we have coalesced events use this info
+        if ('tmin' in pipeline.keys()) and ('tmax' in pipeline.keys()):
+            tmin = pipeline['tmin']
+            tmax = pipeline['tmax']
+            tc = np.arange(tmin[0],tmax[0]+1)
+            for i in range(1,tmin.shape[0]):
+                tc = np.append(tc,np.arange(tmin[i],tmax[i]+1))
+            tc.sort()
+        else:
+            tc = t
         
         nframes = pipeline.selectedDataSource['t'].max()
 
-        tt, v = plotserpipeline(t, np.ones_like(t))
+        tt, v = plotserpipeline(tc, np.ones_like(tc))
 
         import matplotlib.pyplot as plt
         # plot data and fitted curves

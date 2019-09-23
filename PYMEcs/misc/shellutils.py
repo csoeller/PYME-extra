@@ -4,6 +4,14 @@ import numpy as np
 import math
 
 
+def tclump(pipeline):
+    p = pipeline
+    tc = np.arange(p['tmin'][0],p['tmax'][0]+1)
+    for i in range(1,p['t'].shape[0]):
+        tc = np.append(tc,np.arange(p['tmin'][i],p['tmax'][i]+1))
+    tc.sort()
+    return tc
+
 def plotserpipeline(t,val,base=0):
     # t is on integer times assumed (from pipeline)
     # val is the corresponding value
@@ -15,7 +23,7 @@ def plotserpipeline(t,val,base=0):
 
     to = t-tstart
     tidx = np.argsort(to)
-    tos = to[tidx]
+    tos = to[tidx].astype('I')
     vs = val[tidx]
 
     tvalid = np.zeros((tlen))

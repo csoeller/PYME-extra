@@ -759,8 +759,18 @@ class QPCalc:
         x = pipeline['x']
         y = pipeline['y']
 
+        p = pipeline
+        # if we have coalesced events use this info
+        if ('tmin' in p.keys()) and ('tmax' in p.keys()):
+            tc = np.arange(p['tmin'][0],p['tmax'][0]+1)
+            for i in range(1,p['t'].shape[0]):
+                tc = np.append(tc,np.arange(p['tmin'][i],p['tmax'][i]+1))
+            tc.sort()
+        else:
+            tc = t
+            
         # determine darktime from gaps and reject zeros (no real gaps) 
-        dts = t[1:]-t[0:-1]-1
+        dts = tc[1:]-tc[0:-1]-1
         dtg = dts[dts>0]
         nts = dtg.shape[0]
 
