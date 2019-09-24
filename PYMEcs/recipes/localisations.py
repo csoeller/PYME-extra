@@ -125,6 +125,37 @@ class FiducialApplyFromFiducials(ModuleBase):
         namespace[self.outputName] = mapped
 
 
+@register_module('ClusterTimeRange')
+class ClusterTimeRange(ModuleBase):
+    
+    inputName = Input('dbscanClustered')
+    IDkey = CStr('dbscanClumpID')
+    outputName = Output('withTrange')
+
+    def execute(self, namespace):
+        from scipy.stats import binned_statistic
+        
+        inp = namespace[self.inputName]
+        mapped = tabular.mappingFilter(inp)
+
+        ids = inp[self.IDkey]
+        t = inp['t']
+        maxid = int(ids.max())
+        edges = -0.5+np.arange(maxid+2)
+        resmin = binned_statistic(ids, t, statistic='min', bins=edges)
+        resmax = binned_statistic(ids, t, statistic='max', bins=edges)
+        trange = resmax[0][ids] - resmin[0][ids] + 1
+
+        mapped.addColumn('trange', trange)
+        
+        # propogate metadata, if present
+        try:
+            mapped.mdh = inp.mdh
+        except AttributeError:
+            pass
+        
+        namespace[self.outputName] = mapped
+
 @register_module('CopyMapped')
 class CopyMapped(ModuleBase):
     inputName = Input('filtered')
