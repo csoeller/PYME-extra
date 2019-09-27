@@ -175,6 +175,8 @@ from scipy.optimize import curve_fit
 def cumuexpfit(t,tau):
     return 1-np.exp(-t/tau)
 
+def cumumultiexpfit(t,tau1,tau2,a):
+    return a*(1-np.exp(-t/tau1))+(1-a)*(1-np.exp(-t/tau2))
 
 def notimes(ndarktimes):
     analysis = {

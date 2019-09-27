@@ -800,20 +800,30 @@ class QPCalc:
             popt,pcov,infodict,errmsg,ierr = curve_fit(fitDarkTimes.cumuexpfit,cumux,cumuy, p0=(tauest),full_output=True)
             chisqred = ((cumuy - infodict['fvec'])**2).sum()/(nts-1)
 
+            poptm,pcovm,infodictm,errmsgm,ierrm = curve_fit(fitDarkTimes.cumumultiexpfit,cumux,cumuy, p0=(tauest,10.0,0.8), full_output=True)
+            chisqredm = ((cumuy - infodictm['fvec'])**2).sum()/(nts-1)
+            
             import matplotlib.pyplot as plt
             # plot data and fitted curves
             plt.figure()
             plt.subplot(211)
             plt.plot(cumux,cumuy,'o')
             plt.plot(cumux,fitDarkTimes.cumuexpfit(cumux,popt[0]))
+            
             plt.plot(binctrs,hc,'o')
             plt.plot(binctrs,fitDarkTimes.cumuexpfit(binctrs,popth[0]))
+
+            plt.plot(cumux,fitDarkTimes.cumumultiexpfit(cumux,*poptm),'--')
+
             plt.ylim(-0.2,1.2)
             plt.subplot(212)
             plt.semilogx(cumux,cumuy,'o')
             plt.semilogx(cumux,fitDarkTimes.cumuexpfit(cumux,popt[0]))
             plt.semilogx(binctrs,hc,'o')
             plt.semilogx(binctrs,fitDarkTimes.cumuexpfit(binctrs,popth[0]))
+
+            plt.semilogx(cumux,fitDarkTimes.cumumultiexpfit(cumux,*poptm),'--')
+            
             plt.ylim(-0.2,1.2)
             plt.show()
             
@@ -837,6 +847,8 @@ class QPCalc:
             print >>outstr, "darktime: %.1f+-%d (%.1f+-%d) frames - chisqr %.2f (%.2f)" % (popt[0],np.sqrt(pcov[0][0]),
                                                                                            popth[0],np.sqrt(pcovh[0][0]),
                                                                                            chisqred,chisqredh)
+            print >>outstr, "darktime: tau1 %.1f, tau2 %.1f (a %.2f, b %.2f) - chisqr %.2f" % (poptm[0], poptm[1], poptm[2],
+                                                                                               1-poptm[2],chisqredm) 
             print >>outstr, "darktime: starting estimates: %.1f (%.1f)" % (tauest,tauesth)
             print >>outstr, "qunits: %.2f (%.2f), eunits: %.2f" % (100.0/popt[0], 100.0/popth[0],t.shape[0]/500.0)
 
