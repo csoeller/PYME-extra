@@ -156,6 +156,33 @@ class ClusterTimeRange(ModuleBase):
         
         namespace[self.outputName] = mapped
 
+@register_module('ValidClumps')
+class ValidClumps(ModuleBase):
+    
+    inputName = Input('with_clumps')
+    inputValid = Input('valid_clumps')
+    IDkey = CStr('clumpIndex')
+    outputName = Output('with_validClumps')
+
+    def execute(self, namespace):
+        
+        inp = namespace[self.inputName]
+        valid = namespace[self.inputValid]
+        mapped = tabular.mappingFilter(inp)
+
+        ids = inp[self.IDkey]
+        validIDs = np.in1d(ids,np.unique(valid[self.IDkey]))
+        
+        mapped.addColumn('validID', validIDs.astype('f')) # should be float or int?
+        
+        # propogate metadata, if present
+        try:
+            mapped.mdh = inp.mdh
+        except AttributeError:
+            pass
+        
+        namespace[self.outputName] = mapped
+
 @register_module('CopyMapped')
 class CopyMapped(ModuleBase):
     inputName = Input('filtered')
