@@ -172,6 +172,7 @@ class ZFactorPlotPanel(PlotPanel):
         y = dznm[50-3:50+4]
         m, b = np.polyfit(x,y,1)
         Zfactor = 1.0/m
+        print 'Z-factor: ', Zfactor
 
         if not hasattr( self, 'subplot' ):
                 self.subplot1 = self.figure.add_subplot( 121 )
@@ -196,7 +197,7 @@ class ZFactorPlotPanel(PlotPanel):
         'weight': 'normal',
         'size': 16,
         }
-        self.subplot2.text(-50, 100, 'Z-factor = %3.1f' % Zfactor, fontdict=font)
+        self.subplot2.text(0, -20, 'Z-factor = %3.1f' % Zfactor, fontdict=font)
         self.subplot2.grid()
 
         self.canvas.draw()
