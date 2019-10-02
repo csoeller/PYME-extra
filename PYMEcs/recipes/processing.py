@@ -12,7 +12,7 @@ class FlexiThreshold(Filter):
     method = Enum('simple','fractional','otsu','isodata',
                   'li','yen') # newer skimage has minimum, mean and triangle as well
     parameter = Float(0.5)
-    clipAt = Float(10.0)
+    clipAt = Float(2e6) # used to be 10 - increase to large value for newer PYME renderings
 
     def fractionalThreshold(self, data):
         N, bins = np.histogram(data, bins=5000)
