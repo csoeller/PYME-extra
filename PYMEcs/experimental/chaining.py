@@ -6,8 +6,7 @@ class ParticleTracker2:
 
         visFr.AddMenuItem('Experimental>Chaining', "Clump consecutive appearances", self.OnCoalesce)
 
-
-def OnCoalesce(self, event):
+    def OnCoalesce(self, event):
         from PYMEcs.recipes import localisations
         recipe = self.visFr.pipeline.recipe
     
@@ -16,6 +15,7 @@ def OnCoalesce(self, event):
         recipe.execute()
         self.visFr.pipeline.selectDataSource('coalesced')
         #self.visFr.CreateFoldPanel() #TODO: can we capture this some other way?
+
 
 def Plug(visFr):
     """Plugs this module into the gui"""
