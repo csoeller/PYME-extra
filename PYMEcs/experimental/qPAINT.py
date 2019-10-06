@@ -761,15 +761,24 @@ class QPCalc:
 
         p = pipeline
         # if we have coalesced events use this info
-        if ('tmin' in p.keys()) and ('tmax' in p.keys()):
-            tc = np.arange(p['tmin'][0],p['tmax'][0]+1)
-            for i in range(1,p['t'].shape[0]):
-                tc = np.append(tc,np.arange(p['tmin'][i],p['tmax'][i]+1))
-            tc.sort()
-            usingTminTmax = True
+        if ('clumpIndex' in p.keys()) and not ('fitError_x0' in p.keys()): # heuristic to only do on coalesced data
+            usingClumpIndex = True
+            if ('tmin' in p.keys()) and ('tmax' in p.keys()):
+                tc = np.arange(p['tmin'][0],p['tmax'][0]+1)
+                for i in range(1,p['t'].shape[0]):
+                    tc = np.append(tc,np.arange(p['tmin'][i],p['tmax'][i]+1))
+                tc.sort()
+                usingTminTmax = True
+            else:
+                tc = np.arange(int(t[0]-p['clumpSize'][0]/2),int(t[0]+p['clumpSize'][0]/2))
+                for i in range(1,t.shape[0]):
+                    tc = np.append(tc,np.arange(int(t[i]-p['clumpSize'][i]/2),int(t[i]+p['clumpSize'][i]/2)))
+                tc.sort()
+                usingTminTmax = False
         else:
             tc = t
             usingTminTmax = False
+            usingClumpIndex = False
 
         # determine darktime from gaps and reject zeros (no real gaps) 
         dts = tc[1:]-tc[0:-1]-1
@@ -843,10 +852,14 @@ class QPCalc:
             #    self.visFr.analysisrecord = []
             #    self.visFr.analysisrecord.append(analysis)
 
-            if usingTminTmax:
-                print >>outstr, "events: %d, dark times: %d (using Tmin & Tmax)" % (t.shape[0],nts)
-            else:
+            if usingClumpIndex:
+                if usingTminTmax:
+                    print >>outstr, "events: %d, dark times: %d (using clumpIndices + Tmin & Tmax)" % (t.shape[0],nts)
+                else:
+                    print >>outstr, "events: %d, dark times: %d (using clumpIndices)" % (t.shape[0],nts)
+            else:    
                 print >>outstr, "events: %d, dark times: %d" % (t.shape[0],nts)
+
             print >>outstr, "region: %d x %d nm (%d x %d pixel)" % (bbszx,bbszy,bbszx/voxx,bbszy/voxy)
             print >>outstr, "centered at %d,%d (%d,%d pixels)" % (x.mean(),y.mean(),x.mean()/voxx,y.mean()/voxy)
             print >>outstr, "darktime: %.1f+-%d (%.1f+-%d) frames - chisqr %.2f (%.2f)" % (popt[0],np.sqrt(pcov[0][0]),
