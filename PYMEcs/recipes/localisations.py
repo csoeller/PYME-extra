@@ -92,6 +92,41 @@ class FiducialApply(ModuleBase):
         namespace[self.outputName] = mapped
 
 
+@register_module('MergeClumpsTperiod')
+class MergeClumpsTperiod(ModuleBase):
+    """
+    Create a new mapping object which derives mapped keys from original ones.
+    Also adds the time period of bursts by adding tmin and tmax columns for each clump.
+    """
+    inputName = Input('clumped')
+    outputName = Output('merged')
+    labelKey = CStr('clumpIndex')
+
+    def execute(self, namespace):
+        from PYME.Analysis.points.DeClump import pyDeClump
+        from PYME.Analysis.points.DeClump import deClump as deClumpC
+        
+        inp = namespace[self.inputName]
+
+        grouped = pyDeClump.mergeClumps(inp, labelKey=self.labelKey)
+
+        # work out tmin and tmax
+        I = np.argsort(inp[self.labelKey])
+        sorted_src = {k: inp[k][I] for k in [self.labelKey,'t']}
+        # tmin and tmax - tentative addition
+        NClumps = int(np.max(sorted_src[self.labelKey]) + 1)
+        tmin = deClumpC.aggregateMin(NClumps, sorted_src[self.labelKey].astype('i'), sorted_src['t'].astype('f'))
+        tmax = -deClumpC.aggregateMin(NClumps, sorted_src[self.labelKey].astype('i'), -1.0*sorted_src['t'].astype('f'))
+        grouped.addColumn('tmin',tmin)
+        grouped.addColumn('tmax',tmax)
+        
+        try:
+            grouped.mdh = inp.mdh
+        except AttributeError:
+            pass
+
+        namespace[self.outputName] = grouped
+
 # interpolate the key from the source to the selected target of the pipeline
 def finterpDS(target,source,key):
     tsource, idx = np.unique(source['t'], return_index=True)

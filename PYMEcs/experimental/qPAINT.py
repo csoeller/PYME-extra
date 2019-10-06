@@ -766,9 +766,11 @@ class QPCalc:
             for i in range(1,p['t'].shape[0]):
                 tc = np.append(tc,np.arange(p['tmin'][i],p['tmax'][i]+1))
             tc.sort()
+            usingTminTmax = True
         else:
             tc = t
-            
+            usingTminTmax = False
+
         # determine darktime from gaps and reject zeros (no real gaps) 
         dts = tc[1:]-tc[0:-1]-1
         dtg = dts[dts>0]
@@ -841,7 +843,10 @@ class QPCalc:
             #    self.visFr.analysisrecord = []
             #    self.visFr.analysisrecord.append(analysis)
 
-            print >>outstr, "events: %d, dark times: %d" % (t.shape[0],nts)
+            if usingTminTmax:
+                print >>outstr, "events: %d, dark times: %d (using Tmin & Tmax)" % (t.shape[0],nts)
+            else:
+                print >>outstr, "events: %d, dark times: %d" % (t.shape[0],nts)
             print >>outstr, "region: %d x %d nm (%d x %d pixel)" % (bbszx,bbszy,bbszx/voxx,bbszy/voxy)
             print >>outstr, "centered at %d,%d (%d,%d pixels)" % (x.mean(),y.mean(),x.mean()/voxx,y.mean()/voxy)
             print >>outstr, "darktime: %.1f+-%d (%.1f+-%d) frames - chisqr %.2f (%.2f)" % (popt[0],np.sqrt(pcov[0][0]),
