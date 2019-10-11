@@ -180,68 +180,104 @@ class FiducialTracker:
         pipeline = self.pipeline
         
         fids = pipeline.dataSources['corrected_fiducials']
-        ci = fids['clumpIndex']
-        
-        #cis = np.arange(1, ci.max())
+        if 'clumpIndex' in fids.keys():
+            ci = fids['clumpIndex']
 
-        #clump_lengths = [(ci == c).sum() for c in cis]
+            #cis = np.arange(1, ci.max())
 
-        #largest_clump = ci == cis[np.argmax(clump_lengths)]
+            #clump_lengths = [(ci == c).sum() for c in cis]
 
-        #x_c = fids['x'][largest_clump]
-        #y_c = fids['y'][largest_clump]
+            #largest_clump = ci == cis[np.argmax(clump_lengths)]
 
-        f1 = plt.figure()
-        a1 = plt.axes()
-        plt.title('Y residuals')
-        plt.grid()
-        f2 = plt.figure()
-        plt.title('X residuuals')
-        a2 = plt.axes()
-        plt.grid()
-        f3 = plt.figure()
-        plt.title('Z residuuals')
-        a3 = plt.axes()
-        plt.grid()
+            #x_c = fids['x'][largest_clump]
+            #y_c = fids['y'][largest_clump]
 
-        sel_ids = np.unique(fids['fiducialID'])
-        for pos in range(sel_ids.shape[0]):
-            a1.text(-250, pos * 50, "%d" % sel_ids[pos])
-            a2.text(-250, pos * 50, "%d" % sel_ids[pos])
-            a3.text(-250, pos * 150, "%d" % sel_ids[pos])
+            f1 = plt.figure()
+            a1 = plt.axes()
+            plt.title('Y residuals')
+            plt.grid()
+            f2 = plt.figure()
+            plt.title('X residuuals')
+            a2 = plt.axes()
+            plt.grid()
+            f3 = plt.figure()
+            plt.title('Z residuuals')
+            a3 = plt.axes()
+            plt.grid()
+
+            sel_ids = np.unique(fids['fiducialID'])
+            for pos in range(sel_ids.shape[0]):
+                a1.text(-250, pos * 50, "%d" % sel_ids[pos])
+                a2.text(-250, pos * 50, "%d" % sel_ids[pos])
+                a3.text(-250, pos * 150, "%d" % sel_ids[pos])
             
-        for i in range(1, ci.max()+1):
-            mask = fids['clumpIndex'] == i
-            if mask.sum() > 0:
-                f_id = fids['fiducialID'][mask][0]
-                pos = np.where(sel_ids==f_id)[0][0] # position in set of selected ids
+            for i in range(1, ci.max()+1):
+                mask = fids['clumpIndex'] == i
+                if mask.sum() > 0:
+                    f_id = fids['fiducialID'][mask][0]
+                    pos = np.where(sel_ids==f_id)[0][0] # position in set of selected ids
 
-                fid_m = fids['fiducialID'] == f_id
+                    fid_m = fids['fiducialID'] == f_id
 
-                ym = fids['y'][fid_m].mean()
-                xm = fids['x'][fid_m].mean()
-                zm = fids['z'][fid_m].mean()
+                    ym = fids['y'][fid_m].mean()
+                    xm = fids['x'][fid_m].mean()
+                    zm = fids['z'][fid_m].mean()
 
-                # also plot a filtered version to see the trend in the noisy trace
-                yfilt = FILTER_FUNCS['Median'](fids['t'][mask],{'y':fids['y'][mask]},13)
-                xfilt = FILTER_FUNCS['Median'](fids['t'][mask],{'x':fids['x'][mask]},13)
-                zfilt = FILTER_FUNCS['Median'](fids['t'][mask],{'z':fids['z'][mask]},13)
+                    # also plot a filtered version to see the trend in the noisy trace
+                    yfilt = FILTER_FUNCS['Median'](fids['t'][mask],{'y':fids['y'][mask]},13)
+                    xfilt = FILTER_FUNCS['Median'](fids['t'][mask],{'x':fids['x'][mask]},13)
+                    zfilt = FILTER_FUNCS['Median'](fids['t'][mask],{'z':fids['z'][mask]},13)
 
-                a1.plot(fids['t'][mask], fids['y'][mask] - ym + pos * 50,
-                        color=plt.cm.hsv( (i % 20.0)/20.))
-                a1.plot(fids['t'][mask], yfilt['y'] - ym + pos * 50, '--',
-                        color='#b0b0b0', alpha=0.7)
+                    a1.plot(fids['t'][mask], fids['y'][mask] - ym + pos * 50,
+                            color=plt.cm.hsv( (i % 20.0)/20.))
+                    a1.plot(fids['t'][mask], yfilt['y'] - ym + pos * 50, '--',
+                            color='#b0b0b0', alpha=0.7)
 
-                a2.plot(fids['t'][mask], fids['x'][mask] - xm + pos * 50,
-                        color=plt.cm.hsv((i % 20.0) / 20.))
-                a2.plot(fids['t'][mask], xfilt['x'] - xm + pos * 50, '--',
-                        color='#b0b0b0', alpha=0.7)
+                    a2.plot(fids['t'][mask], fids['x'][mask] - xm + pos * 50,
+                            color=plt.cm.hsv((i % 20.0) / 20.))
+                    a2.plot(fids['t'][mask], xfilt['x'] - xm + pos * 50, '--',
+                            color='#b0b0b0', alpha=0.7)
 
-                a3.plot(fids['t'][mask], fids['z'][mask] - zm + pos * 150,
-                        color=plt.cm.hsv((i % 20.0) / 20.))
-                a3.plot(fids['t'][mask], zfilt['z'] - zm + pos * 150, '--',
-                        color='#b0b0b0', alpha=0.7)
+                    a3.plot(fids['t'][mask], fids['z'][mask] - zm + pos * 150,
+                            color=plt.cm.hsv((i % 20.0) / 20.))
+                    a3.plot(fids['t'][mask], zfilt['z'] - zm + pos * 150, '--',
+                            color='#b0b0b0', alpha=0.7)
 
+        else:
+            # stuff to do when no clumpIndex
+            f1 = plt.figure()
+            a1 = plt.axes()
+            plt.title('Y residuals')
+            plt.grid()
+            f2 = plt.figure()
+            plt.title('X residuuals')
+            a2 = plt.axes()
+            plt.grid()
+            f3 = plt.figure()
+            plt.title('Z residuuals')
+            a3 = plt.axes()
+            plt.grid()
+
+            ym = fids['y'].mean()
+            xm = fids['x'].mean()
+            zm = fids['z'].mean()
+
+            # also plot a filtered version to see the trend in the noisy trace
+            yfilt = FILTER_FUNCS['Median'](fids['t'],{'y':fids['y']},13)
+            xfilt = FILTER_FUNCS['Median'](fids['t'],{'x':fids['x']},13)
+            zfilt = FILTER_FUNCS['Median'](fids['t'],{'z':fids['z']},13)
+
+            a1.plot(fids['t'], fids['y'] - ym)
+            a1.plot(fids['t'], yfilt['y'] - ym, '--',
+                    color='#b0b0b0', alpha=0.7)
+            
+            a2.plot(fids['t'], fids['x'] - xm)
+            a2.plot(fids['t'], xfilt['x'] - xm, '--',
+                    color='#b0b0b0', alpha=0.7)
+            
+            a3.plot(fids['t'], fids['z'] - zm)
+            a3.plot(fids['t'], zfilt['z'] - zm, '--',
+                    color='#b0b0b0', alpha=0.7)
 
         # plot the trace derived from the fiducials
         tuq, idx = np.unique(fids['t'], return_index=True)

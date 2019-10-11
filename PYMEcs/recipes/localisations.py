@@ -139,25 +139,32 @@ class FiducialApplyFromFiducials(ModuleBase):
     inputData = Input('filtered')
     inputFiducials = Input('Fiducials')
     outputName = Output('fiducialApplied')
-
+    outputFiducials = Output('corrected_fiducials')
+    
     def execute(self, namespace):
         inp = namespace[self.inputData]
         fiducial = namespace[self.inputFiducials]
         
         mapped = tabular.mappingFilter(inp)
-
+        out_f = tabular.mappingFilter(fiducial)
+        
         for dim in ['x','y','z']:
             fiducial_dim = finterpDS(inp,fiducial,'fiducial_%s' % dim)
+            
             mapped.addColumn('fiducial_%s' % dim,fiducial_dim)
             mapped.addColumn(dim, inp[dim]-fiducial_dim)
+
+            out_f.setMapping(dim, '{0} - fiducial_{0}'.format(dim))
 
         # propogate metadata, if present
         try:
             mapped.mdh = inp.mdh
+            out_f.mdh = fiducial.mdh
         except AttributeError:
             pass
 
         namespace[self.outputName] = mapped
+        namespace[self.outputFiducials] = out_f
 
 
 @register_module('ClusterTimeRange')
