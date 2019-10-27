@@ -3,6 +3,10 @@ from PYME.recipes.traits import Input, Output, Float, Enum, CStr, Bool, Int,  Fi
 
 import numpy as np
 import skimage.filters as skf
+from scipy import ndimage
+
+from PYME.IO.image import ImageStack
+
 
 @register_module('FlexiThreshold') 
 class FlexiThreshold(Filter):
@@ -39,3 +43,143 @@ class FlexiThreshold(Filter):
     def completeMetadata(self, im):
         im.mdh['Processing.ThresholdParameter'] = self.parameter
         im.mdh['Processing.ThresholdMethod'] = self.method
+
+@register_module('LabelRange')        
+class LabelRange(Filter):
+    """Asigns a unique integer label to each contiguous region in the input mask.
+    Throws away all regions which are outside of given number of pixel range.
+    Also uses the number of sites from a second input channel to decide if region is retained,
+    retaining only those with the number sites in a given range.
+    """
+    inputSitesLabeled = Input("sites") # sites and the main input must have the same shape!
+    minRegionPixels = Int(10)
+    maxRegionPixels = Int(100)
+    minSites = Int(4)
+    maxSites = Int(6)
+    sitesAsMaxima = Bool(False)
+
+    def filter(self, image, imagesites):
+        #from PYME.util.shmarray import shmarray
+        #import multiprocessing
+        
+        if self.processFramesIndividually:
+            filt_ims = []
+            for chanNum in range(image.data.shape[3]):
+                filt_ims.append(np.concatenate([np.atleast_3d(self.applyFilter(image.data[:,:,i,chanNum].squeeze().astype('f'), imagesites.data[:,:,i,chanNum].squeeze().astype('f'), chanNum, i, image)) for i in range(image.data.shape[2])], 2))
+        else:
+            filt_ims = [np.atleast_3d(self.applyFilter(image.data[:,:,:,chanNum].squeeze().astype('f'), imagesites.data[:,:,:,chanNum].squeeze().astype('f'), chanNum, 0, image)) for chanNum in range(image.data.shape[3])]
+            
+        im = ImageStack(filt_ims, titleStub = self.outputName)
+        im.mdh.copyEntriesFrom(image.mdh)
+        im.mdh['Parent'] = image.filename
+        
+        self.completeMetadata(im)
+        
+        return im
+        
+    def execute(self, namespace):
+        namespace[self.outputName] = self.filter(namespace[self.inputName],namespace[self.inputSitesLabeled])
+
+    def applyFilter(self, data, sites, chanNum, frNum, im):
+
+        # siteLabels = self.recipe.namespace[self.sitesLabeled]
+        
+        mask = data > 0.5
+        labs, nlabs = ndimage.label(mask)
+        
+        rSize = self.minRegionPixels
+        rMax = self.maxRegionPixels
+
+        minSites = self.minSites
+        maxSites = self.maxSites
+        
+        m2 = 0*mask
+        objs = ndimage.find_objects(labs)
+        for i, o in enumerate(objs):
+            r = labs[o] == i+1
+            #print r.shape
+            area = r.sum()
+            if (area >= rSize) and (area <= rMax):
+                if self.sitesAsMaxima:
+                    nsites = sites[o][r].sum()
+                else:
+                    nsites = (np.unique(sites[o][r]) > 0).sum() # count the unique labels (excluding label 0 which is background)
+                if (nsites >= minSites) and (nsites <= maxSites):
+                    m2[o] += r
+
+        labs, nlabs = ndimage.label(m2 > 0)
+
+        return labs
+
+    def completeMetadata(self, im):
+        im.mdh['Labelling.MinSize'] = self.minRegionPixels
+        im.mdh['Labelling.MaxSize'] = self.maxRegionPixels
+        im.mdh['Labelling.MinSites'] = self.minSites
+        im.mdh['Labelling.MaxSites'] = self.maxSites
+
+
+@register_module('LabelByArea')        
+class LabelByArea(Filter):
+    """Asigns a unique integer label to each contiguous region in the input mask.
+    Optionally throws away all regions which are smaller than a cutoff size.
+    """
+    
+    def applyFilter(self, data, chanNum, frNum, im):
+        mask = data > 0.5
+        labs, nlabs = ndimage.label(mask)
+        
+        m2 = 0*mask
+        objs = ndimage.find_objects(labs)
+        for i, o in enumerate(objs):
+            r = labs[o] == i+1
+            #print r.shape
+            area = r.sum()
+            m2[o] += r*area
+
+        return m2
+
+    def completeMetadata(self, im):
+        im.mdh['Labelling.Property'] = 'area'
+
+
+import skimage.measure
+import math
+
+@register_module('LabelByRegionProperty')        
+class LabelByRegionProperty(Filter):
+    """Asigns a region property to each contiguous region in the input mask.
+    Optionally throws away all regions for which property is outside a given range.
+    """
+    regionProperty = Enum(['area','circularity','aspectratio'])
+    filterByProperty = Bool(False)
+    propertyMin = Float(0)
+    propertyMax = Float(1e6)
+    
+    def applyFilter(self, data, chanNum, frNum, im):
+        mask = data > 0.5
+        labs, nlabs = ndimage.label(mask)
+        rp = skimage.measure.regionprops(labs,None,cache=True)
+        
+        m2 = np.zeros_like(mask,dtype='float')
+        objs = ndimage.find_objects(labs)
+        for region in rp:
+            oslices = objs[region.label-1]
+            r = labs[oslices] == region.label
+            #print r.shape
+            if self.regionProperty == 'area':
+                propValue = region.area
+            elif self.regionProperty == 'aspectratio':
+                propValue = region.major_axis_length / region.minor_axis_length
+            elif self.regionProperty == 'circularity':
+                propValue = 4 * math.pi * region.area / (region.perimeter*region.perimeter)
+            if self.filterByProperty:
+                if (propValue >= self.propertyMin) and (propValue <= self.propertyMax):
+                    m2[oslices] += r*propValue
+            else:
+                m2[oslices] += r*propValue
+
+        return m2
+
+    def completeMetadata(self, im):
+        im.mdh['Labelling.Property'] = self.regionProperty
+

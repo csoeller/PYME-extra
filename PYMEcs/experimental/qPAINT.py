@@ -3,6 +3,7 @@ import numpy as np
 import sys
 from scipy import ndimage
 from PYMEcs.misc.guiMsgBoxes import Warn
+from PYME.recipes import tablefilters
 
 import logging
 logger = logging.getLogger(__file__)
@@ -206,15 +207,23 @@ class QPCalc:
     def OnGetIDsfromImage(self, event, img=None):
         from PYME.DSView import dsviewer
 
-        visFr = self.visFr
-        pipeline = visFr.pipeline
+        pipeline = self.pipeline
 
         if img is None:
             selection = selectWithDialog(dsviewer.openViewers.keys())
             if selection is not None:
                 img = dsviewer.openViewers[selection].image
 
-        if img is not None:            
+        if img is not None:
+            recipe = pipeline.recipe
+            mapp = tablefilters.Mapping(recipe,inputName=pipeline.selectedDataSourceKey,
+                                  outputName='with_ids')
+            recipe.add_module(mapp)
+            # note: in future we may add a filter for the valid IDs straighaway as a tablefilter!
+            recipe.execute()
+
+            withIDs = recipe.namespace['with_ids']
+            
             pixX = np.round((pipeline['x'] - img.imgBounds.x0 )/img.pixelSize).astype('i')
             pixY = np.round((pipeline['y'] - img.imgBounds.y0 )/img.pixelSize).astype('i')
 
@@ -226,13 +235,13 @@ class QPCalc:
 
             numPerObject, b = np.histogram(ids, np.arange(ids.max() + 1.5) + .5)
 
-            pipeline.addColumn('objectID', ids)
-            pipeline.addColumn('NEvents', numPerObject[ids-1])
+            withIDs.addColumn('objectID', ids)
+            withIDs.addColumn('NEvents', numPerObject[ids-1])
 
+            pipeline.selectDataSource('with_ids')
             pipeline.Rebuild()
-            self.visFr.CreateFoldPanel() # to make, for example, new columns show up in filter columns
-            
 
+            
     def OnCopyDS(self, event=None):
         """
 
