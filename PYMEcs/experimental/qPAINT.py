@@ -8,7 +8,7 @@ from PYME.recipes import tablefilters
 import logging
 logger = logging.getLogger(__file__)
 
-from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float
+from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float, Bool
 from traitsui.api import View, Item, Group
 from traitsui.menu import OKButton, CancelButton, OKCancelButtons
 
@@ -107,7 +107,6 @@ class TimedSpecies(HasTraits):
 
         logger.info('speclist is ' + repr(speclist))
         return speclist
-
                 
 def uniqueByID(ids,column):
     uids, idx = np.unique(ids, return_index=True)
@@ -124,6 +123,10 @@ def selectWithDialog(choices, message='select image from list', caption='Selecti
     dlg.Destroy()
     return item
 
+class FitSettings(HasTraits):
+    keepTau2Constant = Bool(False)
+    Tau2FixedValue = Float(2.0)
+
 class QPCalc:
     """
 
@@ -132,6 +135,7 @@ class QPCalc:
         self.visFr = visFr
         self.pipeline = visFr.pipeline
         self.qpMeasurements = {}
+        self.fitSettings = FitSettings()
         self.useTau = 2 # we change to using the proper histogram for fitting
         if self.useTau == 1:
             self.tausrc = {
@@ -172,6 +176,7 @@ class QPCalc:
 
         visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
         visFr.AddMenuItem('qPAINT', "Darktime distribution of selected events\tCtrl+T",self.OnDarkT)
+        visFr.AddMenuItem('qPAINT', "Select Fit Settings",self.OnFitSettings)
         visFr.AddMenuItem('qPAINT', "Calibrate a qIndex (or any column)",self.OnQindexCalibrate)
         visFr.AddMenuItem('qPAINT', "Ratio two qIndices (or any two columns)",self.OnQindexRatio)
 
@@ -751,6 +756,10 @@ class QPCalc:
         if not filename == '':
             self.qpMeasurements['Everything'] = tb.tabularFromCSV(filename)
 
+
+    def OnFitSettings(self,event):
+        self.fitSettings.configure_traits(kind='modal')
+
     def OnDarkT(self,event):
         import StringIO
         from PYMEcs.Analysis import fitDarkTimes
@@ -761,12 +770,13 @@ class QPCalc:
 
         NTMIN = 5
         maxPts = 1e5
+
+        ## STEP 1: Extract times of relevant events and preprocess as needed
+
         t = pipeline['t']
         if len(t) > maxPts:
             Warn(None,'aborting darktime analysis: too many events, current max is %d' % maxPts)
             return
-        x = pipeline['x']
-        y = pipeline['y']
 
         p = pipeline
         # if we have coalesced events use this info
@@ -789,99 +799,125 @@ class QPCalc:
             usingTminTmax = False
             usingClumpIndex = False
 
+        ## STEP 2: from the extracted times get the actual darktimes
+        
         # determine darktime from gaps and reject zeros (no real gaps) 
         dts = tc[1:]-tc[0:-1]-1
         dtg = dts[dts>0]
         nts = dtg.shape[0]
 
+        ## STEP 3: fit the dark time distribution
+        
         if nts > NTMIN:
             # now make a cumulative histogram from these
             cumux,cumuy = fitDarkTimes.cumuhist(dtg)
-            binctrs,hc,binctrsg,hcg = fitDarkTimes.cumuhistBinned(dtg)
+            binctrs,hc,binctrsg,hcg = fitDarkTimes.cumuhistBinnedLog(dtg,dlog=0.05)
+            binctrsCoarse,hcCoarse,binctrsgCoarse,hcgCoarse, hCoarse = fitDarkTimes.cumuhistBinnedLog(dtg,dlog=0.2,return_hist=True)
             
-            bbx = (x.min(),x.max())
-            bby = (y.min(),y.max())
-            voxx = 1e3*mdh['voxelsize.x']
-            voxy = 1e3*mdh['voxelsize.y']
-            bbszx = bbx[1]-bbx[0]
-            bbszy = bby[1]-bby[0]
-
-        # fit theoretical distributions
-        popth,pcovh,popt,pcov = (None,None,None,None)
-        if nts > NTMIN:
+            # fit theoretical distributions
             from scipy.optimize import curve_fit
 
-            idx = (np.abs(hcg - 0.63)).argmin()
-            tauesth = binctrsg[idx]
-            popth,pcovh,infodicth,errmsgh,ierrh = curve_fit(fitDarkTimes.cumuexpfit,binctrs,hc, p0=(tauesth),full_output=True)
-            chisqredh = ((hc - infodicth['fvec'])**2).sum()/(hc.shape[0]-1)
-            idx = (np.abs(cumuy - 0.63)).argmin()
-            tauest = cumux[idx]
-            popt,pcov,infodict,errmsg,ierr = curve_fit(fitDarkTimes.cumuexpfit,cumux,cumuy, p0=(tauest),full_output=True)
-            chisqred = ((cumuy - infodict['fvec'])**2).sum()/(nts-1)
-
-            poptm,pcovm,infodictm,errmsgm,ierrm = curve_fit(fitDarkTimes.cumumultiexpfit,cumux,cumuy, p0=(tauest,10.0,0.8), full_output=True)
-            chisqredm = ((cumuy - infodictm['fvec'])**2).sum()/(nts-1)
+            try:
+                tau1, tau1err, chisqr, tau1est = fitDarkTimes.fitTaus(binctrs,hc,return_tau1est=True)
+                logger.info("fitTaus: tau1 %f, tau1err %f, chisq %.1g, tau1est %f" % (tau1, tau1err, chisqr, tau1est))
+            except RuntimeError:
+                logger.warn("fitting tau value from histogram failed")
+                tau1ok = False
+            else:
+                tau1ok = True
+                
+            try:
+                tau1c, tau1errc, chisqrc, tau1estc = fitDarkTimes.fitTaus(cumux,cumuy,return_tau1est=True)
+                logger.info("fitTaus: tau1 %f, tau1err %f, chisq %.1g, tau1est %f" % (tau1c, tau1errc, chisqrc, tau1estc))
+            except RuntimeError:
+                logger.warn("fitting tau value from cumulative dist failed")
+                tau1cok = False
+            else:
+                tau1cok = True
+                
+            try:
+                tau1m, tau2m, atau1m, tau1errm, tau2errm, atau1errm, chisqrm = fitDarkTimes.fitTaus(binctrs,hc,
+                                                                                                    fitTau2=not self.fitSettings.keepTau2Constant,
+                                                                                                    tau2const=self.fitSettings.Tau2FixedValue)
+                logger.info("fitTaus: tau1 %f, tau2 %f, atau1 %f, tau1err %f, tau2err %f, atau1err %f, chisq %.1g" %
+                            (tau1m, tau2m, atau1m, tau1errm, tau2errm, atau1errm, chisqrm))
+            except RuntimeError:
+                logger.warn("fitting two tau values failed")
+                tau1mok = False
+            else:
+                tau1mok = True
             
+            ## STEP 4: plotting and reporting
+
             import matplotlib.pyplot as plt
+            # make a string with info
+            outstr = StringIO.StringIO()
+            
+            if usingClumpIndex:
+                if usingTminTmax:
+                    print >>outstr, "events: %d, dark times: %d (using clumpIndices + Tmin & Tmax)" % (tc.size,nts)
+                else:
+                    print >>outstr, "events: %d, dark times: %d (using clumpIndices)" % (tc.size,nts)
+            else:    
+                print >>outstr, "events: %d, dark times: %d" % (tc.size,nts)
+
+            print >>outstr, "darktime: %.1f+-%d (%.1f+-%d) frames - chisqr %.2g (%.2g)" % (tau1c,tau1errc,
+                                                                                           tau1,tau1err,
+                                                                                           chisqrc,chisqr)
+            if tau1mok: print >>outstr, "darktime: tau1 %.1f+-%d, tau2 %.1f+-%d" % (tau1m, tau1errm, tau2m, tau2errm)
+            if tau1mok: print >>outstr, "amplitudes: (a %.2f+-%.2f, b %.2f) - chisqr %.2g" % (atau1m,atau1errm, 1-atau1m,chisqrm) 
+            print >>outstr, "darktime: starting estimates: %.1f (%.1f)" % (tau1estc,tau1est)
+            print >>outstr, "qunits: %.2f (%.2f), eunits: %.2f" % (100.0/tau1c, 100.0/tau1,t.shape[0]/500.0)
+
+            labelstr = outstr.getvalue()
+
             # plot data and fitted curves
             plt.figure()
             plt.subplot(211)
             plt.plot(cumux,cumuy,'o')
-            plt.plot(cumux,fitDarkTimes.cumuexpfit(cumux,popt[0]))
+            if tau1cok: plt.plot(cumux,fitDarkTimes.cumuexpfit(cumux,tau1c))
             
             plt.plot(binctrs,hc,'o')
-            plt.plot(binctrs,fitDarkTimes.cumuexpfit(binctrs,popth[0]))
+            if tau1ok: plt.plot(binctrs,fitDarkTimes.cumuexpfit(binctrs,tau1))
 
-            plt.plot(cumux,fitDarkTimes.cumumultiexpfit(cumux,*poptm),'--')
+            if tau1mok: plt.plot(binctrs,fitDarkTimes.cumumultiexpfit(binctrs,tau1m,tau2m,atau1m),'--')
 
             plt.ylim(-0.2,1.2)
             plt.subplot(212)
             plt.semilogx(cumux,cumuy,'o')
-            plt.semilogx(cumux,fitDarkTimes.cumuexpfit(cumux,popt[0]))
+            if tau1cok: plt.semilogx(cumux,fitDarkTimes.cumuexpfit(cumux,tau1c))
             plt.semilogx(binctrs,hc,'o')
-            plt.semilogx(binctrs,fitDarkTimes.cumuexpfit(binctrs,popth[0]))
+            if tau1ok: plt.semilogx(binctrs,fitDarkTimes.cumuexpfit(binctrs,tau1))
 
-            plt.semilogx(cumux,fitDarkTimes.cumumultiexpfit(cumux,*poptm),'--')
+            if tau1mok: plt.semilogx(binctrs,fitDarkTimes.cumumultiexpfit(binctrs,tau1m,tau2m,atau1m),'--')
             
             plt.ylim(-0.2,1.2)
             plt.show()
             
-            outstr = StringIO.StringIO()
-
-            analysis = {
-                'Nevents' : t.shape[0],
-                'Ndarktimes' : nts,
-                'filterKeys' : pipeline.filterKeys.copy(),
-                'darktimes' : (popt[0],popth[0]),
-                'darktimeErrors' : (np.sqrt(pcov[0][0]),np.sqrt(pcovh[0][0]))
-            }
-
-            #if not hasattr(self.visFr,'analysisrecord'):
-            #    self.visFr.analysisrecord = []
-            #    self.visFr.analysisrecord.append(analysis)
-
-            if usingClumpIndex:
-                if usingTminTmax:
-                    print >>outstr, "events: %d, dark times: %d (using clumpIndices + Tmin & Tmax)" % (t.shape[0],nts)
-                else:
-                    print >>outstr, "events: %d, dark times: %d (using clumpIndices)" % (t.shape[0],nts)
-            else:    
-                print >>outstr, "events: %d, dark times: %d" % (t.shape[0],nts)
-
-            print >>outstr, "region: %d x %d nm (%d x %d pixel)" % (bbszx,bbszy,bbszx/voxx,bbszy/voxy)
-            print >>outstr, "centered at %d,%d (%d,%d pixels)" % (x.mean(),y.mean(),x.mean()/voxx,y.mean()/voxy)
-            print >>outstr, "darktime: %.1f+-%d (%.1f+-%d) frames - chisqr %.2f (%.2f)" % (popt[0],np.sqrt(pcov[0][0]),
-                                                                                           popth[0],np.sqrt(pcovh[0][0]),
-                                                                                           chisqred,chisqredh)
-            print >>outstr, "darktime: tau1 %.1f, tau2 %.1f (a %.2f, b %.2f) - chisqr %.2f" % (poptm[0], poptm[1], poptm[2],
-                                                                                               1-poptm[2],chisqredm) 
-            print >>outstr, "darktime: starting estimates: %.1f (%.1f)" % (tauest,tauesth)
-            print >>outstr, "qunits: %.2f (%.2f), eunits: %.2f" % (100.0/popt[0], 100.0/popth[0],t.shape[0]/500.0)
-
-            labelstr = outstr.getvalue()
             plt.annotate(labelstr, xy=(0.5, 0.1), xycoords='axes fraction',
                          fontsize=10)
+
+            plt.figure()
+            plt.subplot(211)
+            if True:
+                plt.semilogx(cumux,cumuy,'o',color='darkblue')
+                if tau1ok: plt.semilogx(binctrs,fitDarkTimes.cumuexpfit(binctrs,tau1))
+                if tau1mok: plt.semilogx(binctrs,fitDarkTimes.cumumultiexpfit(binctrs,tau1m,tau2m,atau1m),'--')
+                plt.ylim(-0.2,1.2)
+                plt.annotate(labelstr, xy=(0.5, 0.1), xycoords='axes fraction',
+                             fontsize=10)
+            else:
+                plt.semilogx(binctrsCoarse, hCoarse, 'o')
+
+            plt.subplot(212)
+            plt.semilogx(binctrs,hc,'go')
+            plt.semilogx(binctrsg,hcg,'bo')
+            if tau1ok: plt.semilogx(binctrs,fitDarkTimes.cumuexpfit(binctrs,tau1))
+            if tau1mok: plt.semilogx(binctrs,fitDarkTimes.cumumultiexpfit(binctrs,tau1m,tau2m,atau1m),'--',color='orange')
+            
+            plt.ylim(-0.2,1.2)
+            plt.show()
+
         else:
             Warn(None, 'not enough data points, only found %d dark times (need at least  %d)' % (nts,NTMIN), 'Error')
 

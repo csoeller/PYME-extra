@@ -178,6 +178,11 @@ def cumuexpfit(t,tau):
 def cumumultiexpfit(t,tau1,tau2,a):
     return a*(1-np.exp(-t/tau1))+(1-a)*(1-np.exp(-t/tau2))
 
+def mkcmexpfit(tau2):
+    def fitfunc(t,tau1,a):
+        return a*(1-np.exp(-t/tau1))+(1-a)*(1-np.exp(-t/tau2))
+    return fitfunc
+
 def notimes(ndarktimes):
     analysis = {
         'NDarktimes' : ndarktimes,
@@ -205,6 +210,56 @@ def cumuhistBinned(timeintervals):
 
     return (binctrs, hc, binctrsg, hcg)
 
+import math
+def cumuhistBinnedLog(timeintervals,dlog=0.1,return_hist=False):
+    binmax = int((math.log10(timeintervals.max())-1.0-dlog)/dlog+2.0)
+    binedges = np.append(0.5+np.arange(10), 10.0**(1.0+dlog*(np.arange(binmax)+1.0)))
+    binctrs = 0.5*(binedges[0:-1]+binedges[1:])
+    h,be2 = np.histogram(timeintervals,bins=binedges)
+    hc = np.cumsum(h)/float(timeintervals.shape[0]) # normalise
+    hcg = hc[h>0] # only nonzero bins
+    binctrsg = binctrs[h>0]
+
+    if return_hist:
+        return (binctrs, hc, binctrsg, hcg, h/float(timeintervals.shape[0]))
+    else:
+        return (binctrs, hc, binctrsg, hcg)
+
+def fitTaus(x_t, y_h, fitTau2 = False, tau2const = 0.0, return_tau1est = False):
+
+    # could be refined by subtracting off the histogram for values around 9 frames or so
+    # and then ask for reaching 63% off the remaining difference to 1
+    idx = (np.abs(y_h - 0.63)).argmin()
+    tau1est = x_t[idx]
+    
+    # further possibilities:
+    # use tau2 but keep it fixed
+    # add bounds on atau1 (between 0..1) and tau2 (0..8)
+
+    if fitTau2:
+        popt,pcov = curve_fit(cumumultiexpfit,x_t,y_h, p0=(tau1est,2.0,0.8),bounds=(0, (np.inf, 8.0, 1.0)))
+        (tau1, tau2, atau1) = popt
+        (tau1err, tau2err, atau1err) = np.sqrt(np.diag(pcov))
+        chisqr = ((y_h - cumumultiexpfit(x_t,*popt))**2).sum()/(x_t.size-1)
+        results = [tau1, tau2, atau1, tau1err, tau2err, atau1err, chisqr]
+    else:
+        if tau2const < 1e-4:
+            popt,pcov = curve_fit(cumuexpfit,x_t,y_h, p0=(tau1est))
+            (tau1,tau1err) = (popt[0],np.sqrt(pcov[0][0]))
+            chisqr = ((y_h - cumuexpfit(x_t,*popt))**2).sum()/(x_t.size-1)
+            results = [tau1, tau1err, chisqr]
+        else:
+            popt,pcov = curve_fit(mkcmexpfit(tau2const),x_t,y_h, p0=(tau1est,0.8),bounds=(0, (np.inf, 1.0)))
+            (tau1, atau1) = popt
+            (tau1err, atau1err) = np.sqrt(np.diag(pcov))
+            (tau2,tau2err) = (tau2const,0)
+            chisqr = ((y_h - cumumultiexpfit(x_t, tau1, tau2, atau1))**2).sum()/(x_t.size-1)
+            results = [tau1, tau2, atau1, tau1err, tau2err, atau1err, chisqr]
+            
+    if return_tau1est:
+        results.append(tau1est)
+
+    return results
 
 def fitDarktimes(t):
     # determine darktime from gaps and reject zeros (no real gaps) 
