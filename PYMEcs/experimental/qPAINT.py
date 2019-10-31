@@ -123,6 +123,17 @@ def selectWithDialog(choices, message='select image from list', caption='Selecti
     dlg.Destroy()
     return item
 
+def unique_name(stem,names):
+    if stem not in names:
+        return stem
+    for i in range(1,11):
+        stem2 = "%s%d" % (stem,i)
+        if stem2 not in names:
+            return stem2
+
+    return stem2 # here we just give up and accept a duplicate name
+
+
 class FitSettings(HasTraits):
     keepTau2Constant = Bool(False)
     Tau2FixedValue = Float(2.0)
@@ -220,14 +231,15 @@ class QPCalc:
                 img = dsviewer.openViewers[selection].image
 
         if img is not None:
+            with_ids = unique_name('with_ids',pipeline.dataSources.keys())
+            valid_ids = unique_name('valid_ids',pipeline.dataSources.keys())
             recipe = pipeline.recipe
             mapp = tablefilters.Mapping(recipe,inputName=pipeline.selectedDataSourceKey,
-                                  outputName='with_ids')
+                                        outputName=with_ids)
             recipe.add_module(mapp)
-            # note: in future we may add a filter for the valid IDs straighaway as a tablefilter!
             recipe.execute()
 
-            withIDs = recipe.namespace['with_ids']
+            withIDs = recipe.namespace[with_ids]
             
             pixX = np.round((pipeline['x'] - img.imgBounds.x0 )/img.pixelSize).astype('i')
             pixY = np.round((pipeline['y'] - img.imgBounds.y0 )/img.pixelSize).astype('i')
@@ -243,7 +255,11 @@ class QPCalc:
             withIDs.addColumn('objectID', ids)
             withIDs.addColumn('NEvents', numPerObject[ids-1])
 
-            pipeline.selectDataSource('with_ids')
+            recipe.add_module(tablefilters.FilterTable(recipe,inputName=with_ids, outputName=valid_ids,
+                                                         filters={'objectID' : [.5, sys.maxsize]}))
+            recipe.execute()
+
+            pipeline.selectDataSource(valid_ids)
             pipeline.Rebuild()
 
             
@@ -854,10 +870,12 @@ class QPCalc:
             outstr = StringIO.StringIO()
             
             if usingClumpIndex:
+                eventsClumped = pipeline['clumpSize'].sum()
                 if usingTminTmax:
-                    print >>outstr, "events: %d, dark times: %d (using clumpIndices + Tmin & Tmax)" % (tc.size,nts)
+                    eventsTminmax = tc.size
+                    print >>outstr, "events: %d (raw clumpSize: %d), dark times: %d (using clumpIndices + Tmin & Tmax)" % (eventsTminmax,eventsClumped,nts)
                 else:
-                    print >>outstr, "events: %d, dark times: %d (using clumpIndices)" % (tc.size,nts)
+                    print >>outstr, "events: %d (from clumpSize), dark times: %d (using clumpIndices)" % (eventsClumped,nts)
             else:    
                 print >>outstr, "events: %d, dark times: %d" % (tc.size,nts)
 
