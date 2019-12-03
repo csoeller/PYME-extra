@@ -16,16 +16,20 @@ import PYME.IO.tabular as tabular
 # and allows adding new columns
 # and inherits tabular I/O
 class TabularRecArrayWrap(tabular.TabularBase):
-    def __init__(self, recarray):
+    def __init__(self, recarray, validCols = None):
         self._recarray = recarray
         self.new_columns = {}
-        
+        if validCols is not None:
+            self._recarrayKeys = validCols
+        else:
+            self._recarrayKeys = self._recarray.dtype.fields.keys()
+
     def keys(self):
-        return list(set(list(self._recarray.dtype.fields.keys() + self.new_columns.keys())))
+        return list(set(list(self._recarrayKeys + self.new_columns.keys())))
 
     def __getitem__(self, keys):
         key, sl = self._getKeySlice(keys)
-        if key in self._recarray.dtype.fields.keys():
+        if key in self._recarrayKeys:
             return self._recarray[key][sl]
         else:
             return self.new_columns[key][sl]
@@ -178,6 +182,11 @@ def cumuexpfit(t,tau):
 def cumumultiexpfit(t,tau1,tau2,a):
     return a*(1-np.exp(-t/tau1))+(1-a)*(1-np.exp(-t/tau2))
 
+def mkcmexpfit(tau2):
+    def fitfunc(t,tau1,a):
+        return a*(1-np.exp(-t/tau1))+(1-a)*(1-np.exp(-t/tau2))
+    return fitfunc
+
 def notimes(ndarktimes):
     analysis = {
         'NDarktimes' : ndarktimes,
@@ -205,6 +214,23 @@ def cumuhistBinned(timeintervals):
 
     return (binctrs, hc, binctrsg, hcg)
 
+import math
+def cumuhistBinnedLog(timeintervals,dlog=0.1,return_hist=False, return_good=False):
+    binmax = int((math.log10(timeintervals.max())-1.0-dlog)/dlog+2.0)
+    binedges = np.append(0.5+np.arange(10), 10.0**(1.0+dlog*(np.arange(binmax)+1.0)))
+    binctrs = 0.5*(binedges[0:-1]+binedges[1:])
+    h,be2 = np.histogram(timeintervals,bins=binedges)
+    hc = np.cumsum(h)/float(timeintervals.shape[0]) # normalise
+    hcg = hc[h>0] # only nonzero bins
+    binctrsg = binctrs[h>0]
+
+    retvals = [binctrs, hc]
+    if return_good:
+       retvals = retvals + [binctrsg, hcg]
+    if return_hist:
+        retvals = retvals + [h/float(timeintervals.shape[0])]
+
+    return retvals
 
 def fitDarktimes(t):
     # determine darktime from gaps and reject zeros (no real gaps) 
@@ -325,6 +351,7 @@ def measureObjectsByID(filter, ids, sigDefocused = None):
     return TabularRecArrayWrap(measurements)
 
 
+
 def retrieveMeasuresForIDs(measurements,idcolumn,columns=['tau1','NDarktimes','qIndex']):
     newcols = {key: np.zeros_like(idcolumn, dtype = 'float64') for key in columns}
 
@@ -336,3 +363,199 @@ def retrieveMeasuresForIDs(measurements,idcolumn,columns=['tau1','NDarktimes','q
                     newcols[col][ind] = measurements[col][j]
 
     return newcols
+
+
+from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float, Bool
+class FitSettings(HasTraits):
+    coalescedProcessing = Enum(['useClumpIndexOnly','useTminTmaxIfAvailable'])
+    cumulativeDistribution = Enum(['binned','empirical'])
+    fitMode = Enum(['SingleMode','TwoModes'])
+    Tau2Constant = Bool(False)
+    Tau2FixedValue = Float(2.0)
+    IDcolumn = CStr('objectID')
+
+    
+measureDType2 = [('objectID', 'i4'),
+                 ('NEvents', 'i4'), ('NEventsCorr', 'i4'), ('NDarktimes', 'i4'),
+                 ('tau1', 'f4'), ('tau2', 'f4'), ('tau1err', 'f4'), ('tau2err', 'f4'),
+                 ('amp1','f4'), ('amp1err','f4'),
+                 ('chisqr', 'f4'), ('tau1est', 'f4'), ('qindex', 'f4')]
+
+def measureObjectsByID2(datasource, idname='objectID', settings=FitSettings()):
+    # Probably an old statement - check: IMPORTANT: repeated filter access is extremely costly!
+    ds = datasource
+    idDs = ds[idname].astype('i')
+
+    idall = np.unique(ds[idname].astype('int'))
+    ids = idall[idall > 0] # only accept nonzero IDs
+    
+    meas = np.zeros(ids.size, dtype=measureDType2)
+
+    # check which type of time processing we are going to use
+    if ('clumpIndex' in ds.keys()) and not ('fitError_x0' in ds.keys()): # heuristic to only do on coalesced data
+        usingClumpIndex = True
+        if (settings.coalescedProcessing == 'useTminTmaxIfAvailable') and  ('tmin' in ds.keys()) and ('tmax' in ds.keys()):
+            usingTminTmax = True
+        else:
+            usingTminTmax = False
+    else:
+        usingClumpIndex = False
+        usingTminTmax = False
+
+    fields = ['NEvents','NDarktimes', 'qindex']
+    if usingTminTmax:
+        fields.append('NEventsCorr')
+
+    if settings.Tau2FixedValue:
+        tau2const = settings.Tau2Constant
+    else:
+        tau2const = 0.0
+        
+    if settings.fitMode == 'SingleMode':
+        #  retv = [tau1, tau1err, chisqr, tau1est]
+        mfields = ['tau1','tau1err','chisqr','tau1est']
+    else:
+        # retv = [tau1, tau2, atau1, tau1err, tau2err, atau1err, chisqr, tauest]
+        mfields = ['tau1','tau2','amp1','tau1err','tau2err','amp1err','chisqr','tau1est']
+        
+    validCols = fields + mfields
+
+    # loop over object IDs
+    ndtmin = 5
+    for j,this_id in enumerate(ids):
+        if not this_id == 0:
+            if np.all(np.in1d(this_id, idDs)): # check if this ID is present in data
+                idx = idDs == this_id
+                # stuff to be done in the innermost loop
+                te, dte, nevents, nevtscorr = extractEventTimes(ds,idx,useTminTmax=usingTminTmax)
+                meas[j]['NEvents'] = nevents
+                meas[j]['NDarktimes'] = dte.size
+                if usingTminTmax:
+                    meas[j]['NEventsCorr'] = nevtscorr
+                if dte.size >= ndtmin:
+                    if settings.cumulativeDistribution == 'binned':
+                        xc, yc = cumuhistBinnedLog(dte,dlog=0.05)
+                    else:
+                        xc, yc = cumuhist(dte)
+
+                    try:
+                        retv = fitTaus(xc,yc,fitTau2 = (settings.fitMode == 'TwoModes'), tau2const=tau2const, return_tau1est=True)
+                    except RuntimeError:
+                        pass # we got a convergence error
+                    else:
+                        for i, field in enumerate(mfields):
+                            meas[j][field] = retv[i]
+                        meas[j]['qindex'] = 100.0/meas[j]['tau1']
+            else:
+                for key in  meas[j].dtype.fields.keys():
+                    meas[j][key]=0
+            meas[j]['objectID'] = this_id
+
+    # wrap recarray in tabular that allows us to
+    # easily add columns and save using tabular methods
+    rmeas = TabularRecArrayWrap(meas, validCols=validCols+['objectID'])
+    
+    return {'measures': rmeas, 'validColumns': validCols,
+            'state' : {
+                'usingClumpIndex': usingClumpIndex,
+                'usingTminTmax': usingTminTmax,
+                'IDcolumn': settings.IDcolumn,
+                'coalescedProcessing': settings.coalescedProcessing,
+                'Tau2Constant': settings.Tau2Constant,
+                'Tau2FixedValue': settings.Tau2FixedValue
+            }}
+
+def retrieveMeasuresForIDs2(measurements,idcol):
+    validCols = measurements['validColumns']
+    measures = measurements['measures']
+    
+    newcols = {key: np.zeros_like(idcol, dtype = measures._recarray.dtype.fields[key][0]) for key in validCols}
+
+    for j,id in enumerate(measures['objectID']):
+        if not id == 0:
+            ind = idcol == id
+            for col in newcols.keys():
+                if not np.isnan(measures[col][j]):
+                    newcols[col][ind] = measures[col][j]
+
+    return newcols
+
+def extractEventTimes(datasource, idx = None, useTminTmax = True, return_modes = False):
+    d = datasource
+    t = d['t']
+    if idx is None:
+        idx = np.ones_like(t,dtype='bool')
+    ti = t[idx]
+    
+    nevents_corrected = None
+    # if we have coalesced events use this info
+    if ('clumpIndex' in d.keys()) and not ('fitError_x0' in d.keys()): # heuristic to only do on coalesced data
+        usingClumpIndex = True
+        csz = d['clumpSize'][idx]
+        nevents = csz.sum()
+        if useTminTmax and  ('tmin' in d.keys()) and ('tmax' in d.keys()):
+            tmin = d['tmin'][idx]
+            tmax = d['tmax'][idx]
+            tc = np.arange(tmin[0],tmax[0]+1)
+            for i in range(1,tmin.size):
+                tc = np.append(tc,np.arange(tmin[i],tmax[i]+1))
+            tc.sort()
+            usingTminTmax = True
+            nevents_corrected = tc.size
+        else:
+            tc = np.arange(int(ti[0]-csz[0]/2),int(ti[0]+csz[0]/2))
+            for i in range(1,ti.size):
+                tc = np.append(tc,np.arange(int(t[i]-csz[i]/2),int(t[i]+csz[i]/2)))
+            tc.sort()
+            usingTminTmax = False
+    else:
+        tc = ti
+        usingTminTmax = False
+        usingClumpIndex = False
+        nevents = tc.size
+
+    dts = tc[1:]-tc[0:-1]-1
+    dtg = dts[dts>0]
+    
+    if return_modes:
+        return (tc, dtg, nevents, nevents_corrected, usingClumpIndex, usingTminTmax)
+    else:
+        return (tc, dtg, nevents, nevents_corrected)
+
+   
+def fitTaus(x_t, y_h, fitTau2 = False, tau2const = 0.0, return_tau1est = False):
+
+    # could be refined by subtracting off the histogram for values around 9 frames or so
+    # and then ask for reaching 63% off the remaining difference to 1
+    idx = (np.abs(y_h - 0.63)).argmin()
+    tau1est = x_t[idx]
+    
+    # further possibilities:
+    # use tau2 but keep it fixed
+    # add bounds on atau1 (between 0..1) and tau2 (0..8)
+
+    if fitTau2:
+        popt,pcov = curve_fit(cumumultiexpfit,x_t,y_h, p0=(tau1est,2.0,0.8),bounds=(0, (np.inf, 8.0, 1.0)))
+        (tau1, tau2, atau1) = popt
+        (tau1err, tau2err, atau1err) = np.sqrt(np.diag(pcov))
+        chisqr = ((y_h - cumumultiexpfit(x_t,*popt))**2).sum()/(x_t.size-1)
+        results = [tau1, tau2, atau1, tau1err, tau2err, atau1err, chisqr]
+    else:
+        if tau2const < 1e-4:
+            popt,pcov = curve_fit(cumuexpfit,x_t,y_h, p0=(tau1est))
+            (tau1,tau1err) = (popt[0],np.sqrt(pcov[0][0]))
+            chisqr = ((y_h - cumuexpfit(x_t,*popt))**2).sum()/(x_t.size-1)
+            results = [tau1, tau1err, chisqr]
+        else:
+            popt,pcov = curve_fit(mkcmexpfit(tau2const),x_t,y_h, p0=(tau1est,0.8),bounds=(0, (np.inf, 1.0)))
+            (tau1, atau1) = popt
+            (tau1err, atau1err) = np.sqrt(np.diag(pcov))
+            (tau2,tau2err) = (tau2const,0)
+            chisqr = ((y_h - cumumultiexpfit(x_t, tau1, tau2, atau1))**2).sum()/(x_t.size-1)
+            results = [tau1, tau2, atau1, tau1err, tau2err, atau1err, chisqr]
+            
+    if return_tau1est:
+        results.append(tau1est)
+
+    return results
+
