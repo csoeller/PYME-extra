@@ -12,3 +12,4 @@ PYMEcs.experimental.mortensen
 PYMEcs.experimental.splitRender
 PYMEcs.experimental.timedSpecies
 PYMEcs.experimental.chaining
+PYMEcs.experimental.specLabeling
