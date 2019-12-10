@@ -18,8 +18,8 @@ class SelectROIFT:
             x1, y1 = self.visFr.glCanvas.selectionSettings.finish
 
         filters = {}
-        filters['x'] = [min(x0, x1), max(x0, x1)]
-        filters['y'] = [min(y0, y1), max(y0,y1)]
+        filters['x'] = [float(min(x0, x1)), float(max(x0, x1))] # must ensure all values are eventually scalars to avoid issue with recipe yaml output
+        filters['y'] = [float(min(y0, y1)), float(max(y0, y1))] # ditto
 
         recipe = self.visFr.pipeline.recipe
         ftable = FilterTable(recipe, inputName=self.visFr.pipeline.selectedDataSourceKey,
