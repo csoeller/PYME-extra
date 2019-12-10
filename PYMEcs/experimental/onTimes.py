@@ -78,16 +78,24 @@ class onTimer:
         else:
             tc = t
         
-        nframes = pipeline.selectedDataSource['t'].max()
+        startn = pipeline.selectedDataSource['t'].min()
+        endn = pipeline.selectedDataSource['t'].max()
 
         tt, v = plotserpipeline(tc, np.ones_like(tc))
 
+        # add points to start from beginning of series
+        tt2 = np.append([startn,tt[0],tt[0]],tt)
+        v2 = np.append([0,0,1],v)
+        # add points to go to end of series
+        tt2 = np.append(tt2,[tt[-1],tt[-1],endn])
+        v2 = np.append(v2,[1,0,0])
+        
         import matplotlib.pyplot as plt
         # plot data and fitted curves
         plt.figure()
-        plt.plot(tt,v)
+        plt.plot(tt2,v2)
         plt.show()
-        plt.xlim(0,nframes-1)
+        plt.xlim(startn,endn)
         
     def OnTimes(self,event):
         import StringIO
