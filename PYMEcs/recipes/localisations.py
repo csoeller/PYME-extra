@@ -214,9 +214,9 @@ class ValidClumps(ModuleBase):
 
         # note: in coalesced data the clumpIndices are float!
         # this creates issues in comparisons unless these are converted to int before comparisons are made!!
-        # that is the reason for the astype conversions below
-        ids = inp[self.IDkey].astype('i')
-        validIDs = np.in1d(ids,np.unique(valid[self.IDkey].astype('i')))
+        # that is the reason for the rint and astype conversions below
+        ids = np.rint(inp[self.IDkey]).astype('i')
+        validIDs = np.in1d(ids,np.unique(np.rint(valid[self.IDkey]).astype('i')))
         
         mapped.addColumn('validID', validIDs.astype('f')) # should be float or int?
         
