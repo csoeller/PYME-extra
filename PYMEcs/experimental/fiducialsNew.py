@@ -51,12 +51,31 @@ class FiducialTracker:
                           helpText='Diagnose quality of fiducial correction')
         visFr.AddMenuItem('Experimental>Fiducials', "Compare fiducial and drift", self.fiducialvsdrift,
                           helpText='Compare fiducial and drift information')
+        visFr.AddMenuItem('Experimental>Corrections',"Fiducial - extract fiducial track and correct datasource",
+                          self.OnFiducialCorrectNew,
+                          helpText='faster tracking by inserting FiducialTrack and FiducialApplyFromFiducials modules')
         
         self.scaleFactor = -1e3
         self.shiftFrames = 0
         self.zeroAlignFrames = 200
         self.zDrift = None
 
+
+    def OnFiducialCorrectNew(self, event=None):
+        from PYMEcs.recipes import localisations
+        recipe = self.pipeline.recipe
+        ftrack = localisations.FiducialTrack(recipe, inputName='Fiducials',
+                                             outputName='fiducialAdded')
+        if not ftrack.configure_traits(kind='modal'):
+            return
+        recipe.add_module(ftrack)
+        recipe.add_module(localisations.FiducialApplyFromFiducials(recipe, inputData=self.pipeline.selectedDataSourceKey,
+                                                                   inputFiducials='fiducialAdded',
+                                                                   outputName='fiducialApplied',
+                                                                   outputFiducials='corrected_fiducials'))
+        recipe.execute()
+        self.pipeline.selectDataSource('fiducialApplied')
+            
     def OnFiducialTrack(self, event=None):
         """
 

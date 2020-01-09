@@ -35,6 +35,7 @@ class FiducialTrack(ModuleBase):
     filterScale = Float(11)
     filterMethod = Enum(tfs.FILTER_FUNCS.keys())
     clumpMinSize = Int(50)
+    singleFiducial = Bool(True)
 
     outputName = Output('fiducialAdded')
 
@@ -44,12 +45,21 @@ class FiducialTrack(ModuleBase):
         inp = namespace[self.inputName]
         mapped = tabular.mappingFilter(inp)
 
+        if self.singleFiducial:
+            # if all data is from a single fiducial we do not need to align
+            # we then avoid problems with incomplete tracks giving rise to offsets between
+            # fiducial track fragments
+            align = False
+        else:
+            align = True
+
         t, x, y, z, isFiducial = tfs.extractTrajectoriesClump(inp, clumpRadiusVar = 'error_x',
                                                               clumpRadiusMultiplier=self.radiusMultiplier,
-                                                              timeWindow=self.timeWindow, clumpMinSize=self.clumpMinSize)
+                                                              timeWindow=self.timeWindow, clumpMinSize=self.clumpMinSize,
+                                                              align=align)
         rawtracks = (t, x, y, z)
         tracks = tfs.AverageTrack(inp, rawtracks, filter=self.filterMethod,
-                                         filterScale=self.filterScale)
+                                         filterScale=self.filterScale,align=align)
         
         # add tracks for all calculated dims to output
         for dim in tracks.keys():

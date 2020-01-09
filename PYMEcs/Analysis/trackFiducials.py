@@ -37,7 +37,7 @@ FILTER_FUNCS = {
     } 
 
 def extractTrajectoriesClump(ds, clumpRadiusVar = 'error_x', clumpRadiusMultiplier=5.0, 
-                                  timeWindow=25, clumpMinSize=50):
+                                  timeWindow=25, clumpMinSize=50, align=True):
                                       
     import PYME.Analysis.points.DeClump.deClump as deClump
     #track beads through frames
@@ -83,13 +83,22 @@ def extractTrajectoriesClump(ds, clumpRadiusVar = 'error_x', clumpRadiusMultipli
                 isFiducial[clump_mask] = 1 # mark the event mask that this is a fiducial
                 
                 x_i_f = np.NaN*np.ones_like(t_f)
-                x_i_f[t_i]= x_i - x_i.mean()
-                
+                if align:
+                    x_i_f[t_i]= x_i - x_i.mean()
+                else:
+                    x_i_f[t_i]= x_i
+                    
                 y_i_f = np.NaN*np.ones_like(t_f)
-                y_i_f[t_i]= y_i - y_i.mean()
-
+                if align:
+                    y_i_f[t_i]= y_i - y_i.mean()
+                else:
+                    y_i_f[t_i]= y_i
+                    
                 z_i_f = np.NaN*np.ones_like(t_f)
-                z_i_f[t_i]= z_i - z_i.mean()
+                if align:
+                    z_i_f[t_i]= z_i - z_i.mean()
+                else:
+                    z_i_f[t_i]= z_i
                 
                 #clumps.append((x_i_f, y_i_f))
                 x_f.append(x_i_f)
@@ -105,16 +114,17 @@ def extractTrajectoriesClump(ds, clumpRadiusVar = 'error_x', clumpRadiusMultipli
 
     return (t_f, x_f, y_f, z_f, isFiducial)
 
-def AverageTrack(ds, tracks, filter='Gaussian', filterScale=10.0):
+def AverageTrack(ds, tracks, filter='Gaussian', filterScale=10.0, align=True):
 
     t_f, x_f, y_f, z_f = tracks
     t = ds['t'].astype('i')
     
-    def _mf(p, meas):
-        '''calculate the offset between trajectories'''
-        m_adj = meas + np.hstack([[0], p])[:,None]
+    # this function does not appear to be used anywhere
+    # def _mf(p, meas):
+    #     '''calculate the offset between trajectories'''
+    #     m_adj = meas + np.hstack([[0], p])[:,None]
         
-        return np.nansum(np.nanvar(m_adj, axis=0))
+    #     return np.nansum(np.nanvar(m_adj, axis=0))
         
     def _align(meas, tol=.1):
         n_iters = 0
@@ -136,11 +146,20 @@ def AverageTrack(ds, tracks, filter='Gaussian', filterScale=10.0):
         mm = np.nanmean(meas, 0)
         print 'Finished:', n_iters, dm
         return mm
+
+    def _simpleav(meas):
+        mm = np.nanmean(meas, 0)
+        return mm
         
-    x_corr = _align(x_f)
-    y_corr = _align(y_f)
-    z_corr = _align(z_f)
-    
+    if align:
+        x_corr = _align(x_f)
+        y_corr = _align(y_f)
+        z_corr = _align(z_f)
+    else:
+        x_corr = _simpleav(x_f)
+        y_corr = _simpleav(y_f)
+        z_corr = _simpleav(z_f)
+        
     filtered_corr_woffs = FILTER_FUNCS[filter](t_f, {'x' : x_corr, 'y':y_corr, 'z':z_corr}, filterScale)
     
     dims = filtered_corr_woffs.keys()
