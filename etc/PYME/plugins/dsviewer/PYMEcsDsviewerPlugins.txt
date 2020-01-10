@@ -3,3 +3,4 @@ PYMEcs.experimental.mapTools
 PYMEcs.experimental.meas2DplotDh5view
 PYMEcs.experimental.testChannelByName
 PYMEcs.experimental.FRC
+PYMEcs.experimental.regExtraCmaps

@@ -14,3 +14,4 @@ PYMEcs.experimental.timedSpecies
 PYMEcs.experimental.chaining
 PYMEcs.experimental.specLabeling
 PYMEcs.experimental.selectROIfilterTable
+PYMEcs.experimental.regExtraCmaps

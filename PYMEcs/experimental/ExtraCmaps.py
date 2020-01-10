@@ -104,6 +104,44 @@ def overflow_wrap(cmapname, underflowcol = 'magenta', overflowcol = 'lime', perc
     mymap.name = cmap.name + '_overflow'
     return mymap
 
+# FIJI inspired colour maps
+
+# cyan hot (for pylab devide all values by 255.0)
+# red: 0 0, 170 0, 255 255
+# green: 0 0, 170 255, 255, 255
+# blue: 0 0, 85, 255, 255 255
+
+# cb_skyblue
+# red: 0 0, 255 85
+# green: 0 0, 255 180
+# blue: 0 0, 255 232
+
+# generate a 3-tupel for continuous colour and normalise to 0..1
+def contc(x,y):
+    return (x/255.0,y/255.0,y/255.0)
+
+cyan_hot_d = {
+    'red'   : [contc(0,0),contc(170,0),contc(255,255)],
+    'green' : [contc(0,0),contc(170,255),contc(255,255)],
+    'blue'  : [contc(0,0),contc(85,255),contc(255,255)]
+}
+
+cb_skyblue_d = {
+    'red'   : [contc(0,0),contc(255,85)],
+    'green' : [contc(0,0),contc(255,180)],
+    'blue'  : [contc(0,0),contc(255,232)]
+}
+
+cb_skyblue2_d = {
+    'red'   : [contc(0,0),contc(200,85),contc(255,255)],
+    'green' : [contc(0,0),contc(200,180),contc(255,255)],
+    'blue'  : [contc(0,0),contc(200,232),contc(255,255)]
+}
+
+cm_ch = mcol.LinearSegmentedColormap('cyan_hot',cyan_hot_d)
+cm_cbskb = mcol.LinearSegmentedColormap('cb_skyblue',cb_skyblue_d)
+cm_cbskb2 = mcol.LinearSegmentedColormap('cb_skyblue2',cb_skyblue2_d)
+
 def main():
     import numpy as np
     a=np.outer(np.arange(0,1,0.01),np.ones(10))
