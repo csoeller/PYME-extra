@@ -1,16 +1,10 @@
-from PYMEcs.experimental.ExtraCmaps import cm_ch, cm_cbskb, cm_cbskb2
-from PYME.misc.extraCMaps import regCmap
-import pylab
+from PYMEcs.misc.ExtraCmaps import registerCmaps
 
-registered = False
+# this module hijacks the plugin system to run colour map registration
+# at startup of visgui, dsviewer
+
+# I am exploring the alternative option to do this via the startup console script
+# which has the advantage of doing this at startup for dsviewer which is an issue otherwise
 
 def Plug(arg):
-    global registered
-    
-    if not registered:
-        regCmap(cm_ch)
-        regCmap(cm_cbskb)
-        regCmap(cm_cbskb2)
-
-        pylab.cm.cmapnames.sort()
-        registered = True
+    registerCmaps()
