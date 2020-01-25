@@ -762,7 +762,9 @@ class QPCalc:
 
     def OnSaveMeasurements(self,event):
         from PYME.recipes import runRecipe
+        from PYMEcs.IO.darkTimes import saveDarkTimesCSV
         import os.path
+        import yaml
         
         if len(self.qpMeasurements.keys()) > 0:
             filename = wx.FileSelector('Save all measurements (select basename)...',
@@ -773,7 +775,11 @@ class QPCalc:
                 base, ext = os.path.splitext(filename)
                 for ds in self.qpMeasurements.keys():
                     for chan in self.qpMeasurements[ds]:
-                        runRecipe.saveOutput(self.qpMeasurements[ds][chan]['measures'], base + '_' + ds + '_' + chan + ext)
+                        qpm = self.qpMeasurements[ds][chan]
+                        runRecipe.saveOutput(qpm['measures'], base + '_' + ds + '_' + chan + ext)
+                        saveDarkTimesCSV(qpm['measures']['objectID'],qpm['darkTimes'], base + '_' + ds + '_' + chan + '_' + 'dts.csv')
+                        with open(base + '_' + ds + '_' + chan + '_' + 'state.yaml', 'w') as stream:
+                            yaml.dump(qpm['state'], stream)
 
     def OnLoadMeasurements(self,event):
         import PYMEcs.IO.tabular as tb

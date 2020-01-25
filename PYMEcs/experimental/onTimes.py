@@ -47,7 +47,7 @@ class onTimer:
                           self.OnPlotProperty,
                           helpText='plots a time series of the selected events in a "single channel trace" - using a user chosen event property')
         visFr.AddMenuItem('Experimental>Event Processing',
-                          "plot time gating from selected events",
+                          "plot time gating from selected events\tCtrl+G",
                           self.OnPlotTser,
                           helpText='plots the time series of gating of detected molecules from the selected group of events')
 

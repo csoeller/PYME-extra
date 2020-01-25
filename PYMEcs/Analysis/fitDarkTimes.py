@@ -390,6 +390,7 @@ def measureObjectsByID2(datasource, idname='objectID', settings=FitSettings()):
     ids = idall[idall > 0] # only accept nonzero IDs
     
     meas = np.zeros(ids.size, dtype=measureDType2)
+    darkTimes = []
 
     # check which type of time processing we are going to use
     if ('clumpIndex' in ds.keys()) and not ('fitError_x0' in ds.keys()): # heuristic to only do on coalesced data
@@ -430,6 +431,7 @@ def measureObjectsByID2(datasource, idname='objectID', settings=FitSettings()):
                 te, dte, nevents, nevtscorr = extractEventTimes(ds,idx,useTminTmax=usingTminTmax)
                 meas[j]['NEvents'] = nevents
                 meas[j]['NDarktimes'] = dte.size
+                darkTimes.append(dte)
                 if usingTminTmax:
                     meas[j]['NEventsCorr'] = nevtscorr
                 if dte.size >= ndtmin:
@@ -455,14 +457,17 @@ def measureObjectsByID2(datasource, idname='objectID', settings=FitSettings()):
     # easily add columns and save using tabular methods
     rmeas = TabularRecArrayWrap(meas, validCols=validCols+['objectID'])
     
-    return {'measures': rmeas, 'validColumns': validCols,
+    return {'measures': rmeas,
+            'darkTimes' : darkTimes,
+            'validColumns': validCols,
             'state' : {
                 'usingClumpIndex': usingClumpIndex,
                 'usingTminTmax': usingTminTmax,
                 'IDcolumn': settings.IDcolumn,
                 'coalescedProcessing': settings.coalescedProcessing,
                 'Tau2Constant': settings.Tau2Constant,
-                'Tau2FixedValue': settings.Tau2FixedValue
+                'Tau2FixedValue': settings.Tau2FixedValue,
+                'FitMode' : settings.fitMode
             }}
 
 def retrieveMeasuresForIDs2(measurements,idcol):
@@ -523,7 +528,7 @@ def extractEventTimes(datasource, idx = None, useTminTmax = True, return_modes =
         return (tc, dtg, nevents, nevents_corrected)
 
    
-def fitTaus(x_t, y_h, fitTau2 = False, tau2const = 0.0, return_tau1est = False):
+def fitTaus(x_t, y_h, fitTau2 = False, tau2const = 0.0, return_tau1est = False, tau2max=8.0):
 
     # could be refined by subtracting off the histogram for values around 9 frames or so
     # and then ask for reaching 63% off the remaining difference to 1
@@ -535,7 +540,7 @@ def fitTaus(x_t, y_h, fitTau2 = False, tau2const = 0.0, return_tau1est = False):
     # add bounds on atau1 (between 0..1) and tau2 (0..8)
 
     if fitTau2:
-        popt,pcov = curve_fit(cumumultiexpfit,x_t,y_h, p0=(tau1est,2.0,0.8),bounds=(0, (np.inf, 8.0, 1.0)))
+        popt,pcov = curve_fit(cumumultiexpfit,x_t,y_h, p0=(tau1est,2.0,0.8),bounds=(0, (np.inf, tau2max, 1.0)))
         (tau1, tau2, atau1) = popt
         (tau1err, tau2err, atau1err) = np.sqrt(np.diag(pcov))
         chisqr = ((y_h - cumumultiexpfit(x_t,*popt))**2).sum()/(x_t.size-1)
