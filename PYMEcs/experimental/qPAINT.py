@@ -777,7 +777,10 @@ class QPCalc:
                     for chan in self.qpMeasurements[ds]:
                         qpm = self.qpMeasurements[ds][chan]
                         runRecipe.saveOutput(qpm['measures'], base + '_' + ds + '_' + chan + ext)
-                        saveDarkTimesCSV(qpm['measures']['objectID'],qpm['darkTimes'], base + '_' + ds + '_' + chan + '_' + 'dts.csv')
+                        saveDarkTimesCSV(qpm['measures']['objectID'],qpm['darkTimes'],
+                                         base + '_' + ds + '_' + chan + '_' + 'dts.csv')
+                        saveDarkTimesCSV(qpm['measures']['objectID'],qpm['times'],
+                                         base + '_' + ds + '_' + chan + '_' + 'times.csv')
                         with open(base + '_' + ds + '_' + chan + '_' + 'state.yaml', 'w') as stream:
                             yaml.dump(qpm['state'], stream)
 

@@ -391,6 +391,7 @@ def measureObjectsByID2(datasource, idname='objectID', settings=FitSettings()):
     
     meas = np.zeros(ids.size, dtype=measureDType2)
     darkTimes = []
+    times = []
 
     # check which type of time processing we are going to use
     if ('clumpIndex' in ds.keys()) and not ('fitError_x0' in ds.keys()): # heuristic to only do on coalesced data
@@ -432,6 +433,7 @@ def measureObjectsByID2(datasource, idname='objectID', settings=FitSettings()):
                 meas[j]['NEvents'] = nevents
                 meas[j]['NDarktimes'] = dte.size
                 darkTimes.append(dte)
+                times.append(te)
                 if usingTminTmax:
                     meas[j]['NEventsCorr'] = nevtscorr
                 if dte.size >= ndtmin:
@@ -459,6 +461,7 @@ def measureObjectsByID2(datasource, idname='objectID', settings=FitSettings()):
     
     return {'measures': rmeas,
             'darkTimes' : darkTimes,
+            'times' : times,
             'validColumns': validCols,
             'state' : {
                 'usingClumpIndex': usingClumpIndex,
