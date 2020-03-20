@@ -4,6 +4,12 @@ import numpy as np
 import math
 
 
+def test_fiducial(pipeline,mode='Gaussian',scale=11.0):
+    import PYMEcs.Analysis.trackFiducials as tf
+    t_f, x_f, y_f, z_f, isFiducial = tf.extractTrajectoriesClump(pipeline)
+    avt = tf.AverageTrack(pipeline,[t_f, x_f, y_f, z_f],filter=mode, filterScale=scale)
+    return avt
+
 def tclump(pipeline):
     p = pipeline
     tc = np.arange(p['tmin'][0],p['tmax'][0]+1)
