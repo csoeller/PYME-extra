@@ -29,11 +29,12 @@ def makeFilter(filtFunc):
             out[k] = filtFunc(np.interp(t, r_t, r_v), scale)
         return out
     return ffcn
-    
+
 FILTER_FUNCS = {
     'Gaussian' : makeFilter(ndimage.gaussian_filter),
     'Uniform' : makeFilter(ndimage.uniform_filter),
-    'Median' : makeFilter(ndimage.median_filter)
+    # must be int(size), otherwise gets float type error!!!!!
+    'Median' : makeFilter(lambda input, size: ndimage.median_filter(input,int(size)))
     } 
 
 def extractTrajectoriesClump(ds, clumpRadiusVar = 'error_x', clumpRadiusMultiplier=5.0, 
