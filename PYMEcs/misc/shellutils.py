@@ -4,6 +4,40 @@ import numpy as np
 import math
 
 
+def bigClumpStats(pipeline,minsize=15):
+    import numpy as np
+    import pandas as pd
+    
+    p = pipeline # convenient shortcut
+    bgn = 'fitResults_background'
+
+    ci, idx = np.unique(p['clumpIndex'], return_index=True)
+    cisz = p['clumpSize'][idx]
+    ci2 = ci[cisz>minsize]
+    cisz2=cisz[cisz>minsize]
+
+    if ci2.size < 1:
+        return None
+
+    x = np.zeros_like(ci2,dtype='f')
+    sx = np.zeros_like(ci2,dtype='f')
+    ex = np.zeros_like(ci2,dtype='f')
+    bg = np.zeros_like(ci2,dtype='f')
+    np = np.zeros_like(ci2,dtype='f')
+
+    for j,this_ci in enumerate(ci2):
+        this_idx = p['clumpIndex'] == this_ci
+        x[j] = p['x'][this_idx].mean()
+        sx[j] = p['x'][this_idx].std()
+        ex[j] = p['error_x'][this_idx].mean()
+        bg[j] = p[bgn][this_idx].mean()
+        np[j] = p['nPhotons'][this_idx].mean()
+
+    epc = p.mdh['Camera.ElectronsPerCount']
+    
+    return pd.DataFrame.from_dict({'x':x, 'x_std':sx, 'error_x':ex, 'background':bg*epc, 'nPhotons':np, 'clumpIndex': ci2})
+
+
 def test_fiducial(pipeline,mode='Gaussian',scale=11.0):
     import PYMEcs.Analysis.trackFiducials as tf
     t_f, x_f, y_f, z_f, isFiducial = tf.extractTrajectoriesClump(pipeline)
