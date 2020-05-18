@@ -2,7 +2,7 @@ import wx
 import numpy as np
 import sys
 from scipy import ndimage
-from PYMEcs.misc.guiMsgBoxes import Warn
+from PYMEcs.misc.guiMsgBoxes import Warn, Info
 
 from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float
 from traitsui.api import View, Item, Group
@@ -50,6 +50,24 @@ class onTimer:
                           "plot time gating from selected events\tCtrl+G",
                           self.OnPlotTser,
                           helpText='plots the time series of gating of detected molecules from the selected group of events')
+        visFr.AddMenuItem('Experimental>Event Processing',
+                          "Event density in ROI\tCtrl+D",
+                          self.OnEvtDensity,
+                          helpText='calculate the event density (events/unit area) in the current ROI/image area')
+
+
+    def OnEvtDensity(self,event):
+        from PYMEcs.Analysis.eventProperties import evtDensity, getarea
+        visFr = self.visFr
+        pipeline = visFr.pipeline
+
+        dens = evtDensity(pipeline)
+        area = getarea(pipeline)
+
+        if dens is None:
+            Warn(visFr,'area too small (%.2f um^2)' % (area))
+        else:
+            Info(visFr,'Event density: %.1f events per um^2\nArea probed: %.2f um^2' % (dens,area))
 
 
     def OnPlotTser(self,event):
