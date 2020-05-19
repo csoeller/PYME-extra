@@ -61,13 +61,19 @@ class onTimer:
         visFr = self.visFr
         pipeline = visFr.pipeline
 
-        dens = evtDensity(pipeline)
+        dens, intens, trange = evtDensity(pipeline)
         area = getarea(pipeline)
 
         if dens is None:
             Warn(visFr,'area too small (%.2f um^2)' % (area))
         else:
-            Info(visFr,'Event density: %.1f events per um^2\nArea probed: %.2f um^2' % (dens,area))
+            infostr = \
+"""
+Event density:        %.1f events/um^2
+Normalised intensity: %.1f events/um^2/5K-fr
+Area probed:          %.2f um^2
+Time range:           %.1fK frames""" % (dens, intens, area, trange)
+            Info(visFr,infostr)
 
 
     def OnPlotTser(self,event):

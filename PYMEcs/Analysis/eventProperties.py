@@ -35,9 +35,11 @@ def getarea(p):
 
 def evtDensity(p):
     area = getarea(p)
+    trange = p['t'].max()-p['t'].min()+1
     nEvents = p['x'].size
 
     if area > 1e-6:
-        return nEvents / area
+        dens = nEvents / area
+        return (dens, dens / trange * 5e3, trange)
     else:
         return None
