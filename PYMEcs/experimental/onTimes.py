@@ -72,7 +72,7 @@ class onTimer:
 Event density:        %.1f events/um^2
 Normalised intensity: %.1f events/um^2/5K-fr
 Area probed:          %.2f um^2
-Time range:           %.1fK frames""" % (dens, intens, area, trange)
+Time range:           %.2fK frames""" % (dens, intens, area, trange/1e3)
             Info(visFr,infostr)
 
 
