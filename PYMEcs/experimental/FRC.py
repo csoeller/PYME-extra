@@ -138,6 +138,72 @@ def frc(i0,i1,vszx,vszy,muwidth = 2, zeropad = False, lowessFraction = 1/20.0):
     
     return (bcc,frcv,smoothed,L)
 
+def frc_from_image(image,channels,muwidth=2,zeropad=True,lowessFraction=5.0*0.01):
+    im0 = image.data[:,:,:,0].squeeze()
+    im1 = image.data[:,:,:,1].squeeze()
+
+    mdh = image.mdh
+    vx = 1e3*mdh['voxelsize.x']
+    vy = 1e3*mdh['voxelsize.y']
+    freqs,frc1,smoothed,L = frc(im0,im1,vx,vy,muwidth=2,zeropad=True,
+                                lowessFraction=5.0*0.01)
+    halfbit = sigmaline(L)
+    fhb = zc.zerocross1d(freqs,smoothed-halfbit)
+    f7= zc.zerocross1d(freqs,smoothed-1.0/7.0)
+    
+    return (freqs,frc1,smoothed,fhb,f7,halfbit)
+
+def frc_plot(freqs,frc1,smoothed,fhb,f7,halfbit,chanNames=['block0','block1'],
+             showGrid=True,showHalfbitThreshold=False):
+    import matplotlib.pyplot as plt
+        
+    from mpl_toolkits.axes_grid1 import host_subplot
+    import mpl_toolkits.axisartist as AA
+
+    plt.figure()
+    ax = host_subplot(111, axes_class=AA.Axes)
+    ax.plot(freqs,frc1)
+    ax.plot(freqs,smoothed)
+    if showHalfbitThreshold:
+        ax.plot(freqs,halfbit)
+    ax.plot(freqs,1/7.0*np.ones(freqs.shape))
+
+    if len(f7) > 0:
+        ax.plot([f7[0],f7[0]],[0,1],'--')
+        ax.text(0.55, 0.8,'res-1/7     = %3.1f nm' % (1.0/f7[0]),horizontalalignment='left',
+                     verticalalignment='center', transform=plt.gca().transAxes)
+    else:
+        ax.text(0.55, 0.8,'res-1/7 - no intercept',horizontalalignment='left',
+                    verticalalignment='center', transform=plt.gca().transAxes)
+
+    if showHalfbitThreshold:
+        if len(fhb) > 0:
+            ax.plot([fhb[0],fhb[0]],[0,1],'--')
+            ax.text(0.55, 0.9,'res-halfbit = %3.1f nm' % (1.0/fhb[0]),horizontalalignment='left',
+                    verticalalignment='center', transform=plt.gca().transAxes)
+        else:
+            ax.text(0.55, 0.9,'res-halfbit - no intercept',horizontalalignment='left',
+                    verticalalignment='center', transform=plt.gca().transAxes)
+
+    ax.plot(freqs,np.zeros(freqs.shape),'--')
+    ax.set_xlim(0,freqs[-1])
+    ax.set_xlabel('spatial frequency (nm^-1)')
+    ax.set_ylabel('FRC values')
+    xt = np.array([10., 15, 20, 30, 40, 50, 75, 150])
+    ft = 1.0 / xt
+
+    ax2 = ax.twin()  # ax2 is responsible for "top" axis and "right" axis
+    ax2.set_xticks(ft[::-1])
+    ax2.set_xticklabels(['%d' % xi for xi in xt[::-1]],rotation=90)
+    ax2.set_xlabel('resolution (nm)')
+    if showGrid:
+        ax2.grid(True)
+        
+    ax2.axis["right"].major_ticklabels.set_visible(False)
+    ax2.axis["top"].major_ticklabels.set_visible(True)
+
+    plt.title("FRC for channels %s and %s" % (chanNames[0],chanNames[1]), y=1.08)
+    plt.show()
 
 import PYMEcs.Analysis.zerocross as zc
 from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float, Bool
@@ -174,70 +240,16 @@ class FRCplotter:
 
         chans = dlg.GetChans()
         dlg.Destroy()
-    
-        im0 = image.data[:,:,:,chans[0]].squeeze()
-        im1 = image.data[:,:,:,chans[1]].squeeze()
-
-        mdh = self.dsviewer.image.mdh
-        vx = 1e3*mdh['voxelsize.x']
-        vy = 1e3*mdh['voxelsize.y']
         chanNames = [names[chans[0]],names[chans[1]]]
+
+        freqs,frc1,smoothed,fhb,f7,halfbit = frc_from_image(image,chans,muwidth=2,
+                                                    zeropad=self.frcSettings.ZeroPadding,
+                                                    lowessFraction=self.frcSettings.LowessSmoothingPercentage*0.01)
+        frc_plot(freqs,frc1,smoothed,fhb,f7,halfbit,chanNames,
+                 showHalfbitThreshold=self.frcSettings.ShowHalfbitThreshold,
+                 showGrid=self.frcSettings.ShowGrid)
         
-        freqs,frc1,smoothed,L = frc(im0,im1,vx,vy,muwidth=2,zeropad=self.frcSettings.ZeroPadding,
-                                    lowessFraction=self.frcSettings.LowessSmoothingPercentage*0.01)
-        halfbit = sigmaline(L)
-        fhb = zc.zerocross1d(freqs,smoothed-halfbit)
-        f7= zc.zerocross1d(freqs,smoothed-1.0/7.0)
         
-        import matplotlib.pyplot as plt
-        
-        from mpl_toolkits.axes_grid1 import host_subplot
-        import mpl_toolkits.axisartist as AA
-
-        plt.figure()
-        ax = host_subplot(111, axes_class=AA.Axes)
-        ax.plot(freqs,frc1)
-        ax.plot(freqs,smoothed)
-        if self.frcSettings.ShowHalfbitThreshold:
-            ax.plot(freqs,halfbit)
-        ax.plot(freqs,1/7.0*np.ones(freqs.shape))
-
-        if len(f7) > 0:
-            ax.plot([f7[0],f7[0]],[0,1],'--')
-            ax.text(0.55, 0.8,'res-1/7     = %3.1f nm' % (1.0/f7[0]),horizontalalignment='left',
-                     verticalalignment='center', transform=plt.gca().transAxes)
-        else:
-            ax.text(0.55, 0.8,'res-1/7 - no intercept',horizontalalignment='left',
-                     verticalalignment='center', transform=plt.gca().transAxes)
-
-        if self.frcSettings.ShowHalfbitThreshold:
-            if len(fhb) > 0:
-                ax.plot([fhb[0],fhb[0]],[0,1],'--')
-                ax.text(0.55, 0.9,'res-halfbit = %3.1f nm' % (1.0/fhb[0]),horizontalalignment='left',
-                         verticalalignment='center', transform=plt.gca().transAxes)
-            else:
-                ax.text(0.55, 0.9,'res-halfbit - no intercept',horizontalalignment='left',
-                         verticalalignment='center', transform=plt.gca().transAxes)
-
-        ax.plot(freqs,np.zeros(freqs.shape),'--')
-        ax.set_xlim(0,freqs[-1])
-        ax.set_xlabel('spatial frequency (nm^-1)')
-        ax.set_ylabel('FRC values')
-        xt = np.array([10., 15, 20, 30, 40, 50, 75, 150])
-        ft = 1.0 / xt
-
-        ax2 = ax.twin()  # ax2 is responsible for "top" axis and "right" axis
-        ax2.set_xticks(ft[::-1])
-        ax2.set_xticklabels(['%d' % xi for xi in xt[::-1]],rotation=90)
-        ax2.set_xlabel('resolution (nm)')
-        if self.frcSettings.ShowGrid:
-            ax2.grid(True)
-        
-        ax2.axis["right"].major_ticklabels.set_visible(False)
-        ax2.axis["top"].major_ticklabels.set_visible(True)
-
-        plt.title("FRC for channels %s and %s" % (chanNames[0],chanNames[1]), y=1.08)
-        plt.show()
 
 def Plug(dsviewer):
     """Plugs this module into the gui"""
