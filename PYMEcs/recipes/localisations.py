@@ -208,6 +208,58 @@ class ClusterTimeRange(ModuleBase):
         
         namespace[self.outputName] = mapped
 
+@register_module('ClusterStats')
+class ClusterStats(ModuleBase):
+    
+    inputName = Input('with_clumps')
+    IDkey = CStr('clumpIndex')
+    StatMethod = Enum(['std','min','max', 'mean', 'median', 'count', 'sum'])
+    StatKey = CStr('x')
+    outputName = Output('withClumpStats')
+
+    def execute(self, namespace):
+        from scipy.stats import binned_statistic
+        
+        inp = namespace[self.inputName]
+        mapped = tabular.mappingFilter(inp)
+
+        ids = inp[self.IDkey] # I imagine this needs to be an int type key
+        prop = inp[self.StatKey]
+        maxid = int(ids.max())
+        edges = -0.5+np.arange(maxid+2)
+        resstat = binned_statistic(ids, prop, statistic=self.StatMethod, bins=edges)
+
+        mapped.addColumn(self.StatKey+"_"+self.StatMethod, resstat[0][ids])
+        
+        # propogate metadata, if present
+        try:
+            mapped.mdh = inp.mdh
+        except AttributeError:
+            pass
+        
+        namespace[self.outputName] = mapped
+
+    @property
+    def _key_choices(self):
+        #try and find the available column names
+        try:
+            return sorted(self._parent.namespace[self.inputName].keys())
+        except:
+            return []
+
+    @property
+    def default_view(self):
+        from traitsui.api import View, Group, Item
+        from PYME.ui.custom_traits_editors import CBEditor
+
+        return View(Item('inputName', editor=CBEditor(choices=self._namespace_keys)),
+                    Item('_'),
+                    Item('IDkey', editor=CBEditor(choices=self._key_choices)),
+                    Item('StatKey', editor=CBEditor(choices=self._key_choices)),
+                    Item('StatMethod'),
+                    Item('_'),
+                    Item('outputName'), buttons=['OK'])
+
 @register_module('ValidClumps')
 class ValidClumps(ModuleBase):
     
