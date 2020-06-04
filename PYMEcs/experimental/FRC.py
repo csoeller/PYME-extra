@@ -139,8 +139,8 @@ def frc(i0,i1,vszx,vszy,muwidth = 2, zeropad = False, lowessFraction = 1/20.0):
     return (bcc,frcv,smoothed,L)
 
 def frc_from_image(image,channels,muwidth=2,zeropad=True,lowessFraction=5.0*0.01):
-    im0 = image.data[:,:,:,0].squeeze()
-    im1 = image.data[:,:,:,1].squeeze()
+    im0 = image.data[:,:,:,channels[0]].squeeze()
+    im1 = image.data[:,:,:,channels[1]].squeeze()
 
     mdh = image.mdh
     vx = 1e3*mdh['voxelsize.x']
