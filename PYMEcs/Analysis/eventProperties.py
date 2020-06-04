@@ -12,6 +12,7 @@ def getarea(p):
         height = p.filterKeys['y'][1]-p.filterKeys['y'][0]
     else:
         height = p.mdh.Camera.ROIHeight*p.mdh.voxelsize_nm.y
+    # all distances are in nm and we want um^2
     area1 = 1e-6*width*height
 
     nEvents = p['x'].size
@@ -21,15 +22,16 @@ def getarea(p):
 
         width = xrange[1]-xrange[0]
         height = yrange[1]-yrange[0]
-
+        # all distances are in nm and we want um^2
         area2 = 1e-6*width*height
 
+    if ('x' in p.filterKeys) and ('y' in p.filterKeys):
+        area = area1
+    else:
         if abs(area1-area2)/area1 > 0.2: # we have a > 20 % difference
             area = area2
         else:
             area = area1
-    else:
-        area = area1
         
     return area # area in um^2
 
