@@ -735,7 +735,7 @@ def subsampidx(arraylen, percentage=10):
     return idx
 
 from scipy.stats import gaussian_kde
-def scatterdens(x,y,subsample=1.0, s=40, xlabel=None, ylabel=None, **kwargs):
+def scatterdens(x,y,subsample=1.0, s=10, xlabel=None, ylabel=None, **kwargs):
     xf = x.flatten()
     yf = y.flatten()
     if subsample < 1.0:
@@ -749,7 +749,7 @@ def scatterdens(x,y,subsample=1.0, s=40, xlabel=None, ylabel=None, **kwargs):
     estimator = gaussian_kde([xs,ys]) 
     density = estimator.evaluate([xf,yf])
     print "density min, max: %f, %f" % (density.min(), density.max())
-    plt.scatter(xf,yf,c=density,marker='o',linewidth='0',zorder=3,s=s,**kwargs)
+    plt.scatter(xf,yf,c=density,marker='o',s=s,**kwargs)
     if xlabel is not None:
         plt.xlabel(xlabel)
     if ylabel is not None:
