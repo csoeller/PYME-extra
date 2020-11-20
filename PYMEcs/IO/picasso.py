@@ -5,7 +5,11 @@ import math
 import os
 
 def picasso2pyme(locs,mdh):
-    nmperpix = mdh['Camera.Pixelsize']
+    try:
+        nmperpix = mdh['Camera.Pixelsize']
+    except KeyError:
+        nmperpix = mdh['Pixelsize']
+        
     pyme = {}
     pyme['x'] = locs['x']*nmperpix
     pyme['y'] = locs['y']*nmperpix
@@ -18,7 +22,7 @@ def picasso2pyme(locs,mdh):
     return pyme
 
 def struc_from_mdh(mdh):
-    if 'Structure.HandleStruct' not in mdh.keys():
+    if mdh is None or 'Structure.HandleStruct' not in mdh.keys():
         return None
     struc = {}
     nmperpix = float(mdh['Camera.Pixelsize'])
@@ -33,13 +37,27 @@ def struc_from_mdh(mdh):
         struc[key] = np.array([(npixels-float(i)-offshalfpix)*nmperpix for i in mdh["Structure.%s" % key].split(',')])
     return struc
 
+
+def parse_dicts(dicts):
+    import re
+    mdh = None
+    strucmdh = None
+    for d in dicts:
+        if any (re.match('pixelsize',key,re.I) for key in d.keys()):
+            mdh = d
+    for d in dicts:
+        if any (re.match('Structure',key,re.I) for key in d.keys()):
+            strucmdh = d    
+    return (mdh,strucmdh)
+
 def read_picasso_hdf(name):
     locs = pd.read_hdf(name,'locs')
     basename, file_extension = os.path.splitext(name)
     with open(basename+'.yaml') as file:
-        mdh, about = yaml.load_all(file)
+        finf = list(yaml.load_all(file, Loader=yaml.FullLoader))
+    mdh, strucmdh = parse_dicts(finf)
     pymedf = pd.DataFrame(picasso2pyme(locs,mdh))
-    struc = struc_from_mdh(mdh)
+    struc = struc_from_mdh(strucmdh)
     return pymedf, mdh, struc
 
 def pymedf2csv(pymedf,filename):

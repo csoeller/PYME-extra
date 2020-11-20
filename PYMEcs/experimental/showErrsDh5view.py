@@ -2,17 +2,25 @@ import wx
 from  wx.lib.dialogs import ScrolledMessageDialog
 from PYMEcs.misc.guiMsgBoxes import Warn
 
+from PYMEcs.misc.versionCheck import PYMEversionCheck
+try:
+   from PYME.DSView.modules._base import Plugin
+except ImportError:
+   PYMEversionCheck('PluginClass')
+
 def isDarwin():
    import os
    from sys import platform
    return platform == "darwin"
 
-class ShowErr:
+class ShowErr(Plugin):
    """
 
    """
    def __init__(self, dsviewer):
-      self.dsviewer = dsviewer
+
+      Plugin.__init__(self, dsviewer)
+      
       self.txtwin = None
       dsviewer.AddMenuItem('Experimental', 'Errors in scrolled message dialog\tCtrl+E', self.OnErrScrolledDialog)
 
@@ -47,4 +55,4 @@ class ShowErr:
 
 def Plug(dsviewer):
     """Plugs this module into the gui"""
-    dsviewer.showErr = ShowErr(dsviewer)
+    return ShowErr(dsviewer)

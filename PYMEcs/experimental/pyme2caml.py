@@ -5,7 +5,7 @@ def pipelineSaveCSV(pipeline,filename,keys):
     pipeline.save_txt(filename,keys)
 
 
-def p_populate(pipeline,keys):
+def p_fileinfo(pipeline,keys):
     xlim = [float(pipeline['x'].min()),float(pipeline['x'].max())]
     ylim = [float(pipeline['y'].min()),float(pipeline['y'].max())]
     fileinfo = dict(xCol = keys.index('x'),
@@ -30,10 +30,10 @@ def p_populate(pipeline,keys):
 
 def pipelineSaveJSON(pipeline,filename,keys):
     import json
-    fileinfo = p_populate(pipeline,keys)
+    fileinfo = p_fileinfo(pipeline,keys)
     
-    with open(filename,"w") as file:
-        json.dump(fileinfo, file,skipkeys=True)
+    with open(filename,"w+") as file:
+        json.dump(fileinfo, file,skipkeys=True,indent=3)
 
 
 class IOcaml:
