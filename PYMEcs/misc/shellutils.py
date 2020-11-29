@@ -1,3 +1,4 @@
+from __future__ import print_function    # (at top of module)
 from PYME.Analysis.piecewise import piecewiseLinear
 import matplotlib.pylab as plt
 import numpy as np
@@ -183,12 +184,12 @@ def seriestiming(mdh=None):
         tinfo['start'] = mdh['Source.StartTime']
         tinfo['end'] = _mcheck(mdh,'Source.EndTime')
     else:
-        print "no timing info found"
+        print("no timing info found")
         return
-    print "Start\t\t%s" % _tformat(tinfo['start'])
+    print("Start\t\t%s" % _tformat(tinfo['start']))
     if tinfo['end']:
-        print "End\t\t\t%s" % _tformat(tinfo['end'])
-        print "Duration\t%.2f s (%.1f min)" % (tinfo['end']-tinfo['start'],(tinfo['end']-tinfo['start'])/60.0)
+        print("End\t\t\t%s" % _tformat(tinfo['end']))
+        print("Duration\t%.2f s (%.1f min)" % (tinfo['end']-tinfo['start'],(tinfo['end']-tinfo['start'])/60.0))
 
 def getDriftPars(mdh=None):
     if mdh is None:
@@ -196,10 +197,10 @@ def getDriftPars(mdh=None):
     try:
         dc = mdh['DriftCorrection']
     except:
-        print 'could not find DriftCorrection info'
+        print('could not find DriftCorrection info')
         return None
     else:
-        print 'found drift correction info'
+        print('found drift correction info')
 
     # estimate the number of frames or fall back to default
     try:
@@ -292,11 +293,11 @@ def imagestats():
     import scipy.ndimage as nd
     image = getvar('image',inmodule=True)
     if image is None:
-        print 'could not find image'
+        print('could not find image')
         return
     do = getvar('do',inmodule=True)
     if do is None:
-        print 'could not find display object'
+        print('could not find display object')
         return
     
     data = image.data[:,:,do.zp].squeeze()
@@ -313,24 +314,24 @@ def defaultbase():
     import os.path
     image = getvar('image',inmodule=True)
     if image is None:
-        print 'could not find image'
+        print('could not find image')
         return
     return os.path.splitext(os.path.basename(image.filename))[0]
 
 def saveSelection(fname):
     do = getvar('do',inmodule=True)
     if do is None:
-        print 'could not find display object'
+        print('could not find display object')
         return
     lx, ly, hx, hy = do.GetSliceSelection()
     image = getvar('image',inmodule=True)
     if image is None:
-        print 'could not find image'
+        print('could not find image')
         return
     filen = image.filename
 
-    print 'source file %s' % (filen)
-    print 'selection ', (lx,ly,hx,hy)
+    print('source file %s' % (filen))
+    print('selection ', (lx,ly,hx,hy))
     f = open(fname,'w')
     f.write("%s\n" % filen)
     for item in (lx,ly,hx,hy):
@@ -537,7 +538,7 @@ def savitzky_golay(y, window_size, order, deriv=0):
     try:
         window_size = np.abs(np.int(window_size))
         order = np.abs(np.int(order))
-    except ValueError, msg:
+    except (ValueError, msg):
         raise ValueError("window_size and order have to be of type int")
     if window_size % 2 != 1 or window_size < 1:
         raise TypeError("window_size size must be a positive odd number")
@@ -686,7 +687,7 @@ def darkCal(dataSource, integrationTimes,transitionTimes):
     vs = []
     endTimes = transitionTimes[1:]+[-1]
     for istart, istop in zip(transitionTimes, endTimes):
-        print "starting at %d, using %d frames..." % (istart,istop-istart)
+        print("starting at %d, using %d frames..." % (istart,istop-istart))
         m, v = meanvards(dataSource,istart,istop)
         ms.append(m)
         vs.append(v)
@@ -721,7 +722,7 @@ def dcfit(ms,integrationTimes):
     p_value = z2d()
     std_err = z2d()
     for x in range(sz[0]):
-        print "line %d" % (x) + '\r',
+        print("line %d" % (x) + '\r')
         sys.stdout.flush()
         for y in range(sz[1]):
             dc[x,y], offs[x,y], r_value[x,y], p_value[x,y], std_err[x,y] = \
@@ -748,7 +749,7 @@ def scatterdens(x,y,subsample=1.0, s=10, xlabel=None, ylabel=None, **kwargs):
         
     estimator = gaussian_kde([xs,ys]) 
     density = estimator.evaluate([xf,yf])
-    print "density min, max: %f, %f" % (density.min(), density.max())
+    print("density min, max: %f, %f" % (density.min(), density.max()))
     plt.scatter(xf,yf,c=density,marker='o',s=s,**kwargs)
     if xlabel is not None:
         plt.xlabel(xlabel)
@@ -793,7 +794,7 @@ def intdens(image,framenum=0):
     except:
         pass
     if nevts is not None:
-        print "Ratio Events/Intdens = %f" % (nevts/intdens)
+        print("Ratio Events/Intdens = %f" % (nevts/intdens))
     return intdens
 
 def px(p):
@@ -854,12 +855,12 @@ def darktimes(pipeline, mdh=None, plot=True, report=True):
         plt.ylim(-0.2,1.2)
         plt.show()
     if report:
-        print "events: %d" % t.shape[0]
-        print "dark times: %d" % nts
-        print "region: %d x %d nm (%d x %d pixel)" % (bbszx,bbszy,bbszx/voxx,bbszy/voxy)
-        print "centered at %d,%d (%d,%d pixels)" % (x.mean(),y.mean(),x.mean()/voxx,y.mean()/voxy)
-        print "darktime: %.1f (%.1f) frames" % (popt[0],popth[0])
-        print "qunits: %.2f" % (200/(popt[0]+popth[0]))
+        print("events: %d" % t.shape[0])
+        print("dark times: %d" % nts)
+        print("region: %d x %d nm (%d x %d pixel)" % (bbszx,bbszy,bbszx/voxx,bbszy/voxy))
+        print("centered at %d,%d (%d,%d pixels)" % (x.mean(),y.mean(),x.mean()/voxx,y.mean()/voxy))
+        print("darktime: %.1f (%.1f) frames" % (popt[0],popth[0]))
+        print("qunits: %.2f" % (200/(popt[0]+popth[0])))
 
     return (cumux,cumuy,popt[0],pcov)
 
@@ -894,7 +895,11 @@ def datafrompipeline(datasource,pipeline, ctr, boxsize = 7):
         rawser[:,:,t] = datasource[int(ctrx)-bszh:int(ctrx)+bszh+1,int(ctry)-bszh:int(ctry)+bszh+1,t].squeeze()
     return (tser, rawser)
 
-import StringIO
+try:
+    from StringIO import StringIO ## for Python 2
+except ImportError:
+    from io import StringIO ## for Python 3
+
 import sys
 def darkAnalysisRawPlusPipeline(datasource, pipeline, driftPane=None, boxsize = 7, doplot = True,
                                 threshfactor=0.45, mdh=None, debug=1):
@@ -942,18 +947,18 @@ def darkAnalysisRawPlusPipeline(datasource, pipeline, driftPane=None, boxsize = 
     ctrpix = np.rint(bbctrt / np.array(xpix,ypix))
 
     if debug:
-        print 'BBox (nm): ',bbox
-        print 'BBox (pix): ',bboxpix
-        print 'Ctr (pix): ',ctrpix[:,0]
+        print('BBox (nm): ',bbox)
+        print('BBox (pix): ',bboxpix)
+        print('Ctr (pix): ',ctrpix[:,0])
         sys.stdout.flush()
 
     # return (bbox, bbctrt,ctrpix,t)
 
-    print 'extracting region from data...'
+    print('extracting region from data...')
     sys.stdout.flush()
     tser, rawser = datafrompipeline(datasource,pipeline,ctrpix,boxsize = boxsize)
     
-    print 'analyzing data...'
+    print('analyzing data...')
     sys.stdout.flush()
     tevts = pipeline['t'].copy()
     rawm, peakav, fitev, fitr, rawthresh = analyzeDataPlusEvents(tser, rawser, tevts, doplot = doplot,
@@ -978,18 +983,17 @@ def analyzeDataPlusEvents(tser, rawser, tevts, doplot = True,
     
     outstr = StringIO.StringIO()
 
-    print >>outstr, "events: %d (%d raw)" % (tp.shape[0],th.shape[0])
-    print >>outstr, "dark times: %d (%d raw)" % (ctp.shape[0],ctr.shape[0])
-    #print >>outstr, "region: %d x %d nm (%d x %d pixel)" % (bbszx,bbszy,bbszx/voxx,bbszy/voxy)
-    #print >>outstr, "centered at %d,%d (%d,%d pixels)" % (x.mean(),y.mean(),x.mean()/voxx,y.mean()/voxy)
-    print >>outstr, "darktime: ev %.1f (raw %.1f) frames" % (taup,taur)
-    print >>outstr, "qunits: ev %.2f (raw %.2f), eunits: %.2f" % (200.0/taup,200.0/taur,tp.shape[0]/500.0)
+    print("events: %d (%d raw)" % (tp.shape[0],th.shape[0]),file=outstr)
+    print("dark times: %d (%d raw)" % (ctp.shape[0],ctr.shape[0]),file=outstr)
+    #print("region: %d x %d nm (%d x %d pixel)" % (bbszx,bbszy,bbszx/voxx,bbszy/voxy),file=outstr)
+    #print("centered at %d,%d (%d,%d pixels)" % (x.mean(),y.mean(),x.mean()/voxx,y.mean()/voxy),file=outstr)
+    print("darktime: ev %.1f (raw %.1f) frames" % (taup,taur),file=outstr)
+    print("qunits: ev %.2f (raw %.2f), eunits: %.2f" % (200.0/taup,200.0/taur,tp.shape[0]/500.0),file=outstr)
 
     labelstr = outstr.getvalue()
 
     if debug:
-        print labelstr
-
+        print
     if doplot:
         plt.figure()
         plt.plot(tser, rawm)

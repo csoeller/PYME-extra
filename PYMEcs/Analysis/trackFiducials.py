@@ -1,3 +1,5 @@
+from __future__ import print_function    # (at top of module)
+
 import numpy as np
 from scipy import ndimage
 from collections import OrderedDict
@@ -142,10 +144,10 @@ def AverageTrack(ds, tracks, filter='Gaussian', filterScale=10.0, align=True):
             dm = sum(d**2)
             meas = meas - d[:,None]
             n_iters +=1
-            print n_iters, dm
+            print(n_iters, dm)
          
         mm = np.nanmean(meas, 0)
-        print 'Finished:', n_iters, dm
+        print('Finished:', n_iters, dm)
         return mm
 
     def _simpleav(meas):

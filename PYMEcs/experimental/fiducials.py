@@ -132,10 +132,10 @@ def _extractAverageTrajectory(pipeline, clumpRadiusVar = 'error_x', clumpRadiusM
             dm = sum(d**2)
             meas = meas - d[:,None]
             n_iters +=1
-            print n_iters, dm
+            print(n_iters, dm)
          
         mm = np.nanmean(meas, 0)
-        print 'Finished:', n_iters, dm
+        print('Finished:', n_iters, dm)
         return mm
         
     x_corr = _align(x_f)

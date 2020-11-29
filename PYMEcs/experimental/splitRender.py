@@ -98,7 +98,7 @@ class SplitRenderer(TriangleRenderer):
 
         try:
             oldBlock = self.pipeline.filterKeys['timeBlock']
-        except KeyError, AttributeError:
+        except (KeyError, AttributeError):
             oldBlock = None
         
         ims = []
