@@ -484,6 +484,7 @@ def trackser(ref, series, frange=None, usefrac=0.25):
     return [dx,dy]
 
 import matplotlib.pyplot as plt
+# turns out the below is mostly taken from https://scipy-cookbook.readthedocs.io/items/SavitzkyGolay.html
 def savitzky_golay(y, window_size, order, deriv=0):
     r"""Smooth (and optionally differentiate) data with a Savitzky-Golay filter.
     The Savitzky-Golay filter removes high frequency noise from data.
@@ -538,7 +539,7 @@ def savitzky_golay(y, window_size, order, deriv=0):
     try:
         window_size = np.abs(np.int(window_size))
         order = np.abs(np.int(order))
-    except (ValueError, msg):
+    except ValueError as msg:
         raise ValueError("window_size and order have to be of type int")
     if window_size % 2 != 1 or window_size < 1:
         raise TypeError("window_size size must be a positive odd number")
