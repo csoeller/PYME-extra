@@ -60,7 +60,7 @@ def plotserpipeline(t,val,base=0):
     tmax = t.max()
     tstart = tmin-1
     tend = tmax + 1
-    tlen = tend-tstart+1
+    tlen = int(tend-tstart+1)
 
     to = t-tstart
     tidx = np.argsort(to)
