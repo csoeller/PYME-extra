@@ -216,6 +216,25 @@ def check_mapexists(mdh, type = 'dark'):
     else:
         return None
 
+def mk_compositeMap(sourcemap):
+    # make new composite map using sourcemap to populate
+    # check source is a map
+    # composite map has first channel with map data, second channel is mask where map is valid
+    # returns composite map (identified by its metadata)
+    pass
+
+def addMap2composite(map,compMap):
+    # insert map according to valid ROI into composite map
+    # update the valid channel accordingly
+    # possibly perform a number of checks
+    pass
+
+def export_mapFromComposite(compMap):
+    # export a normal map from the composite map
+    # in the exported map we set the valid ROI to the whole chip area
+    # return as image?
+    pass
+
 
 class mapTools:
     """
