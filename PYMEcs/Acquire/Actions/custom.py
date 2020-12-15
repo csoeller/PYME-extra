@@ -1,7 +1,8 @@
-from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float
+from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float, Bool
 from traitsui.api import View, Item, Group
 from traitsui.menu import OKButton, CancelButton, OKCancelButtons
 
+from PYMEcs.misc.guiMsgBoxes import YesNo
 
 # could be called in init file as:
 
@@ -18,6 +19,7 @@ class ChipROI(HasTraits):
     roiSize = Int(256)
     overlap = Int(20)
     numberOfFrames = Int(500)
+    checkBeforeQueuingActions = Bool(True)
 
 
 def queue_roi_series(scope):
@@ -119,7 +121,14 @@ def camera_chip_calibration_series(scope):
                                  roi[3]-roi[1]+1,
                                  linewidth=1,edgecolor=cols[i %2],facecolor='none')
         ax.add_patch(rect)
+        cx = 0.5*(roi[0]+roi[2])
+        cy = 0.5*(roi[1]+roi[3])
+        plt.text(cx,cy,'%d' % i,c='w')
 
+
+    if chipROI.checkBeforeQueuingActions:
+        if not YesNo(None, "Will use %d ROIS.\nProceed with running ROI actions?" % len(rois), caption='Proceed'):
+            return
 
     # actually queue series
     for roi in rois:
