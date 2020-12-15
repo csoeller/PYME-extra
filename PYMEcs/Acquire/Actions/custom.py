@@ -52,10 +52,10 @@ def check_roi(x0,y0,x1,y1,width=None, height=None):
         x0=0
     if y0<0:
         y0=0
-    if x1>(width-1):
-        x1 = width-1
-    if y1>(height-1):
-        y1 = height-1
+    if x1>(width):
+        x1 = width
+    if y1>(height):
+        y1 = height
     return [x0,y0,x1,y1]
 
 
@@ -74,7 +74,7 @@ def setState(scope,state):
 
     
 # ToDo - refine implementation as action interface improves
-#      - add help explaining what is going on, using traits help infrastructure (i.e. in class ChipROI)
+#      - add online help, using traits help infrastructure (i.e. in class ChipROI)
 def camera_chip_calibration_series(scope):
 
     chipROI = ChipROI()
@@ -94,10 +94,14 @@ def camera_chip_calibration_series(scope):
 
     rois = []
 
+    # note PYME cam ROI conventions: 1) chip origin starts at 0,0
+    #                                2) ROI with coordinates [x0,y0,x1,y1] starts and includes point x0,y0
+    #                                   but extends to and *excludes* point x1, y1
+    #                                This implies that the ROI width is x1-x0 and height is y1-y0 (used further below)
     x0 = 0
     y0 = 0
-    x1 = rsz-1
-    y1 = rsz-1
+    x1 = rsz # note *not* rsz-1, since it excludes x1, y1, see above
+    y1 = rsz
     
     for iy in range(0,ysteps):
         for ix in range(0,xsteps):
@@ -117,13 +121,13 @@ def camera_chip_calibration_series(scope):
     ax.imshow(np.ones((chipWidth,chipHeight)))
     for i, roi in enumerate(rois):
         rect = patches.Rectangle((roi[0],roi[1]),
-                                 roi[2]-roi[0]+1,
-                                 roi[3]-roi[1]+1,
+                                 roi[2]-roi[0], # remember we get ROI width by difference of corner points
+                                 roi[3]-roi[1], # same for height
                                  linewidth=1,edgecolor=cols[i %2],facecolor='none')
         ax.add_patch(rect)
         cx = 0.5*(roi[0]+roi[2])
         cy = 0.5*(roi[1]+roi[3])
-        plt.text(cx,cy,'%d' % i,c='w')
+        plt.text(cx,cy,'%d' % i,c='w') # plot in white to ensure we see on top of darkish chip plot
 
 
     if chipROI.checkBeforeQueuingActions:
