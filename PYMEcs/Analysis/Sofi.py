@@ -3,7 +3,7 @@ import numpy as np
 import scipy as sp
 import scipy.ndimage as ndimage
 
-def calcCorrelates(data, nOrders=5, startAt=50, filtHalfWidth=25, stopAt=sys.maxint):
+def calcCorrelates(data, nOrders=5, startAt=50, filtHalfWidth=25, stopAt=sys.maxsize):
     '''Calculate the autocorrelations up to nOrders for SOFI inmaging'''
     d3c = np.zeros(list(data.getSliceShape()) + [1, nOrders])
     d_m = np.zeros(data.getSliceShape())
@@ -32,7 +32,7 @@ def calcCorrelates(data, nOrders=5, startAt=50, filtHalfWidth=25, stopAt=sys.max
 
     return d3c/(stopAt - startAt), d_mm/(stopAt - startAt)
 
-def calcCorrelatesI(data, nOrders=5, zoom=4, startAt=50, filtHalfWidth=25, stopAt=sys.maxint):
+def calcCorrelatesI(data, nOrders=5, zoom=4, startAt=50, filtHalfWidth=25, stopAt=sys.maxsize):
     '''Calculate the autocorrelations up to nOrders for SOFI inmaging'''
     slShape = list(np.array(data.getSliceShape())*zoom)
     d3c = np.zeros(slShape + [1, nOrders])
@@ -73,7 +73,7 @@ def calcCumulants(corr):
     return cum
 
 
-def calcCorrelatesZ(data, zm, nOrders=5, startAt=50, filtHalfWidth=25, stopAt=sys.maxint):
+def calcCorrelatesZ(data, zm, nOrders=5, startAt=50, filtHalfWidth=25, stopAt=sys.maxsize):
     '''Calculate the autocorrelations up to nOrders for SOFI inmaging'''
 
     zvals = np.array(list(set(zm.yvals)))
