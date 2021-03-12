@@ -64,8 +64,9 @@ class FiducialTracker:
     def OnFiducialCorrectNew(self, event=None):
         from PYMEcs.recipes import localisations
         recipe = self.pipeline.recipe
-        # change defaults until we fixed the median filter
+        # change defaults back to median filter
         ftrack = localisations.FiducialTrack(recipe, inputName='Fiducials',
+                                             filterMethod='Median',
                                              outputName='fiducialAdded')
         if not ftrack.configure_traits(kind='modal'):
             return

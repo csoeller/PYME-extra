@@ -134,7 +134,7 @@ class SNRcalculator:
         """
         fdialog = wx.FileDialog(None, 'Please select PSF to use ...',
                                 #defaultDir=os.path.split(self.image.filename)[0],
-                                wildcard='PSF Files|*.psf|TIFF files|*.tif', style=wx.OPEN)
+                                wildcard='PSF Files|*.psf|TIFF files|*.tif', style=wx.FD_OPEN)
         succ = fdialog.ShowModal()
         if (succ == wx.ID_OK):
             psfn = filename = fdialog.GetPath()

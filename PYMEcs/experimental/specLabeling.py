@@ -1,6 +1,7 @@
 import numpy as np
-from PYMEcs.recipes.localisations import DBSCANClustering2, ClusterTimeRange, ValidClumps
+from PYMEcs.recipes.localisations import ClusterTimeRange, ValidClumps
 from PYME.recipes.tablefilters import FilterTable
+from PYME.recipes.localisations import DBSCANClustering
 
 class SpecLabeling:
     def __init__(self, visFr):
@@ -15,7 +16,7 @@ class SpecLabeling:
         bigLimit = 1e6 # size for filters big enough to capture everything
         
         # check 'coalesced' is available
-        recipe.add_module(DBSCANClustering2(recipe,inputName='coalesced', outputName='dbscanClustered', columns=['x', 'y'],
+        recipe.add_module(DBSCANClustering(recipe,inputName='coalesced', outputName='dbscanClustered', columns=['x', 'y'],
                                             searchRadius=50, minClumpSize=3, clumpColumnName='dbscanClumpID'))
         filters={'dbscanClumpID' : [0.5,1e6]}
         recipe.add_module(FilterTable(recipe, inputName='dbscanClustered',
