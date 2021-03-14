@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import wx
 import numpy as np
 import sys
@@ -800,7 +802,11 @@ class QPCalc:
         self.fitSettings.configure_traits(kind='modal')
 
     def OnDarkT(self,event):
-        import StringIO
+        try:
+            from StringIO import StringIO ## for Python 2
+        except ImportError:
+            from io import StringIO ## for Python 3
+
         
         visFr = self.visFr
         pipeline = visFr.pipeline
@@ -867,24 +873,38 @@ class QPCalc:
             ## STEP 4: plotting and reporting
 
             import matplotlib.pyplot as plt
+
+            def safepltshow():
+                try:
+                    plt.show()
+                except RuntimeError:
+                    pass
+                
             # make a string with info
-            outstr = StringIO.StringIO()
+            outstr = StringIO()
             
             if usingClumpIndex:
                 if usingTminTmax:
-                    print >>outstr, "events: %d (raw clumpSize: %d), dark times: %d (using clumpIndices + Tmin & Tmax)" % (nevents_corrected,nevents,nts)
+                    print("events: %d (raw clumpSize: %d), dark times: %d (using clumpIndices + Tmin & Tmax)"
+                          % (nevents_corrected,nevents,nts),file=outstr)
                 else:
-                    print >>outstr, "events: %d (from clumpSize), dark times: %d (using clumpIndices)" % (nevents,nts)
+                    print("events: %d (from clumpSize), dark times: %d (using clumpIndices)"
+                          % (nevents,nts),file=outstr)
             else:    
-                print >>outstr, "events: %d, dark times: %d" % (nevents,nts)
+                print("events: %d, dark times: %d" % (nevents,nts),file=outstr)
 
-            print >>outstr, "darktime: %.1f+-%d (%.1f+-%d) frames - chisqr %.2g (%.2g)" % (tau1c,tau1errc,
-                                                                                           tau1,tau1err,
-                                                                                           chisqrc,chisqr)
-            if tau1mok: print >>outstr, "darktime: tau1 %.1f+-%d, tau2 %.1f+-%d" % (tau1m, tau1errm, tau2m, tau2errm)
-            if tau1mok: print >>outstr, "amplitudes: (a %.2f+-%.2f, b %.2f) - chisqr %.2g" % (atau1m,atau1errm, 1-atau1m,chisqrm) 
-            print >>outstr, "darktime: starting estimates: %.1f (%.1f)" % (tau1estc,tau1est)
-            print >>outstr, "qunits: %.2f (%.2f)" % (100.0/tau1c, 100.0/tau1)
+            print("darktime: %.1f+-%d (%.1f+-%d) frames - chisqr %.2g (%.2g)"
+                  % (tau1c,tau1errc,
+                     tau1,tau1err,
+                     chisqrc,chisqr),file=outstr)
+            if tau1mok:
+                print("darktime: tau1 %.1f+-%d, tau2 %.1f+-%d"
+                      % (tau1m, tau1errm, tau2m, tau2errm),file=outstr)
+            if tau1mok:
+                print("amplitudes: (a %.2f+-%.2f, b %.2f) - chisqr %.2g"
+                      % (atau1m,atau1errm, 1-atau1m,chisqrm),file=outstr) 
+            print("darktime: starting estimates: %.1f (%.1f)" % (tau1estc,tau1est),file=outstr)
+            print("qunits: %.2f (%.2f)" % (100.0/tau1c, 100.0/tau1),file=outstr)
 
             labelstr = outstr.getvalue()
 
@@ -909,7 +929,7 @@ class QPCalc:
             if tau1mok: plt.semilogx(binctrs,fitDarkTimes.cumumultiexpfit(binctrs,tau1m,tau2m,atau1m),'--')
             
             plt.ylim(-0.2,1.2)
-            plt.show()
+            safepltshow()
             
             plt.annotate(labelstr, xy=(0.5, 0.1), xycoords='axes fraction',
                          fontsize=10)
@@ -933,7 +953,7 @@ class QPCalc:
             if tau1mok: plt.semilogx(binctrs,fitDarkTimes.cumumultiexpfit(binctrs,tau1m,tau2m,atau1m),'--',color='orange')
             
             plt.ylim(-0.2,1.2)
-            plt.show()
+            safepltshow()
 
         else:
             Warn(None, 'not enough data points, only found %d dark times (need at least  %d)' % (nts,NTMIN), 'Error')
