@@ -22,29 +22,32 @@ class ChipROI(HasTraits):
     checkBeforeQueuingActions = Bool(True)
 
 
-def queue_roi_series(scope):
-    cam = scope.cam
+# commenting out the below which was just a quick trial how to do this
+# keeping in for reference right now
 
-    args = {'state': {'Camera.ROI' : [50, 50, 200, 200]}}
-    scope.actions.QueueAction('state.update', args)
-    args = {'maxFrames': 500, 'stack': False}
-    scope.actions.QueueAction('spoolController.StartSpooling', args)
-    args = {'state': {'Camera.ROI' : [100, 100, 250, 250]}}
-    scope.actions.QueueAction('state.update', args)
-    args = {'maxFrames': 500, 'stack': False}
-    scope.actions.QueueAction('spoolController.StartSpooling', args)    
-    args = {'state': {'Camera.ROI' : [0, 0, 256, 256]}}
-    scope.actions.QueueAction('state.update', args)
+# def queue_roi_series(scope):
+#     cam = scope.cam
+
+#     args = {'state': {'Camera.ROI' : [50, 50, 200, 200]}}
+#     scope.actions.QueueAction('state.update', args)
+#     args = {'maxFrames': 500, 'stack': False}
+#     scope.actions.QueueAction('spoolController.StartSpooling', args)
+#     args = {'state': {'Camera.ROI' : [100, 100, 250, 250]}}
+#     scope.actions.QueueAction('state.update', args)
+#     args = {'maxFrames': 500, 'stack': False}
+#     scope.actions.QueueAction('spoolController.StartSpooling', args)    
+#     args = {'state': {'Camera.ROI' : [0, 0, 256, 256]}}
+#     scope.actions.QueueAction('state.update', args)
     
-    # in future we might code this as:
-    #
-    # calib = [actions.SpoolSeries(maxFrames=500, stack=False, 
-    #                              state={'Camera.ROI' : [50, 50, 200, 200]}),
-    #          actions.SpoolSeries(maxFrames=500, stack=False,
-    #                              state={'Camera.ROI' : [100, 100, 250, 250]}),
-    # ]
+#     # in future we might code this as:
+#     #
+#     # calib = [actions.SpoolSeries(maxFrames=500, stack=False, 
+#     #                              state={'Camera.ROI' : [50, 50, 200, 200]}),
+#     #          actions.SpoolSeries(maxFrames=500, stack=False,
+#     #                              state={'Camera.ROI' : [100, 100, 250, 250]}),
+#     # ]
 
-    # scope.actions.queue_actions(calib)
+#     # scope.actions.queue_actions(calib)
 
 
 def check_roi(x0,y0,x1,y1,width=None, height=None):
