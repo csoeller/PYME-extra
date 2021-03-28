@@ -86,23 +86,18 @@ def plotserpipeline(t,val,base=0):
 
     return (tplot+tstart,vplot)
 
-# should we do this with f_globals instead of f_locals?
-# function to be used at shell prompt in PYME GUI shells
+# python3 compatible version to grep locals in PYME GUI shells
 # can be used to search through the variable names available in the shell
-def grepglobals2(expr, keyonly = False):
-    # instead of passing globals can we get this via inspect?
+def greplocals(expr):
     import inspect
     frame = inspect.currentframe()
     gframe = frame.f_back
-    
-    res = filter(lambda x: expr in x, gframe.f_locals)
-    if len(res)> 0:
-        if keyonly:
-            return res
-        else:
-            return { key: gframe.f_locals[key] for key in res }
-    else:
-        return None
+    return [(key, value) for key, value in gframe.f_locals.items() if expr in key]
+
+
+def showPckgVersions():
+    from PYME.ui.progress import get_package_versions
+    print(get_package_versions())
 
 # convert paste board to UTF-16 little endian
 # this is what pasting into the shell tab appears to require
