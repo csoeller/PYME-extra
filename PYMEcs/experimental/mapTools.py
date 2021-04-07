@@ -90,11 +90,15 @@ GUI class to supply various map tools
             
     def getMapSafely(self, type='dark'):
         try:
-            theMap = self.ci.getDarkMap(self.image.mdh)
-            self.loadedMaps[type] = self.image.mdh
+            mdh = self.dsviewer.LMAnalyser.analysisController.analysisMDH
+        except AttributeError:
+            mdh = self.image.mdh
+        try:
+            theMap = self.ci.getDarkMap(mdh)
+            self.loadedMaps[type] = mdh
         except IOError:
             logger.exception('Dark map specified but not found, falling back on defaults')
-            (theMap,mdh2) = _getDefaultMap(self.ci,self.image.mdh,type,return_loadedmdh=True)
+            (theMap,mdh2) = _getDefaultMap(self.ci,mdh,type,return_loadedmdh=True)
             self.loadedMaps[type] = mdh2
         return theMap
 
