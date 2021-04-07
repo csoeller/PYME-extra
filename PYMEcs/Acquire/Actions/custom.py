@@ -67,8 +67,8 @@ def spoolSeries(scope, maxFrames=500, stack=False, state=None):
         args = {'state': state}
         scope.actions.QueueAction('state.update', args)
         
-    args = {'maxFrames': maxFrames, 'stack': stack}
-    scope.actions.QueueAction('spoolController.StartSpooling', args)
+    args = {'settings': {'max_frames': maxFrames, 'stack': stack}}
+    scope.actions.QueueAction('spoolController.start_spooling', args)
 
 
 def setState(scope,state):
