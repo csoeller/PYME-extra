@@ -5,3 +5,4 @@ PYMEcs.experimental.testChannelByName
 PYMEcs.experimental.FRC
 PYMEcs.experimental.regExtraCmaps
 PYMEcs.experimental.procPoints
+PYMEcs.experimental.combine_maps
