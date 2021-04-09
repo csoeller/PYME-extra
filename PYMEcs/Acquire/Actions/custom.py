@@ -3,6 +3,8 @@ from traitsui.api import View, Item, Group
 from traitsui.menu import OKButton, CancelButton, OKCancelButtons
 
 from PYMEcs.misc.guiMsgBoxes import YesNo
+from PYME.IO.FileUtils.nameUtils import numToAlpha
+
 
 # could be called in init file as:
 
@@ -62,12 +64,16 @@ def check_roi(x0,y0,x1,y1,width=None, height=None):
     return [x0,y0,x1,y1]
 
 
-def spoolSeries(scope, maxFrames=500, stack=False, state=None):
+def spoolSeries(scope, maxFrames=500, stack=False, state=None,
+                method=None, subdirectory=None):
     if state is not None:
         args = {'state': state}
         scope.actions.QueueAction('state.update', args)
-        
-    args = {'settings': {'max_frames': maxFrames, 'stack': stack}}
+
+    args = {'settings': {'max_frames': maxFrames,
+                         'stack': stack,
+                         'subdirectory': subdirectory,
+                         'method': method}}
     scope.actions.QueueAction('spoolController.start_spooling', args)
 
 
@@ -75,10 +81,22 @@ def setState(scope,state):
     args = {'state': state}
     scope.actions.QueueAction('state.update', args)
 
-    
+
+
+def get_mapdir(scope):
+    import os
+    seriesCounter = 0
+    subdirectory =  'map_' + numToAlpha(seriesCounter)
+    while os.path.exists(scope.spoolController.get_dirname(subdirectory)):
+        seriesCounter += 1
+        subdirectory = 'map_' + numToAlpha(seriesCounter)
+    return subdirectory
+        
+        
 # ToDo - refine implementation as action interface improves
 #      - add online help, using traits help infrastructure (i.e. in class ChipROI)
 def camera_chip_calibration_series(scope):
+    import os
 
     chipROI = ChipROI()
     if not chipROI.configure_traits(kind='modal'):
@@ -137,10 +155,13 @@ def camera_chip_calibration_series(scope):
         if not YesNo(None, "Will use %d ROIS.\nProceed with running ROI actions?" % len(rois), caption='Proceed'):
             return
 
+    mapdir = get_mapdir(scope)
     # actually queue series
     for roi in rois:
         spoolSeries(scope, maxFrames=chipROI.numberOfFrames, stack=False,
-                    state={'Camera.ROI' : roi})
+                    state={'Camera.ROI' : roi}, subdirectory=mapdir,
+                    method='FILE')
 
     # set back to original ROI
     setState(scope,state={'Camera.ROI' : curROI})
+    
