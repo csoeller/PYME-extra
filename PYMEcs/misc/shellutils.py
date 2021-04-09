@@ -5,6 +5,15 @@ import numpy as np
 import math
 
 
+def genFitImage(fitResults,mdh):
+     fitMod = __import__('PYME.localization.FitFactories.' + mdh.getEntry('Analysis.FitModule'), fromlist=['PYME', 'localization', 'FitFactories']) #import our fitting module
+     if 'genFitImage' in dir(fitMod):
+         imf = fitMod.genFitImage(fitResults, mdh).squeeze()
+         return imf
+     else:
+         return None
+
+
 def bigClumpStats(pipeline,minsize=15):
     import numpy as np
     import pandas as pd
