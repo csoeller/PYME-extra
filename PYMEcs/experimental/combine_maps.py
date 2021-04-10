@@ -47,7 +47,46 @@ def on_map(image, parentWindow=None, glCanvas=None):
         mapfn = map_dlg.GetPath()
         combinedMap.Save(filename=mapfn)
 
+from PYME.recipes.batchProcess import bake
+from PYME.recipes import modules
+import os
+
+def on_bake(image, parentWindow=None, glCanvas=None):
+    with wx.FileDialog(parentWindow, "Choose all series", wildcard='H5 (*.h5)|*.h5',
+                       style=wx.FD_OPEN | wx.FD_MULTIPLE) as dialog:
+
+        if dialog.ShowModal() == wx.ID_CANCEL:
+            return
+
+        filelist = dialog.GetPaths()
+        
+    inputGlobs = {'input' : filelist}
+    map_dir = os.path.dirname(filelist[0])
+    output_dir = os.path.join(map_dir,'analysis')
+     
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    recipe_str = """
+- processing.DarkAndVarianceMap:
+    input: input
+    output_dark: dark
+    output_variance: variance
+- output.ImageOutput:
+    filePattern: '{output_dir}/{file_stub}_dark.tif'
+    inputName: dark
+- output.ImageOutput:
+    filePattern: '{output_dir}/{file_stub}_variance.tif'
+    inputName: variance
+"""
+
+    recipe = modules.ModuleCollection.fromYAML(recipe_str)
+
+    bake(recipe, inputGlobs, output_dir)
+
 
 def Plug(dsviewer):
+    dsviewer.AddMenuItem(menuName='Experimental>Map Tools', itemName='Analyse tiled ROI Map Series',
+                         itemCallback = lambda e : on_bake(dsviewer.image, dsviewer, dsviewer.glCanvas))
     dsviewer.AddMenuItem(menuName='Experimental>Map Tools', itemName='Combine tiled ROI Maps',
                          itemCallback = lambda e : on_map(dsviewer.image, dsviewer, dsviewer.glCanvas))

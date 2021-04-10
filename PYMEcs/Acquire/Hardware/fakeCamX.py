@@ -11,4 +11,5 @@ class FakeCameraX(FakeCamera):
         mdh.setEntry('Camera.SerialNumber', 'FAKE-007')
         mdh.setEntry('Camera.SensorWidth',self.GetCCDWidth())
         mdh.setEntry('Camera.SensorHeight',self.GetCCDHeight())
+        mdh.setEntry('Camera.Model', 'FakeCameraX')
 
