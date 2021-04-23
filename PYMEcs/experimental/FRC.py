@@ -99,8 +99,9 @@ def padsquare(image,newsize=None):
             raise RuntimeError('trying to embed image (%d,%d) into smaller container (%d,%d)' % (N,M,newsize,newsize)) 
         
         newim = np.zeros((K,K))
-        startn = (K-N)/2
-        startm = (K-M)/2
+        # note that these divisions need to be integer divisons as we do index arithmetic
+        startn = (K-N) // 2
+        startm = (K-M) // 2
         newim[startn:startn+N,startm:startm+M] = image
         return newim
     else:
