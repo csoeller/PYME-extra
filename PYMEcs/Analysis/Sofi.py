@@ -1,7 +1,29 @@
+# d.baddeley@auckland.ac.nz
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+##################
+
+# this code lifted from PYMEnf and made compatible with py3 (change to sys.maxsize)
+
 import sys
 import numpy as np
 import scipy as sp
 import scipy.ndimage as ndimage
+
+# note this code assumes still the older data model and uses methods like `getSliceShape`
+# whereas the newer access modes (e.g. data_xyztc) do not have these
 
 def calcCorrelates(data, nOrders=5, startAt=50, filtHalfWidth=25, stopAt=sys.maxsize):
     '''Calculate the autocorrelations up to nOrders for SOFI inmaging'''
