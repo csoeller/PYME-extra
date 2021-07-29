@@ -80,8 +80,11 @@ def on_bake(image, parentWindow=None, glCanvas=None):
     inputName: variance
 """
 
-    recipe = modules.ModuleCollection.fromYAML(recipe_str)
-
+    try:
+        recipe = modules.ModuleCollection.fromYAML(recipe_str)
+    except AttributeError:
+        recipe = modules.ModuleCollection().fromYAML(recipe_str)
+        
     bake(recipe, inputGlobs, output_dir)
 
 
