@@ -83,7 +83,8 @@ def on_bake(image, parentWindow=None, glCanvas=None):
     try:
         recipe = modules.ModuleCollection.fromYAML(recipe_str)
     except AttributeError:
-        recipe = modules.ModuleCollection().fromYAML(recipe_str)
+        from PYME.recipes.recipe import Recipe
+        recipe = Recipe.fromYAML(recipe_str)
         
     bake(recipe, inputGlobs, output_dir)
 
