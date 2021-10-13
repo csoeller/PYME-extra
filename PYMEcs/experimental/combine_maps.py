@@ -33,9 +33,9 @@ def on_map(image, parentWindow=None, glCanvas=None):
     ViewIm3D(vMap, title='Valid Regions', parent=parentWindow, glCanvas=glCanvas)
     
     if mapType == 'dark':
-        mapname = gen_sCMOS_maps.mkDefaultPath('dark', image.mdh)
+        mapname = gen_sCMOS_maps.mkDefaultPath('dark', combinedMap.mdh)
     else:
-        mapname = gen_sCMOS_maps.mkDefaultPath('variance', image.mdh)
+        mapname = gen_sCMOS_maps.mkDefaultPath('variance', combinedMap.mdh)
 
     # on windows we may need to pass the full path to defaultFile to force selecting the
     # directory we want; otherwise the last used directory may be used on some
