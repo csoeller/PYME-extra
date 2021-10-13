@@ -37,11 +37,19 @@ def on_map(image, parentWindow=None, glCanvas=None):
     else:
         mapname = gen_sCMOS_maps.mkDefaultPath('variance', image.mdh)
 
+    # on windows we may need to pass the full path to defaultFile to force selecting the
+    # directory we want; otherwise the last used directory may be used on some
+    # windows 7+ installs, see also https://forums.wxwidgets.org/viewtopic.php?t=44404
+    import platform
+    if platform.system() == 'Windows':
+        fname = mapname
+    else:
+        fname = os.path.basename(mapname)
     map_dlg = wx.FileDialog(parentWindow, message="Save dark map as...",
-                             defaultDir=os.path.dirname(mapname),
-                             defaultFile=os.path.basename(mapname), 
-                             wildcard='TIFF (*.tif)|*.tif', 
-                             style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
+                            defaultDir=os.path.dirname(mapname),
+                            defaultFile=fname, 
+                            wildcard='TIFF (*.tif)|*.tif', 
+                            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
     
     if map_dlg.ShowModal() == wx.ID_OK:
         mapfn = map_dlg.GetPath()
