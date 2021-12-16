@@ -16,3 +16,5 @@ PYMEcs.experimental.specLabeling
 PYMEcs.experimental.selectROIfilterTable
 PYMEcs.experimental.regExtraCmaps
 PYMEcs.experimental.pyme2caml
+PYMEcs.experimental.Simpler
+
