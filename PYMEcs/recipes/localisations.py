@@ -752,3 +752,54 @@ class BiplanePhotons(ModuleBase):
             pass
         
         namespace[self.outputName] = mapped
+
+@register_module('ClusterModes')
+class ClusterModes(ModuleBase):
+    
+    inputName = Input('dbscanClustered')
+    IDkey = CStr('dbscanClumpID')
+    outputName = Output('with_clusterModes')
+    PropertyKey = CStr('nPhotons')
+
+    def execute(self, namespace):
+        from PYMEcs.Analysis.Simpler import clusterModes
+        
+        inp = namespace[self.inputName]
+        cmodes = tabular.mappingFilter(inp)
+
+        ids = inp[self.IDkey] # I imagine this needs to be an int type key
+        props = inp[self.PropertyKey]
+
+        cm, ce, ccx, ccy = clusterModes(inp['x'],inp['y'],ids,props)
+        cmodes.addColumn('clusterMode',cm)
+        cmodes.addColumn('clusterModeError',ce)
+        cmodes.addColumn('clusterCentroid_x',ccx)
+        cmodes.addColumn('clusterCentroid_y',ccy)
+        
+        # propogate metadata, if present
+        try:
+            cmodes.mdh = inp.mdh
+        except AttributeError:
+            pass
+        
+        namespace[self.outputName] = cmodes
+
+    @property
+    def _key_choices(self):
+        #try and find the available column names
+        try:
+            return sorted(self._parent.namespace[self.inputName].keys())
+        except:
+            return []
+
+    @property
+    def default_view(self):
+        from traitsui.api import View, Group, Item
+        from PYME.ui.custom_traits_editors import CBEditor
+
+        return View(Item('inputName', editor=CBEditor(choices=self._namespace_keys)),
+                    Item('_'),
+                    Item('IDkey', editor=CBEditor(choices=self._key_choices)),
+                    Item('PropertyKey', editor=CBEditor(choices=self._key_choices)),
+                    Item('_'),
+                    Item('outputName'), buttons=['OK'])

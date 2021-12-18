@@ -136,3 +136,5 @@ dmypy.json
 # emacs
 *.py~
 *~
+
+PYMEcs/misc/adhoc.py

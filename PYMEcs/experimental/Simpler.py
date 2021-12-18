@@ -3,9 +3,7 @@ from traitsui.menu import OKButton, CancelButton, OKCancelButtons
 #from PYME.DSView.dsviewer import View3D
 #from PYME.IO.MetaDataHandler import NestedClassMDHandler
 
-import numpy as np
-#from PYMEcs.Analysis.Sofi import calcCorrelates, calcCorrelatesI
-#import sys
+#import numpy as np
 
 from PYME.DSView.modules._base import Plugin
 class SIMPLER():
@@ -13,6 +11,7 @@ class SIMPLER():
         self.visFr = visFr
              
         visFr.AddMenuItem('Experimental>Corrections', "Filter events for SIMPLER", self.OnFilterSIMPLER)
+        visFr.AddMenuItem('Experimental>Corrections', "Cluster modes for SIMPLER N0 distribution", self.OnModesN0SIMPLER)
 
 
     def OnFilterSIMPLER(self, event):
@@ -29,6 +28,9 @@ class SIMPLER():
                                                     outputName='simpler_filtered',
                                                     filters={'clumpEdge' : [-0.1,0.1]})])
         self.visFr.pipeline.selectDataSource('simpler_filtered')
+
+    def OnModesN0SIMPLER(self, event):
+        
 
 def Plug(visFr):
     return SIMPLER(visFr)
