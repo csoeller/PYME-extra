@@ -803,3 +803,44 @@ class ClusterModes(ModuleBase):
                     Item('PropertyKey', editor=CBEditor(choices=self._key_choices)),
                     Item('_'),
                     Item('outputName'), buttons=['OK'])
+
+
+@register_module('SIMPLERzgenerator')
+class SIMPLERzgenerator(ModuleBase):
+
+    inputName = Input('filtered')
+    outputName = Output('with_simpler_z')
+    df_in_nm = Float(88.0)
+    alphaf = Float(0.9)
+
+    def execute(self, namespace):
+        inp = namespace[self.inputName]
+        mapped = tabular.mappingFilter(inp)
+
+        from six.moves import cPickle
+        fdialog = wx.FileDialog(None, 'Please select N0 map to use ...',
+                    wildcard='N0 map file (*.n0m)|*.n0m', style=wx.FD_OPEN)
+        succ = fdialog.ShowModal()
+        if (succ == wx.ID_OK):
+            nmFilename = fdialog.GetPath()
+            with open(nmFilename, 'rb') as fid:
+                n0m,bb = cPickle.load(fid)
+        
+            try:
+                N0 = n0m(inp['x'],inp['y'],grid=False) # this should ensure N) is floating point type
+            except TypeError:
+                N0 = n0m(inp['x'],inp['y'])
+            N = inp['nPhotons']
+            simpler_z = self.df_in_nm*np.log(self.alphaf/(N/N0 - (1 - self.alphaf)))
+            simpler_z[np.isnan(simpler_z)] = -100.0
+
+            mapped.addColumn('N0', N0)
+            mapped.addColumn('z', simpler_z)
+
+        # propogate metadata, if present
+        try:
+            mapped.mdh = inp.mdh
+        except AttributeError:
+            pass
+        
+        namespace[self.outputName] = mapped
