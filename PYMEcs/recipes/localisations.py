@@ -812,7 +812,8 @@ class SIMPLERzgenerator(ModuleBase):
     outputName = Output('with_simpler_z')
     df_in_nm = Float(88.0)
     alphaf = Float(0.9)
-
+    N0_scale_factor = Float(1.0)
+    
     def execute(self, namespace):
         inp = namespace[self.inputName]
         mapped = tabular.mappingFilter(inp)
@@ -830,11 +831,14 @@ class SIMPLERzgenerator(ModuleBase):
                 N0 = n0m(inp['x'],inp['y'],grid=False) # this should ensure N) is floating point type
             except TypeError:
                 N0 = n0m(inp['x'],inp['y'])
+            N0 *= self.N0_scale_factor
             N = inp['nPhotons']
-            simpler_z = self.df_in_nm*np.log(self.alphaf/(N/N0 - (1 - self.alphaf)))
+            NoverN0 = N/N0
+            simpler_z = self.df_in_nm*np.log(self.alphaf/(NoverN0 - (1 - self.alphaf)))
             simpler_z[np.isnan(simpler_z)] = -100.0
 
             mapped.addColumn('N0', N0)
+            mapped.addColumn('NoverN0', NoverN0)
             mapped.addColumn('z', simpler_z)
 
         # propogate metadata, if present
