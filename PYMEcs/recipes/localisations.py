@@ -813,33 +813,39 @@ class SIMPLERzgenerator(ModuleBase):
     df_in_nm = Float(88.0)
     alphaf = Float(0.9)
     N0_scale_factor = Float(1.0)
+    N0_is_uniform = Bool(False)
     
     def execute(self, namespace):
         inp = namespace[self.inputName]
         mapped = tabular.mappingFilter(inp)
 
-        from six.moves import cPickle
-        fdialog = wx.FileDialog(None, 'Please select N0 map to use ...',
-                    wildcard='N0 map file (*.n0m)|*.n0m', style=wx.FD_OPEN)
-        succ = fdialog.ShowModal()
-        if (succ == wx.ID_OK):
-            nmFilename = fdialog.GetPath()
-            with open(nmFilename, 'rb') as fid:
-                n0m,bb = cPickle.load(fid)
+        if not self.N0_is_uniform:
+            from six.moves import cPickle
+            fdialog = wx.FileDialog(None, 'Please select N0 map to use ...',
+                                    wildcard='N0 map file (*.n0m)|*.n0m', style=wx.FD_OPEN)
+            succ = fdialog.ShowModal()
+            if (succ == wx.ID_OK):
+                nmFilename = fdialog.GetPath()
+                with open(nmFilename, 'rb') as fid:
+                    n0m,bb = cPickle.load(fid)
         
-            try:
-                N0 = n0m(inp['x'],inp['y'],grid=False) # this should ensure N) is floating point type
-            except TypeError:
-                N0 = n0m(inp['x'],inp['y'])
-            N0 *= self.N0_scale_factor
-            N = inp['nPhotons']
-            NoverN0 = N/N0
-            simpler_z = self.df_in_nm*np.log(self.alphaf/(NoverN0 - (1 - self.alphaf)))
-            simpler_z[np.isnan(simpler_z)] = -100.0
+                try:
+                    N0 = n0m(inp['x'],inp['y'],grid=False) # this should ensure N) is floating point type
+                except TypeError:
+                    N0 = n0m(inp['x'],inp['y'])
+            else:
+                N0 = np.ones_like(inp['x']) # fallback, TODO: check if this the right thing to do here
+        else:
+            N0 = np.ones_like(inp['x'])
+        N0 *= self.N0_scale_factor
+        N = inp['nPhotons']
+        NoverN0 = N/N0
+        simpler_z = self.df_in_nm*np.log(self.alphaf/(NoverN0 - (1 - self.alphaf)))
+        simpler_z[np.isnan(simpler_z)] = -100.0
 
-            mapped.addColumn('N0', N0)
-            mapped.addColumn('NoverN0', NoverN0)
-            mapped.addColumn('z', simpler_z)
+        mapped.addColumn('N0', N0)
+        mapped.addColumn('NoverN0', NoverN0)
+        mapped.addColumn('z', simpler_z)
 
         # propogate metadata, if present
         try:
