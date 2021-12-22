@@ -1,5 +1,5 @@
 from PYME.recipes.base import register_module, ModuleBase, Filter
-from PYME.recipes.traits import Input, Output, Float, Enum, CStr, Bool, Int, List, DictStrStr, DictStrList, ListFloat, ListStr
+from PYME.recipes.traits import Input, Output, Float, Enum, CStr, Bool, Int, List, DictStrStr, DictStrList, ListFloat, ListStr, FileOrURI
 
 import numpy as np
 import pandas as pd
@@ -814,6 +814,7 @@ class SIMPLERzgenerator(ModuleBase):
     alphaf = Float(0.9)
     N0_scale_factor = Float(1.0)
     N0_is_uniform = Bool(False)
+    N0_map_file = FileOrURI(filter=['*.n0m'], exists=True)
     
     def execute(self, namespace):
         inp = namespace[self.inputName]
@@ -821,20 +822,12 @@ class SIMPLERzgenerator(ModuleBase):
 
         if not self.N0_is_uniform:
             from six.moves import cPickle
-            fdialog = wx.FileDialog(None, 'Please select N0 map to use ...',
-                                    wildcard='N0 map file (*.n0m)|*.n0m', style=wx.FD_OPEN)
-            succ = fdialog.ShowModal()
-            if (succ == wx.ID_OK):
-                nmFilename = fdialog.GetPath()
-                with open(nmFilename, 'rb') as fid:
-                    n0m,bb = cPickle.load(fid)
-        
-                try:
-                    N0 = n0m(inp['x'],inp['y'],grid=False) # this should ensure N) is floating point type
-                except TypeError:
-                    N0 = n0m(inp['x'],inp['y'])
-            else:
-                N0 = np.ones_like(inp['x']) # fallback, TODO: check if this the right thing to do here
+            with open(self.N0_map_file, 'rb') as fid:
+                n0m,bb = cPickle.load(fid)        
+            try:
+                N0 = n0m(inp['x'],inp['y'],grid=False) # this should ensure N) is floating point type
+            except TypeError:
+                N0 = n0m(inp['x'],inp['y'])
         else:
             N0 = np.ones_like(inp['x'])
         N0 *= self.N0_scale_factor

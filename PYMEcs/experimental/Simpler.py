@@ -25,6 +25,12 @@ def voxelsize_mdh(pixelsize_nm):
 class InterpolChoice(HasTraits):
     InterpolationMethod = Enum(['Splines','Radial Basis functions','Constraint Model'])
 
+
+# things still to add
+# - "Filter events for SIMPLER": choose clump radius and min clumpsize interactively
+# - new function to calculate N0 from data background
+# - new function to insert SIMPLERzgenerator
+# - add error estimates for SIMPLER (combination of formula and/or stddev) -> do in recipe module
 class SIMPLER():
     def __init__(self, visFr):
         self.visFr = visFr
