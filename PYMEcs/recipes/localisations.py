@@ -814,13 +814,18 @@ class SIMPLERzgenerator(ModuleBase):
     alphaf = Float(0.9)
     N0_scale_factor = Float(1.0)
     N0_is_uniform = Bool(False)
-    N0_map_file = FileOrURI(filter=['*.n0m'], exists=True)
+    N0_map_file = FileOrURI(filter=['*.n0m'], exists=True) # keywords inherited from FILE, see https://docs.enthought.com/traits/traits_user_manual/defining.html
+    # note that docs do not emphasize that filter keyword value must be an array of wildcard strings!
     
     def execute(self, namespace):
         inp = namespace[self.inputName]
         mapped = tabular.mappingFilter(inp)
 
         if not self.N0_is_uniform:
+            # we may want to cache the read! traits has a way to do this, see
+            #    traits.has_traits.cached_property in https://docs.enthought.com/traits/traits_api_reference/has_traits.html
+            # but this may not be compatible with the recipes use of traits
+            # in that case will have to use one of the ways in which existing recipe modules achieve this
             from six.moves import cPickle
             with open(self.N0_map_file, 'rb') as fid:
                 n0m,bb = cPickle.load(fid)        
