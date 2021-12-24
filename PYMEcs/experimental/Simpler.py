@@ -25,7 +25,68 @@ def voxelsize_mdh(pixelsize_nm):
 class InterpolChoice(HasTraits):
     InterpolationMethod = Enum(['Splines','Radial Basis functions','Constraint Model'])
 
+import wx
+#import deClump
+#from pylab import *
+#import numpy as np
 
+class simplerFilterDialog(wx.Dialog):
+    def __init__(self, *args, **kwargs):
+        wx.Dialog.__init__(self, *args, **kwargs)
+
+        vsizer = wx.BoxSizer(wx.VERTICAL)
+
+        hsizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        hsizer.Add(wx.StaticText(self, -1, 'Clump Radius: '), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5)
+
+        self.tClumpRadMult = wx.TextCtrl(self, -1, '2.0', size=[30,-1])
+        hsizer.Add(self.tClumpRadMult, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5)
+
+        hsizer.Add(wx.StaticText(self, -1, 'X'), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5)
+
+        self.cClumpRadVar = wx.Choice(self, -1, choices=['1.0', 'error_x'])
+        self.cClumpRadVar.SetSelection(1)
+        hsizer.Add(self.cClumpRadVar,1, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5)
+        
+        vsizer.Add(hsizer, 0, wx.ALL, 5)
+        
+        hsizer = wx.BoxSizer(wx.HORIZONTAL)
+        hsizer.Add(wx.StaticText(self, -1, 'Minimum Clump Size (post filter): '), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5)
+
+        self.tClumpMin = wx.TextCtrl(self, -1, '3')
+        hsizer.Add(self.tClumpMin,1, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5)
+
+        vsizer.Add(hsizer, 0, wx.ALL, 5)
+
+        btSizer = wx.StdDialogButtonSizer()
+
+        btn = wx.Button(self, wx.ID_OK)
+        btn.SetDefault()
+
+        btSizer.AddButton(btn)
+
+        btn = wx.Button(self, wx.ID_CANCEL)
+
+        btSizer.AddButton(btn)
+
+        btSizer.Realize()
+
+        vsizer.Add(btSizer, 0, wx.ALL, 5)
+
+        self.SetSizerAndFit(vsizer)
+
+    def GetClumpRadiusMultiplier(self):
+        return float(self.tClumpRadMult.GetValue())
+
+    def GetClumpRadiusVariable(self):
+        return self.cClumpRadVar.GetStringSelection()
+
+    def GetClumpMinSize(self):
+        return int(self.tClumpMin.GetValue())
+
+
+    
 # things still to add
 # - "Filter events for SIMPLER": choose clump radius and min clumpsize interactively
 # - new function to calculate N0 from data background
@@ -37,24 +98,44 @@ class SIMPLER():
         self.intMeth = InterpolChoice()
         
         visFr.AddMenuItem('Experimental>SIMPLER', "Filter events for SIMPLER", self.OnFilterSIMPLER)
+        visFr.AddMenuItem('Experimental>SIMPLER', "Generate z estimates with SIMPLER", self.OnGenerateZSIMPLER)
+        
         visFr.AddMenuItem('Experimental>SIMPLER', "Cluster modes for SIMPLER N0 distribution", self.OnModesN0SIMPLER)
         visFr.AddMenuItem('Experimental>SIMPLER', "Interpolate N0 Map", self.OnCalculateN0Field)
-        visFr.AddMenuItem('Experimental>SIMPLER', "Load N0 Map", self.OnLoadN0Map)
+        visFr.AddMenuItem('Experimental>SIMPLER', "Show N0 Map", self.OnLoadN0Map)
         
     def OnFilterSIMPLER(self, event):
         from PYME.recipes.tablefilters import FilterTable
         from PYME.recipes.tracking import FindClumps
         recipe = self.visFr.pipeline.recipe
         pipeline = self.visFr.pipeline
-        recipe.add_modules_and_execute([FindClumps(recipe, inputName=pipeline.selectedDataSourceKey,
-                                                   outputName='with_clumps',
-                                                   timeWindow=0,
-                                                   clumpRadiusVariable='error_x',
-                                                   clumpRadiusScale=2.0),
-                                        FilterTable(recipe, inputName='with_clumps',
-                                                    outputName='simpler_filtered',
-                                                    filters={'clumpEdge' : [-0.1,0.1]})])
-        self.visFr.pipeline.selectDataSource('simpler_filtered')
+
+        dlg = simplerFilterDialog(None)
+        ret = dlg.ShowModal()
+        if ret == wx.ID_OK:
+            minClumpSizePostFilt = dlg.GetClumpMinSize() + 2 # since 2 events are removed for edges
+            recipe.add_modules_and_execute([FindClumps(recipe, inputName=pipeline.selectedDataSourceKey,
+                                                       outputName='with_clumps',
+                                                       timeWindow=0,
+                                                       clumpRadiusVariable=dlg.GetClumpRadiusVariable(),
+                                                       clumpRadiusScale=dlg.GetClumpRadiusMultiplier()),
+                                            FilterTable(recipe, inputName='with_clumps',
+                                                        outputName='simpler_filtered',
+                                                        filters={'clumpEdge' : [-0.1,0.1],
+                                                                 'clumpSize' : [minClumpSizePostFilt-0.5,1e5]})])
+            self.visFr.pipeline.selectDataSource('simpler_filtered')
+
+        dlg.Destroy()
+
+    def OnGenerateZSIMPLER(self, event):
+        from PYMEcs.recipes.localisations import SIMPLERzgenerator
+        recipe = self.visFr.pipeline.recipe
+        pipeline = self.visFr.pipeline
+        
+        szg = SIMPLERzgenerator(recipe,inputName='simpler_filtered',outputName='with_simpler_z')
+        if szg.configure_traits(kind='modal'):
+           recipe.add_modules_and_execute([szg])
+           self.visFr.pipeline.selectDataSource(szg.outputName)
 
     def OnModesN0SIMPLER(self, event):
         raise RuntimeError('not implemented yet!')
