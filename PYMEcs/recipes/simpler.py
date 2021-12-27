@@ -155,6 +155,50 @@ class N0FromImage(ModuleBase):
 
         namespace[self.outputName] = withN0
 
+
+
+@register_module('N0FromInterpolationMap')
+class N0FromInterpolationMap(ModuleBase):
+
+    inputName = Input('filtered')
+    outputName = Output('with_N0')
+    # keywords inherited from FILE, see https://docs.enthought.com/traits/traits_user_manual/defining.html
+    # note that docs do not emphasize that filter keyword value must be an array of wildcard strings!
+    N0_map_file = FileOrURI(filter=['*.n0m'], exists=True)    
+    normaliseN0 = Bool(False)
+    maxN0 = Float(1.0)
+
+    def execute(self, namespace):
+        inp = namespace[self.inputName]
+        mapped = tabular.mappingFilter(inp)
+
+        # we may want to cache the read! traits has a way to do this, see
+        #    traits.has_traits.cached_property in https://docs.enthought.com/traits/traits_api_reference/has_traits.html
+        # but this may not be compatible with the recipes use of traits
+        # in that case will have to use one of the ways in which existing recipe modules achieve this
+        from six.moves import cPickle
+        with open(self.N0_map_file, 'rb') as fid:
+            n0m,bb,origin = cPickle.load(fid)        
+        try:
+            N0 = n0m(inp['x'],inp['y'],grid=False) # this should ensure N0 is floating point type
+        except TypeError:
+            N0 = n0m(inp['x'],inp['y'])
+
+        if self.normaliseN0:
+            maxval = np.percentile(N0,97.5)
+            N0 *= self.maxN0/maxval           
+
+        mapped.addColumn('N0', N0)
+
+        # propagate metadata, if present
+        try:
+            mapped.mdh = namespace[self.inputName].mdh
+        except AttributeError:
+            pass
+
+        namespace[self.outputName] = mapped
+
+        
 @register_module('SIMPLERzgenerator')
 class SIMPLERzgenerator(ModuleBase):
 
@@ -164,34 +208,20 @@ class SIMPLERzgenerator(ModuleBase):
     alphaf = Float(0.9)
     N0_scale_factor = Float(1.0)
     N0_is_uniform = Bool(False)
-    N0_map_file = FileOrURI(filter=['*.n0m'], exists=True) # keywords inherited from FILE, see https://docs.enthought.com/traits/traits_user_manual/defining.html
-    # note that docs do not emphasize that filter keyword value must be an array of wildcard strings!
     
     def execute(self, namespace):
         inp = namespace[self.inputName]
         mapped = tabular.mappingFilter(inp)
-
-        if not self.N0_is_uniform:
-            # we may want to cache the read! traits has a way to do this, see
-            #    traits.has_traits.cached_property in https://docs.enthought.com/traits/traits_api_reference/has_traits.html
-            # but this may not be compatible with the recipes use of traits
-            # in that case will have to use one of the ways in which existing recipe modules achieve this
-            from six.moves import cPickle
-            with open(self.N0_map_file, 'rb') as fid:
-                n0m,bb = cPickle.load(fid)        
-            try:
-                N0 = n0m(inp['x'],inp['y'],grid=False) # this should ensure N) is floating point type
-            except TypeError:
-                N0 = n0m(inp['x'],inp['y'])
-        else:
+        if self.N0_is_uniform:
             N0 = np.ones_like(inp['x'])
-        N0 *= self.N0_scale_factor
+        else:
+            N0 = inp['N0']
         N = inp['nPhotons']
-        NoverN0 = N/N0
+        NoverN0 = N/(N0*self.N0_scale_factor)
         simpler_z = self.df_in_nm*np.log(self.alphaf/(NoverN0 - (1 - self.alphaf)))
         simpler_z[np.isnan(simpler_z)] = -100.0
+        simpler_z[np.isinf(simpler_z)] = -100.0
 
-        mapped.addColumn('N0', N0)
         mapped.addColumn('NoverN0', NoverN0)
         mapped.addColumn('z', simpler_z)
 

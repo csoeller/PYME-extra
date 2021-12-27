@@ -132,8 +132,10 @@ class SIMPLER():
         
         visFr.AddMenuItem('Experimental>SIMPLER', "Cluster modes for SIMPLER N0 distribution", self.OnModesN0SIMPLER)
         visFr.AddMenuItem('Experimental>SIMPLER', "Interpolate N0 Map", self.OnInterpolateN0Field)
-        visFr.AddMenuItem('Experimental>SIMPLER', "Generate N0 Map from Background", self.bgrend.GenerateGUI)
-        visFr.AddMenuItem('Experimental>SIMPLER', "Set N0 from Image Map", self.OnN0FromImage) 
+        visFr.AddMenuItem('Experimental>SIMPLER', "Generate N0 Image Map from Background", self.bgrend.GenerateGUI)
+        visFr.AddMenuItem('Experimental>SIMPLER', "Set N0 from Image Map", self.OnN0FromImage)
+        visFr.AddMenuItem('Experimental>SIMPLER', "Set N0 from Interpolation Map", self.OnN0FromIinterpolationField)
+        
         visFr.AddMenuItem('Experimental>SIMPLER', "Show N0 Map from Interpolation", self.OnShowN0Map)
         
     def OnFilterSIMPLER(self, event):
@@ -168,6 +170,16 @@ class SIMPLER():
         if szg.configure_traits(kind='modal'):
            recipe.add_modules_and_execute([szg])
            self.visFr.pipeline.selectDataSource(szg.outputName)
+
+    def OnN0FromIinterpolationField(self, event):
+        from PYMEcs.recipes.simpler import N0FromInterpolationMap
+        recipe = self.visFr.pipeline.recipe
+        pipeline = self.visFr.pipeline
+        
+        n0i = N0FromInterpolationMap(recipe,inputName=pipeline.selectedDataSourceKey,outputName='with_n0')
+        if n0i.configure_traits(kind='modal'):
+           recipe.add_modules_and_execute([n0i])
+           self.visFr.pipeline.selectDataSource(n0i.outputName)     
 
     def OnModesN0SIMPLER(self, event):
         raise RuntimeError('not implemented yet!')
