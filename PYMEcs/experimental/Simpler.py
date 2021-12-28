@@ -187,7 +187,21 @@ class SIMPLER():
            self.visFr.pipeline.selectDataSource(n0i.outputName)     
 
     def OnModesN0SIMPLER(self, event):
-        raise RuntimeError('not implemented yet!')
+        # what we have to do here:
+        # DBSCANclustering (currently use minClumpSize: 40, searchRadius: 35.0
+        # filter out clumpID 0 (not clustered)
+        # follow that by simpler.ClusterModes to determine modes of objects recognised as origami clusters
+        from PYMEcs.recipes.simpler import ClusterModes
+        from PYME.recipes import localisations, tablefilters
+        recipe = self.visFr.pipeline.recipe
+        pipeline = self.visFr.pipeline
+        recipe.add_modules_and_execute([localisations.DBSCANClustering(inputName='simpler_filtered',outputName='dbscanClumped',
+                                                                       minClumpSize=40,searchRadius=35.0),
+                                        tablefilters.FilterTable(inputName='dbscanClumped',outputName='validClusters',
+                                                                 filters={'dbscanClumpID':[0.5, 10000]}),
+                                        ClusterModes(inputName='validClusters',outputName='with_clusterModes')])
+        
+        pipeline.selectDataSource('with_clusterModes')   
 
     def OnInterpolateN0Field(self, event):
         from PYME.Analysis.points import twoColour
