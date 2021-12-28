@@ -7,13 +7,30 @@ from PYME.IO import tabular
 import logging
 logger = logging.getLogger(__file__)
 
-def get_values_from_image(label_image, points, normalise=False, n0max=1.0):
+from scipy.stats import binned_statistic
+def mystd(vec):
+    return np.std(vec,ddof=0)
+
+# note that we are using our manual implementation of stddev (mystd) rather than the builtin 'std'
+# our tests showed that using 'std' can result in NaNs or other non-finite values
+# hopfully this will be fixed at some stage
+def get_stddev_property(ids, prop):
+    maxid = int(ids.max())
+    edges = -0.5+np.arange(maxid+2)
+    idrange = (0,maxid)
+
+    propstd, bin_edge, binno = binned_statistic(ids, prop, statistic=mystd, bins=edges, range=idrange)
+    std_events = propstd[ids]
+    binno_events = binno[ids]
+    return std_events, binno_events
+
+def get_values_from_image(values_image, points, normalise=False, n0max=1.0):
     """
     Function to extract values from a segmented image (2D or 3D) at given locations.
     
     Parameters
     ----------
-    label_image: PYME.IO.image.ImageStack instance
+    values_image: PYME.IO.image.ImageStack instance
         an image containing object labels
     points: tabular-like (PYME.IO.tabular, np.recarray, pandas DataFrame) containing 'x', 'y' & 'z' columns
         locations at which to extract labels
@@ -25,28 +42,28 @@ def get_values_from_image(label_image, points, normalise=False, n0max=1.0):
     """
     from PYME.Analysis.points.coordinate_tools import pixel_index_of_points_in_image
 
-    pixX, pixY, pixZ = pixel_index_of_points_in_image(label_image, points)
+    pixX, pixY, pixZ = pixel_index_of_points_in_image(values_image, points)
 
-    label_data = label_image.data_xyztc
+    values_data = values_image.data_xyztc
 
-    if label_data.shape[2] == 1:
+    if values_data.shape[2] == 1:
         # disregard z for 2D images
         pixZ = np.zeros_like(pixX)
 
-    ind = (pixX < label_data.shape[0]) * (pixY < label_data.shape[1]) * (pixX >= 0) * (pixY >= 0) * (pixZ >= 0) * (
-        pixZ < label_data.shape[2])
+    ind = (pixX < values_data.shape[0]) * (pixY < values_data.shape[1]) * (pixX >= 0) * (pixY >= 0) * (pixZ >= 0) * (
+        pixZ < values_data.shape[2])
 
-    ids = np.zeros_like(pixX)
-    imgdata = np.clip(label_data[:,:,:,0,0].squeeze(),0,None)  # we assume no time sequence, only 1 colour
+    vals = np.zeros_like(pixX)
+    imgdata = np.clip(values_data[:,:,:,0,0].squeeze(),0,None)  # we assume no time sequence, only 1 colour
 
     if normalise:
         maxval = np.percentile(imgdata,97.5)
         imgdata *= n0max/maxval
     
     # assume there is only one channel
-    ids[ind] = np.atleast_3d(imgdata)[pixX[ind], pixY[ind], pixZ[ind]].astype('i')
+    vals[ind] = np.atleast_3d(imgdata)[pixX[ind], pixY[ind], pixZ[ind]].astype('i')
 
-    return ids
+    return vals
 
 
 @register_module('ClusterModes')
@@ -208,6 +225,7 @@ class SIMPLERzgenerator(ModuleBase):
     alphaf = Float(0.9)
     N0_scale_factor = Float(1.0)
     N0_is_uniform = Bool(False)
+    with_error_z = Bool(False)
     
     def execute(self, namespace):
         inp = namespace[self.inputName]
@@ -222,8 +240,13 @@ class SIMPLERzgenerator(ModuleBase):
         simpler_z[np.isnan(simpler_z)] = -100.0
         simpler_z[np.isinf(simpler_z)] = -100.0
 
+        
         mapped.addColumn('NoverN0', NoverN0)
         mapped.addColumn('z', simpler_z)
+        if self.with_error_z:
+            error_z, ezn = get_stddev_property(inp['clumpIndex'], simpler_z)
+            mapped.addColumn('error_z', error_z)
+            mapped.addColumn('error_zN', ezn)
 
         # propogate metadata, if present
         try:

@@ -127,16 +127,21 @@ class SIMPLER():
         # note we need to set the visFr posthoc so that rendering works as expected
         self.bgrend.visFr = visFr
         
-        visFr.AddMenuItem('Experimental>SIMPLER', "Filter events for SIMPLER", self.OnFilterSIMPLER)
-        visFr.AddMenuItem('Experimental>SIMPLER', "Generate z estimates with SIMPLER", self.OnGenerateZSIMPLER)
-        
-        visFr.AddMenuItem('Experimental>SIMPLER', "Cluster modes for SIMPLER N0 distribution", self.OnModesN0SIMPLER)
-        visFr.AddMenuItem('Experimental>SIMPLER', "Interpolate N0 Map", self.OnInterpolateN0Field)
-        visFr.AddMenuItem('Experimental>SIMPLER', "Generate N0 Image Map from Background", self.bgrend.GenerateGUI)
+        # entries to set N0
         visFr.AddMenuItem('Experimental>SIMPLER', "Set N0 from Image Map", self.OnN0FromImage)
         visFr.AddMenuItem('Experimental>SIMPLER', "Set N0 from Interpolation Map", self.OnN0FromIinterpolationField)
-        
-        visFr.AddMenuItem('Experimental>SIMPLER', "Show N0 Map from Interpolation", self.OnShowN0Map)
+        visFr.AddMenuItem('Experimental>SIMPLER', itemType='separator')
+        # entries for next steps in SIMPLER calculations
+        visFr.AddMenuItem('Experimental>SIMPLER', "Filter events for SIMPLER", self.OnFilterSIMPLER)
+        visFr.AddMenuItem('Experimental>SIMPLER', "Generate z estimates with SIMPLER", self.OnGenerateZSIMPLER)
+        visFr.AddMenuItem('Experimental>SIMPLER', itemType='separator')
+        # entries for N0 generation/interpolation
+        visFr.AddMenuItem('Experimental>SIMPLER', "Calculate Cluster modes for N0 (from origami)", self.OnModesN0SIMPLER)
+        visFr.AddMenuItem('Experimental>SIMPLER', "Interpolate N0 Map", self.OnInterpolateN0Field)
+        visFr.AddMenuItem('Experimental>SIMPLER', "Generate N0 Image Map from Background", self.bgrend.GenerateGUI)
+        visFr.AddMenuItem('Experimental>SIMPLER', itemType='separator')
+        # entries for showing N0, can also be used to save resulting image for later setting N0 by image 
+        visFr.AddMenuItem('Experimental>SIMPLER', "Show N0 Map from N0 Interpolation file", self.OnShowN0Map)
         
     def OnFilterSIMPLER(self, event):
         from PYME.recipes.tablefilters import FilterTable
