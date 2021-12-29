@@ -356,7 +356,7 @@ class SIMPLER():
             
             output_name = recipe.new_output_name('with_N0')
             mod = N0FromImage(recipe, inputName=pipeline.selectedDataSourceKey,inputImage=img_name,
-                                  outputName=output_name,label_key_name='N0')
+                                  outputName=output_name,value_key_name='N0')
             if mod.configure_traits(kind='modal'):
                 recipe.add_modules_and_execute([mod,])
                 pipeline.selectDataSource(mod.outputName)

@@ -134,14 +134,9 @@ class N0FromImage(ModuleBase):
     Outputs
     -------
     outputName: Output
-        name of tabular output. A mapped version of the tabular input with 2 extra columns
-    label_key_name : CStr
+        name of tabular output. A mapped version of the tabular input with one extra column
+    value_key_name : CStr
         name of new column which will contain the label number from image, mapped to each localization within that label
-    label_count_key_name : CStr
-        name of new column which will contain the number of localizations within the label that a given localization
-        belongs to
-    minimum_localizations: Int
-        threshold for the number of localizations required to propagate a label through to localizations
 
     """
     inputName = Input('input')
@@ -149,7 +144,7 @@ class N0FromImage(ModuleBase):
     normaliseN0 = Bool(False)
     maxN0 = Float(1.0)
 
-    label_key_name = CStr('N0')
+    value_key_name = CStr('N0')
 
     outputName = Output('with_N0')
 
@@ -162,7 +157,7 @@ class N0FromImage(ModuleBase):
         n0 = get_values_from_image(img, inp, normalise=self.normaliseN0, n0max=self.maxN0)
 
         withN0 = tabular.MappingFilter(inp)
-        withN0.addColumn(self.label_key_name, n0)
+        withN0.addColumn(self.value_key_name, n0)
 
         # propagate metadata, if present
         try:
