@@ -14,12 +14,18 @@ def mystd(vec):
 # note that we are using our manual implementation of stddev (mystd) rather than the builtin 'std'
 # our tests showed that using 'std' can result in NaNs or other non-finite values
 # hopfully this will be fixed at some stage
-def get_stddev_property(ids, prop):
+def get_stddev_property(ids, prop, use_builtin_std=False):
     maxid = int(ids.max())
     edges = -0.5+np.arange(maxid+2)
     idrange = (0,maxid)
 
-    propstd, bin_edge, binno = binned_statistic(ids, prop, statistic=mystd, bins=edges, range=idrange)
+    if use_builtin_std:
+        statistic = 'std'
+    else:
+        statistic = mystd
+        
+    propstd, bin_edge, binno = binned_statistic(ids, prop, statistic=statistic, bins=edges, range=idrange)
+    propstd[np.isnan(propstd)] = 1000.0 # (mark as huge error_z)
     std_events = propstd[ids]
     binno_events = binno[ids]
     return std_events, binno_events
@@ -221,6 +227,7 @@ class SIMPLERzgenerator(ModuleBase):
     N0_scale_factor = Float(1.0)
     N0_is_uniform = Bool(False)
     with_error_z = Bool(False)
+    use_builtin_std = Bool(True)
     
     def execute(self, namespace):
         inp = namespace[self.inputName]
@@ -239,7 +246,8 @@ class SIMPLERzgenerator(ModuleBase):
         mapped.addColumn('NoverN0', NoverN0)
         mapped.addColumn('z', simpler_z)
         if self.with_error_z:
-            error_z, ezn = get_stddev_property(inp['clumpIndex'], simpler_z)
+            error_z, ezn = get_stddev_property(inp['clumpIndex'], simpler_z,
+                                               use_builtin_std=self.use_builtin_std)
             mapped.addColumn('error_z', error_z)
             mapped.addColumn('error_zN', ezn)
 
