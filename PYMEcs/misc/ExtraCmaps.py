@@ -2,7 +2,7 @@ import matplotlib.colors as mcol
 import matplotlib.pyplot as plt
 import numpy as np
 import pylab
-from PYME.misc.extraCMaps import regCmap
+from PYME.misc.colormaps import cm
 
 
 def r(rgb):
@@ -145,19 +145,7 @@ cm_ch = mcol.LinearSegmentedColormap('cyan_hot',cyan_hot_d)
 cm_cbskb = mcol.LinearSegmentedColormap('cb_skyblue',cb_skyblue_d)
 cm_cbskb2 = mcol.LinearSegmentedColormap('cb_skyblue2',cb_skyblue2_d)
 
-registered = False
-
-def registerCmaps():
-    global registered
-    
-    if not registered:
-        regCmap(cm_ch)
-        regCmap(cm_cbskb)
-        regCmap(cm_cbskb2)
-        regCmap(hot_overflow(overflowcol='cyan',percentage=2.5))
-        pylab.cm.cmapnames.sort()
-        registered = True
-
+cm.update({cmap.name: cmap for cmap in [cm_ch,cm_cbskb,cm_cbskb2,hot_overflow(overflowcol='cyan',percentage=2.5)]})
 
 def main():
     import numpy as np

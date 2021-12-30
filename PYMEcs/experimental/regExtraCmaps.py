@@ -1,4 +1,4 @@
-from PYMEcs.misc.ExtraCmaps import registerCmaps
+import PYMEcs.misc.ExtraCmaps
 
 # this module hijacks the plugin system to run colour map registration
 # at startup of visgui, dsviewer
@@ -7,4 +7,5 @@ from PYMEcs.misc.ExtraCmaps import registerCmaps
 # which has the advantage of doing this at startup for dsviewer which is an issue otherwise
 
 def Plug(arg):
-    registerCmaps()
+    # registerCmaps()
+    pass
