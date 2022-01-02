@@ -180,8 +180,9 @@ class SIMPLER():
         from PYMEcs.recipes.simpler import N0FromInterpolationMap
         recipe = self.visFr.pipeline.recipe
         pipeline = self.visFr.pipeline
-        
-        n0i = N0FromInterpolationMap(recipe,inputName=pipeline.selectedDataSourceKey,outputName='with_n0')
+
+        n0i = N0FromInterpolationMap(recipe,inputName=pipeline.selectedDataSourceKey,
+                                     outputName=recipe.new_output_name('with_N0'))
         if n0i.configure_traits(kind='modal'):
            recipe.add_modules_and_execute([n0i])
            self.visFr.pipeline.selectDataSource(n0i.outputName)     
@@ -198,9 +199,8 @@ class SIMPLER():
         recipe.add_modules_and_execute([localisations.DBSCANClustering(inputName='simpler_filtered',outputName='dbscanClumped',
                                                                        minClumpSize=40,searchRadius=35.0),
                                         tablefilters.FilterTable(inputName='dbscanClumped',outputName='validClusters',
-                                                                 filters={'dbscanClumpID':[0.5, 10000]}),
+                                                                 filters={'dbscanClumpID':[0.5, 10000.0]}),
                                         ClusterModes(inputName='validClusters',outputName='with_clusterModes')])
-        
         pipeline.selectDataSource('with_clusterModes')   
 
     def OnInterpolateN0Field(self, event):
