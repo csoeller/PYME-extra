@@ -7,3 +7,4 @@ PYMEcs.experimental.regExtraCmaps
 PYMEcs.experimental.procPoints
 PYMEcs.experimental.combine_maps
 PYMEcs.experimental.Sofi
+PYMEcs.experimental.CalcZfactor
