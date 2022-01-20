@@ -17,22 +17,12 @@ from PYME.IO import MetaDataHandler
 from PYME.DSView import dsviewer as dsviewer
 import PYME.IO.image as im
 
+from PYMEcs.misc.guiMsgBoxes import Info, Warn
+
 import os
 
-#TODO: these don't belong here!
-def YesNo(parent, question, caption = 'Yes or no?'):
-    dlg = wx.MessageDialog(parent, question, caption, wx.YES_NO | wx.ICON_QUESTION)
-    result = dlg.ShowModal() == wx.ID_YES
-    dlg.Destroy()
-    return result
-def Info(parent, message, caption = 'Insert program title'):
-    dlg = wx.MessageDialog(parent, message, caption, wx.OK | wx.ICON_INFORMATION)
-    dlg.ShowModal()
-    dlg.Destroy()
-def Warn(parent, message, caption = 'Warning!'):
-    dlg = wx.MessageDialog(parent, message, caption, wx.OK | wx.ICON_WARNING)
-    dlg.ShowModal()
-    dlg.Destroy()
+import logging
+logger = logging.getLogger(__name__)
 
 class TrackerPlotPanel(PlotPanel):
     def __init__(self, parent, driftTracker, *args, **kwargs):
@@ -51,7 +41,7 @@ class TrackerPlotPanel(PlotPanel):
                     self.subplotc = self.figure.add_subplot(414)
     
             #try:
-            t, dx, dy, dz, corr, corrmax, poffset, pos, focusoffset, nomPos, posInd, posDelta  = np.array(self.dt.get_history(1000)).T
+            t, dx, dy, dz, corr, corrmax, poffset, pos  = np.array(self.dt.get_history(1000)).T
 
             self.subplotxy.cla()
             self.subplotxy.plot(t, dx, 'r')
@@ -61,7 +51,6 @@ class TrackerPlotPanel(PlotPanel):
                         
             self.subplotz.cla()
             self.subplotz.plot(t, 1000*dz, 'b')
-            self.subplotz.plot(t, 1000*focusoffset, 'r--')
             self.subplotz.set_ylabel('dz [nm]')
             self.subplotz.set_xlim(t.min(), t.max())
             
@@ -85,124 +74,6 @@ class TrackerPlotPanel(PlotPanel):
             self.canvas.draw()
 
 
-resx = []
-resy = []
-resz = []
-
-class CalculateZfactorDialog(wx.Dialog):
-    def __init__(self):
-        self.Zfactorfilename = ''
-        wx.Dialog.__init__(self, None, -1, 'Calculate Z-factor')
-        sizer1 = wx.BoxSizer(wx.VERTICAL)
-
-        pan = wx.Panel(self, -1)
-        vsizermain = wx.BoxSizer(wx.VERTICAL)
-        vsizer = wx.BoxSizer(wx.VERTICAL)
-
-        hsizer2 = wx.BoxSizer(wx.HORIZONTAL)
-        hsizer2.Add(wx.StaticText(pan, -1, '  Record a Z-stack with 101 slices & 50 nm step. Use the Z-stack to calculate the Z-factor'), 0, wx.ALL, 2)
-        vsizer.Add(hsizer2)
-
-        hsizer2 = wx.BoxSizer(wx.HORIZONTAL)
-        self.bSelect = wx.Button(pan, -1, 'Select')
-        self.bSelect.Bind(wx.EVT_BUTTON, self.OnSelect)
-        hsizer2.Add(self.bSelect, 0, wx.ALL, 2)
-        self.bPlot = wx.Button(pan, -1, 'Plot')
-        self.bPlot.Bind(wx.EVT_BUTTON, self.OnPlot)
-        hsizer2.Add(self.bPlot, 0, wx.ALL, 2)
-        vsizer.Add(hsizer2)
-
-        self.textZstackFilename = wx.StaticText(pan, -1, 'Z-stack file:    no file selected')
-        vsizer.Add(self.textZstackFilename, 0, wx.ALL, 2)
-
-        vsizermain.Add(vsizer, 0, 0, 0)
-
-        self.plotPan = ZFactorPlotPanel(pan, size=(1200,600))
-        vsizermain.Add(self.plotPan, 1, wx.EXPAND, 0)
-
-        pan.SetSizerAndFit(vsizermain)
-        sizer1.Add(pan, 1,wx.EXPAND, 0)
-        self.SetSizerAndFit(sizer1)
-
-    def OnSelect(self, event):
-        dlg = wx.FileDialog(self, message="Open a Z-stack Image...", defaultDir=os.getcwd(), 
-                            defaultFile="", style=wx.OPEN)
-
-        if dlg.ShowModal() == wx.ID_OK:
-            self.Zfactorfilename = dlg.GetPath()
-
-        dlg.Destroy()
-        self.textZstackFilename.SetLabel('Z-stack file:   '+self.Zfactorfilename)
-
-    
-    def OnPlot(self, event):
-        import PYMEcs.Analysis.offlineTracker as otrack
-
-        ds = im.ImageStack(filename=self.Zfactorfilename)
-        dataset = ds.data[:,:,:].squeeze()
-        refim0 = dataset[:,:,10:91:4]
-        calImages0, calFTs0, dz0, dzn0, mask0, X0, Y0 = otrack.genRef(refim0,normalised=False)
-
-        del resx[:]
-        del resy[:]
-        del resz[:] # empty all these three lists every time before a new plot
-
-        for i in range(dataset.shape[2]):
-            image = dataset[:,:,i]
-            driftx, drifty, driftz, cm, d = otrack.compare(calImages0, calFTs0, dz0, dzn0, 10, image, mask0, X0, Y0, deltaZ=0.2)
-            resx.append(driftx)
-            resy.append(drifty)
-            resz.append(driftz)
-
-        self.plotPan.draw()
-        self.plotPan.Refresh()
-
-
-class ZFactorPlotPanel(PlotPanel):
-
-    def draw(self):
-        dznm = 1e3*np.array(resz)
-        dxnm = 110*np.array(resx)
-        dynm = 110*np.array(resy)
-        t = np.arange(dznm.shape[0])
-
-        dzexp = dznm[50-4:50+5]
-        dztheo = np.arange(-200,201,50)
-        x = np.arange(-150,151,50)
-        y = dznm[50-3:50+4]
-        m, b = np.polyfit(x,y,1)
-        Zfactor = 1.0/m
-        print 'Z-factor: ', Zfactor
-
-        if not hasattr( self, 'subplot' ):
-                self.subplot1 = self.figure.add_subplot( 121 )
-                self.subplot2 = self.figure.add_subplot( 122 )
-
-        self.subplot1.cla()
-
-        self.subplot1.scatter(t,-dznm,s=5)
-        self.subplot1.plot(-dznm, label='z')
-        self.subplot1.plot(-dxnm, label='x')
-        self.subplot1.plot(-dynm, label='y')
-
-        self.subplot1.grid()
-        self.subplot1.legend()
-
-        self.subplot2.cla()
-
-        self.subplot2.plot(dztheo,dzexp,'-o')
-        self.subplot2.plot(dztheo,1.0/Zfactor*dztheo,'--')
-        font = {'family': 'serif',
-        'color':  'darkred',
-        'weight': 'normal',
-        'size': 16,
-        }
-        self.subplot2.text(0, -20, 'Z-factor = %3.1f' % Zfactor, fontdict=font)
-        self.subplot2.grid()
-
-        self.canvas.draw()
-
-
 
 # add controls for lastAdjustment
 class DriftTrackingControl(wx.Panel):
@@ -223,9 +94,9 @@ class DriftTrackingControl(wx.Panel):
         self.cbLock = wx.CheckBox(self, -1, 'Lock')
         self.cbLock.Bind(wx.EVT_CHECKBOX, self.OnCBLock)
         hsizer.Add(self.cbLock, 0, wx.ALL, 2)
-        self.bSaveHist = wx.Button(self, -1, 'Save Hist')
-        hsizer.Add(self.bSaveHist, 0, wx.ALL, 2) 
-        self.bSaveHist.Bind(wx.EVT_BUTTON, self.OnBSaveHist)        
+        #self.bSaveHist = wx.Button(self, -1, 'Save Hist')
+        #hsizer.Add(self.bSaveHist, 0, wx.ALL, 2)
+        #self.bSaveHist.Bind(wx.EVT_BUTTON, self.OnBSaveHist)
         self.cbLockActive = wx.CheckBox(self, -1, 'Lock Active')
         self.cbLockActive.Enable(False)
         hsizer.Add(self.cbLockActive, 0, wx.ALL, 2)        
@@ -236,7 +107,7 @@ class DriftTrackingControl(wx.Panel):
         hsizer.Add(self.bSetPostion, 0, wx.ALL, 2) 
         self.bSetPostion.Bind(wx.EVT_BUTTON, self.OnBSetPostion)
         self.bSaveCalib = wx.Button(self, -1, 'Save Cal')
-        hsizer.Add(self.bSaveCalib, 0, wx.ALL, 2) 
+        hsizer.Add(self.bSaveCalib, 0, wx.ALL, 2)
         self.bSaveCalib.Bind(wx.EVT_BUTTON, self.OnBSaveCalib)
         sizer_1.Add(hsizer, 0, wx.EXPAND, 0)
         
@@ -260,20 +131,8 @@ class DriftTrackingControl(wx.Panel):
         self.tZfactor = wx.TextCtrl(self, -1, '%3.1f'% self.dt.Zfactor, size=[30,-1])
         hsizer.Add(self.tZfactor, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
         self.bSetZfactor = wx.Button(self, -1, 'Set', style=wx.BU_EXACTFIT)
-        hsizer.Add(self.bSetZfactor, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2) 
+        hsizer.Add(self.bSetZfactor, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
         self.bSetZfactor.Bind(wx.EVT_BUTTON, self.OnBSetZfactor)
-        self.bCalcZfactor = wx.Button(self, -1, 'Calculate Z-factor', style=wx.BU_EXACTFIT)
-        hsizer.Add(self.bCalcZfactor, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2) 
-        self.bCalcZfactor.Bind(wx.EVT_BUTTON, self.OnBCalculateZfactor)
-        sizer_1.Add(hsizer,0, wx.EXPAND, 0)
-
-        hsizer = wx.BoxSizer(wx.HORIZONTAL)
-        hsizer.Add(wx.StaticText(self, -1, "Focus offset [nm]:"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
-        self.tFocusoffset = wx.TextCtrl(self, -1, '%3.0f'% self.dt.focusoffset, size=[30,-1])
-        hsizer.Add(self.tFocusoffset, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
-        self.bFocusoffset = wx.Button(self, -1, 'Set', style=wx.BU_EXACTFIT)
-        hsizer.Add(self.bFocusoffset, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2) 
-        self.bFocusoffset.Bind(wx.EVT_BUTTON, self.OnBSetFocusoffset)
         sizer_1.Add(hsizer,0, wx.EXPAND, 0)
         
         hsizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -281,7 +140,7 @@ class DriftTrackingControl(wx.Panel):
         self.tMinDelay = wx.TextCtrl(self, -1, '%d' % (self.dt.minDelay), size=[30,-1])
         hsizer.Add(self.tMinDelay, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
         self.bSetMinDelay = wx.Button(self, -1, 'Set', style=wx.BU_EXACTFIT)
-        hsizer.Add(self.bSetMinDelay, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2) 
+        hsizer.Add(self.bSetMinDelay, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
         self.bSetMinDelay.Bind(wx.EVT_BUTTON, self.OnBSetMinDelay)
         sizer_1.Add(hsizer,0, wx.EXPAND, 0)
         
@@ -290,11 +149,10 @@ class DriftTrackingControl(wx.Panel):
         self.tPlotInterval = wx.TextCtrl(self, -1, '%d' % (self.plotInterval), size=[30,-1])
         hsizer.Add(self.tPlotInterval, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
         self.bSetPlotInterval = wx.Button(self, -1, 'Set', style=wx.BU_EXACTFIT)
-        hsizer.Add(self.bSetPlotInterval, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2) 
+        hsizer.Add(self.bSetPlotInterval, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
         self.bSetPlotInterval.Bind(wx.EVT_BUTTON, self.OnBSetPlotInterval)
         sizer_1.Add(hsizer,0, wx.EXPAND, 0)
-        
-        
+                
         hsizer = wx.BoxSizer(wx.HORIZONTAL)
         self.stError = wx.StaticText(self, -1, 'Error:\n\n', size=[200,-1])
         cfont = self.stError.GetFont()
@@ -316,6 +174,8 @@ class DriftTrackingControl(wx.Panel):
         self.Layout()
         # end wxGlade
 
+        self.getMdh() # we should be able to use the metadata to look up pixel sizes?
+
     def OnCBTrack(self, event):
         #print self.cbTrack.GetValue()
         if self.cbTrack.GetValue():
@@ -332,10 +192,18 @@ class DriftTrackingControl(wx.Panel):
         else:
             self.showCalImages()
 
+    def getMdh(self):
+        #metadata handling
+        mdh = MetaDataHandler.NestedClassMDHandler()
+        #loop over all providers of metadata
+        for mdgen in MetaDataHandler.provideStartMetadata:
+            mdgen(mdh)
+
+        self.mdh = mdh
+            
     def showCalImages(self):
         import numpy as np
         import time
-        ds2 = self.dt.refImages
 
         #metadata handling
         mdh = MetaDataHandler.NestedClassMDHandler()
@@ -347,7 +215,7 @@ class DriftTrackingControl(wx.Panel):
             mdgen(mdh)
         mdh.setEntry('CalibrationPositions',self.dt.calPositions)
 
-        im = dsviewer.ImageStack(data = ds2, mdh = mdh, titleStub='Unsaved Image')
+        im = dsviewer.ImageStack(data = self.dt.refImages, mdh = mdh, titleStub='Unsaved Image')
         if not im.mode == 'graph':
             im.mode = 'lite'
 
@@ -375,14 +243,6 @@ class DriftTrackingControl(wx.Panel):
     def OnBSetZfactor(self, event):
         self.dt.Zfactor = float(self.tZfactor.GetValue())
 
-    def OnBCalculateZfactor(self, event):
-        dlg = CalculateZfactorDialog()
-        ret = dlg.ShowModal()
-        dlg.Destroy()
-
-    def OnBSetFocusoffset(self, event):
-        self.dt.focusoffset = float(self.tFocusoffset.GetValue())/1e3
-
     def OnBSetMinDelay(self, event):
         self.dt.minDelay = int(self.tMinDelay.GetValue())
 
@@ -397,22 +257,27 @@ class DriftTrackingControl(wx.Panel):
             calibState, NStates = self.dt.get_calibration_state()
             self.gCalib.SetRange(NStates + 1)
             self.gCalib.SetValue(calibState)
-            t, dx, dy, dz, corr, corrmax,poffset,pos, focusoffset, nomPos, posInd, posDelta = self.dt.get_history(1)[-1]
-            vx, vy = self.dt.scope.GetPixelSize()
-            self.stError.SetLabel(("Error: x = %s nm y = %s nm\n" +
-                                  "z = %s nm noffs = %s nm c/cm = %4.2f") %
-                                  ("{:>+3.2f}".format(1e3*vx*dx), "{:>+3.2f}".format(1e3*vy*dy),
-                                   "{:>+6.1f}".format(1e3*dz), "{:>+6.1f}".format(1e3*poffset),
-                                   corr/corrmax))
+
+            try:
+                t, dx, dy, dz, corr, corrmax,poffset,pos = self.dt.get_history(1)[-1]
+                self.stError.SetLabel(("Error: x = %s nm y = %s nm\n" +
+                                      "z = %s nm noffs = %s nm c/cm = %4.2f") %
+                                      ("{:>+3.2f}".format(dx), "{:>+3.2f}".format(dy),
+                                       "{:>+6.1f}".format(1e3*dz), "{:>+6.1f}".format(1e3*poffset),
+                                       corr/corrmax))
+
+            except IndexError:
+                pass
+
             self.cbLock.SetValue(self.dt.get_focus_lock())
             self.cbTrack.SetValue(self.dt.is_tracking())
             self.cbLockActive.SetValue(self.dt.lockActive)
             
-            if (len(self.dt.get_history(0)) % self.plotInterval == 0) and self.showPlots:
+            if (len(self.dt.get_history(0)) > 0) and (len(self.dt.get_history(0)) % self.plotInterval == 0) and self.showPlots:
                 self.trackPlot.draw()
         except AttributeError:
-            print "AttrErr"
+            logger.exception('error in refresh')
             pass
         except IndexError:
-            print "IndexErr"
+            logger.exception('error in refresh')
             pass

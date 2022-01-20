@@ -6,16 +6,21 @@ Created on Fri Mar 28 15:02:50 2014
 """
 
 import numpy as np
-from pylab import fftn, ifftn, fftshift, ifftshift
+# from pylab import fftn, ifftn, fftshift, ifftshift
+from numpy.fft import fftn, ifftn, fftshift, ifftshift
+
 import time
 from scipy import ndimage
 from PYME.Acquire import eventLog
 #from PYME.gohlke import tifffile as tif
 
-import Pyro.core
-import Pyro.naming
+#import Pyro.core
+#import Pyro.naming
 import threading
 from PYME.misc.computerName import GetComputerName
+
+import logging
+logger = logging.getLogger(__name__)
 
 def correlateFrames(A, B):
     A = A.squeeze()/A.mean() - 1
@@ -61,19 +66,22 @@ def correlateAndCompareFrames(A, B):
     return (As -B).mean(), dx, dy
     
     
-class correlator(Pyro.core.ObjBase):
-    def __init__(self, scope, piezo=None):
-        Pyro.core.ObjBase.__init__(self)
+class Correlator(object):
+    def __init__(self, scope, piezo=None, stackHalfSize = 35):
         self.scope = scope
         self.piezo = piezo
         
         self.focusTolerance = .05 #how far focus can drift before we correct
         self.deltaZ = 0.2 #z increment used for calibration
-        self.stackHalfSize = 10
+        self.stackHalfSize = stackHalfSize
         self.NCalibStates = 2*self.stackHalfSize + 1
+        self.calibState = 0
 
         self.tracking = False
         self.lockActive = False
+
+        self.lockFocus = False
+        self.logShifts = True
         
         self._last_target_z = -1
         #self.initialise()
@@ -82,7 +90,6 @@ class correlator(Pyro.core.ObjBase):
         self.minDelay = 10
         self.maxfac = 1.5e3
         self.Zfactor = 1.0
-        self.focusoffset = 0.0
         
     def initialise(self):
         d = 1.0*self.scope.frameWrangler.currentFrame.squeeze()        
@@ -180,7 +187,10 @@ class correlator(Pyro.core.ObjBase):
         return self.lockFocus
 
     def get_history(self, length=1000):
-        return self.history[-length:]
+        try:
+            return self.history[-length:]
+        except AttributeError:
+            return []
 
     def get_calibration_state(self):
         """ Returns the current calibration state as a tuple:
@@ -207,11 +217,11 @@ class correlator(Pyro.core.ObjBase):
         
         #where is the piezo suppposed to be
         #nomPos = self.piezo.GetPos(0)
-        #nomPos = self.piezo.GetTargetPos(0)
-        nomPos = 0
+        nomPos = self.piezo.GetTargetPos(0)
+        
         #find closest calibration position
-        #posInd = np.argmin(np.abs(nomPos - self.calPositions))
-        posInd = 10
+        posInd = np.argmin(np.abs(nomPos - self.calPositions))
+        
         #dz = float('inf')
         #count = 0
         #while np.abs(dz) > 0.5*self.deltaZ and count < 1:
@@ -226,10 +236,9 @@ class correlator(Pyro.core.ObjBase):
         dzn = self.dzn[posInd]
         
         #what is the offset between our target position and the calibration position         
-        #posDelta = nomPos - calPos
-        posDelta = 0
+        posDelta = nomPos - calPos
         
-        print('%s' % [nomPos, posInd, calPos, posDelta])
+        #print('%s' % [nomPos, posInd, calPos, posDelta])
         
         #find x-y drift
         C = ifftshift(np.abs(ifftn(fftn(dm)*FA)))
@@ -249,8 +258,7 @@ class correlator(Pyro.core.ObjBase):
         self.ds_A = (ds - refA)
         
         #calculate z offset between actual position and calibration position
-        dz = self.deltaZ*np.dot(self.ds_A.ravel(), ddz)*dzn
-        dz *= self.Zfactor
+        dz = self.Zfactor*self.deltaZ*np.dot(self.ds_A.ravel(), ddz)*dzn
         
         #posInd += np.round(dz / self.deltaZ)
         #posInd = int(np.clip(posInd, 0, self.NCalibStates))
@@ -298,15 +306,16 @@ class correlator(Pyro.core.ObjBase):
             # print "cal proceed"
             if (self.calibState % 1) == 0:
                 #full step - record current image and move on to next position
-                self.setRefN(self.calibState - 1)
-                self.piezo.MoveTo(0, self.calPositions[self.calibState])
+                self.setRefN(int(self.calibState - 1))
+                self.piezo.MoveTo(0, self.calPositions[int(self.calibState)])
             
+			
             #increment our calibration state
             self.calibState += 0.5
             
         elif (self.calibState == self.NCalibStates):
             # print "cal finishing"
-            self.setRefN(self.calibState - 1)
+            self.setRefN(int(self.calibState - 1))
             
             #perform final bit of calibration - calcuate gradient between steps
             #self.dz = (self.refC - self.refB).ravel()
@@ -331,16 +340,16 @@ class correlator(Pyro.core.ObjBase):
             #print dx, dy, dz
             
             #FIXME: logging shouldn't call piezo.GetOffset() etc ... for performance reasons
-            self.history.append((time.time(), dx, dy, dz, cCoeff, self.corrRef, self.piezo.GetOffset(), self.piezo.GetPos(0), self.focusoffset, nomPos, posInd, posDelta))
+            self.history.append((time.time(), dx, dy, dz, cCoeff, self.corrRef, self.piezo.GetOffset(), self.piezo.GetPos(0)))
             eventLog.logEvent('PYME2ShiftMeasure', '%3.4f, %3.4f, %3.4f' % (dx, dy, dz))
             
             self.lockActive = self.lockFocus and (cCoeff > .5*self.corrRef)
             if self.lockActive:
                 if abs(self.piezo.GetOffset()) > 20.0:
                     self.lockFocus = False
-                    print("focus lock released")
-                if abs(dz-self.focusoffset) > self.focusTolerance and self.lastAdjustment >= self.minDelay:
-                    zcorr = self.piezo.GetOffset() - (dz-self.focusoffset)
+                    logger.info("focus lock released")
+                if abs(dz) > self.focusTolerance and self.lastAdjustment >= self.minDelay:
+                    zcorr = self.piezo.GetOffset() - dz
                     if zcorr < - self.maxfac*self.focusTolerance:
                         zcorr = - self.maxfac*self.focusTolerance
                     if zcorr >  self.maxfac*self.focusTolerance:
@@ -387,11 +396,24 @@ class correlator(Pyro.core.ObjBase):
     #     time.sleep(0.5)
     #     self.setRefC()
     #     piezo.MoveTo(0, p)
-    
+
+
+def correlator(scope, piezo=None):
+    # API compatible constructor for Py2
+    import Pyro.core
+    class klass(Pyro.core.ObjBase):
+        def __init__(self, scope, piezo=None):
+            Pyro.core.ObjBase.__init__(self)
+            Correlator.__init__(self, scope, piezo=piezo)
+
+    return klass
+
 
 class ServerThread(threading.Thread):
     def __init__(self, driftTracker):
         threading.Thread.__init__(self)
+        import Pyro.core
+        import Pyro.naming
 
         import socket
         ip_addr = socket.gethostbyname(socket.gethostname())
@@ -436,7 +458,7 @@ class ServerThread(threading.Thread):
         #    daemon.shutdown(True)
         
     def cleanup(self):
-        print('Shutting down drift tracking Server')
+        logger.info('Shutting down drift tracking Server')
         self.daemon.shutdown(True)
     
 def getClient(compName = GetComputerName()):
