@@ -344,6 +344,8 @@ class Correlator(object):
             #FIXME: logging shouldn't call piezo.GetOffset() etc ... for performance reasons
             self.history.append((time.time(), dx, dy, dz, cCoeff, self.corrRef, self.piezo.GetOffset(), self.piezo.GetPos(0)))
             eventLog.logEvent('PYME2ShiftMeasure', '%3.4f, %3.4f, %3.4f' % (dx, dy, dz))
+
+            self.latestPosData = [posInd, calPos, posDelta]
             
             self.lockActive = self.lockFocus and (cCoeff > .5*self.corrRef)
             if self.lockActive:

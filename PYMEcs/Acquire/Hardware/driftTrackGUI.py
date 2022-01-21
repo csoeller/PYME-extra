@@ -40,29 +40,34 @@ class TrackerPlotPanel(PlotPanel):
                     self.subploto = self.figure.add_subplot( 413 )
                     self.subplotc = self.figure.add_subplot(414)
     
-            #try:
-            t, dx, dy, dz, corr, corrmax, poffset, pos  = np.array(self.dt.get_history(1000)).T
+            try:
+                t, dx, dy, dz, corr, corrmax, poffset, pos  = np.array(self.dt.get_history(1000)).T
+            except ValueError:
+                do_plot = False
+            else:
+                do_plot = True
 
-            self.subplotxy.cla()
-            self.subplotxy.plot(t, dx, 'r')
-            self.subplotxy.plot(t, dy, 'g')
-            self.subplotxy.set_ylabel('dx/dy (r/g) [nm]')
-            self.subplotxy.set_xlim(t.min(), t.max())
-                        
-            self.subplotz.cla()
-            self.subplotz.plot(t, 1000*dz, 'b')
-            self.subplotz.set_ylabel('dz [nm]')
-            self.subplotz.set_xlim(t.min(), t.max())
-            
-            self.subploto.cla()
-            self.subploto.plot(t, 1e3*poffset, 'm')
-            self.subploto.set_ylabel('offs [nm]')
-            self.subploto.set_xlim(t.min(), t.max())
-
-            self.subplotc.cla()
-            self.subplotc.plot(t, corr/corrmax, 'r')
-            self.subplotc.set_ylabel('C/C_m')
-            self.subplotc.set_xlim(t.min(), t.max())
+            if do_plot:
+                self.subplotxy.cla()
+                self.subplotxy.plot(t, dx, 'r')
+                self.subplotxy.plot(t, dy, 'g')
+                self.subplotxy.set_ylabel('dx/dy (r/g) [nm]')
+                self.subplotxy.set_xlim(t.min(), t.max())
+                
+                self.subplotz.cla()
+                self.subplotz.plot(t, 1000*dz, 'b')
+                self.subplotz.set_ylabel('dz [nm]')
+                self.subplotz.set_xlim(t.min(), t.max())
+                
+                self.subploto.cla()
+                self.subploto.plot(t, 1e3*poffset, 'm')
+                self.subploto.set_ylabel('offs [nm]')
+                self.subploto.set_xlim(t.min(), t.max())
+                
+                self.subplotc.cla()
+                self.subplotc.plot(t, corr/corrmax, 'r')
+                self.subplotc.set_ylabel('C/C_m')
+                self.subplotc.set_xlim(t.min(), t.max())
 
     
             #except:
@@ -262,11 +267,12 @@ class DriftTrackingControl(wx.Panel):
 
             try:
                 t, dx, dy, dz, corr, corrmax,poffset,pos = self.dt.get_history(1)[-1]
-                self.stError.SetLabel(("Error: x = %s nm y = %s nm\n" +
-                                      "z = %s nm noffs = %s nm c/cm = %4.2f") %
+                posInd = self.dt.latestPosData[0]
+                self.stError.SetLabel(("Error: x = %s nm y = %s nm " +
+                                      "z = %s nm\nnoffs = %s nm c/cm = %4.2f posInd = %d") %
                                       ("{:>+3.2f}".format(dx), "{:>+3.2f}".format(dy),
-                                       "{:>+6.1f}".format(1e3*dz), "{:>+6.1f}".format(1e3*poffset),
-                                       corr/corrmax))
+                                       "{:>+3.1f}".format(1e3*dz), "{:>+6.1f}".format(1e3*poffset),
+                                       corr/corrmax,posInd))
 
             except IndexError:
                 pass
