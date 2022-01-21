@@ -90,6 +90,8 @@ class Correlator(object):
         self.minDelay = 10
         self.maxfac = 1.5e3
         self.Zfactor = 1.0
+        self.vsznm_x = 1.0
+        self.vsznm_y = 1.0
         
     def initialise(self):
         d = 1.0*self.scope.frameWrangler.currentFrame.squeeze()        
@@ -277,7 +279,7 @@ class Correlator(object):
 
         
         #return dx, dy, dz + posDelta, Cm, dz, nomPos, posInd, calPos, posDelta
-        return dx, dy, dz, Cm, dz, nomPos, posInd, calPos, posDelta
+        return dx*self.vsznm_x, dy*self.vsznm_y, dz, Cm, dz, nomPos, posInd, calPos, posDelta
         
     
     def tick(self, **kwargs):

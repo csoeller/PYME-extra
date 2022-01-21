@@ -46,7 +46,7 @@ class TrackerPlotPanel(PlotPanel):
             self.subplotxy.cla()
             self.subplotxy.plot(t, dx, 'r')
             self.subplotxy.plot(t, dy, 'g')
-            self.subplotxy.set_ylabel('dx (r) dy (g) [pixels]')
+            self.subplotxy.set_ylabel('dx/dy (r/g) [nm]')
             self.subplotxy.set_xlim(t.min(), t.max())
                         
             self.subplotz.cla()
@@ -175,7 +175,9 @@ class DriftTrackingControl(wx.Panel):
         # end wxGlade
 
         self.getMdh() # we should be able to use the metadata to look up pixel sizes?
-
+        self.dt.vsznm_x = self.mdh.voxelsize_nm.x
+        self.dt.vsznm_y = self.mdh.voxelsize_nm.y
+        
     def OnCBTrack(self, event):
         #print self.cbTrack.GetValue()
         if self.cbTrack.GetValue():
