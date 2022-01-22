@@ -92,6 +92,7 @@ class Correlator(object):
         self.Zfactor = 1.0
         self.vsznm_x = 1.0
         self.vsznm_y = 1.0
+        self.correctionFraction = 1.0 # fraction between 0.1..1
         
     def initialise(self):
         d = 1.0*self.scope.frameWrangler.currentFrame.squeeze()        
@@ -353,7 +354,7 @@ class Correlator(object):
                     self.lockFocus = False
                     logger.info("focus lock released")
                 if abs(dz) > self.focusTolerance and self.lastAdjustment >= self.minDelay:
-                    zcorr = self.piezo.GetOffset() - dz
+                    zcorr = self.piezo.GetOffset() - self.correctionFraction*dz
                     if zcorr < - self.maxfac*self.focusTolerance:
                         zcorr = - self.maxfac*self.focusTolerance
                     if zcorr >  self.maxfac*self.focusTolerance:
