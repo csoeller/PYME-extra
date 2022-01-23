@@ -112,13 +112,13 @@ class Correlator(object):
         
         self.calibState = 0 #completely uncalibrated
         
-        self.corrRef = 0
+        self.corrRefMax = 0
 
         
         self.lockFocus = False
         self.lockActive = False
         self.logShifts = True
-        self.lastAdjustment = 5 
+        self.timeSinceLastAdjustment = 5 
         self.homePos = self.piezo.GetPos(0)
         
         
@@ -280,6 +280,7 @@ class Correlator(object):
 
         
         #return dx, dy, dz + posDelta, Cm, dz, nomPos, posInd, calPos, posDelta
+        # TODO: check if dx and dy in nm works or if this gives issues down the line!
         return dx*self.vsznm_x, dy*self.vsznm_y, dz, Cm, dz, nomPos, posInd, calPos, posDelta
         
     
@@ -338,22 +339,22 @@ class Correlator(object):
             # print "fully calibrated"
             dx, dy, dz, cCoeff, dzcorr, nomPos, posInd, calPos, posDelta = self.compare()
             
-            self.corrRef = max(self.corrRef, cCoeff)
+            self.corrRefMax = max(self.corrRefMax, cCoeff)
             
             #print dx, dy, dz
             
             #FIXME: logging shouldn't call piezo.GetOffset() etc ... for performance reasons
-            self.history.append((time.time(), dx, dy, dz, cCoeff, self.corrRef, self.piezo.GetOffset(), self.piezo.GetPos(0)))
+            self.history.append((time.time(), dx, dy, dz, cCoeff, self.corrRefMax, self.piezo.GetOffset(), self.piezo.GetPos(0)))
             eventLog.logEvent('PYME2ShiftMeasure', '%3.4f, %3.4f, %3.4f' % (dx, dy, dz))
 
             self.latestPosData = [posInd, calPos, posDelta]
             
-            self.lockActive = self.lockFocus and (cCoeff > .5*self.corrRef)
+            self.lockActive = self.lockFocus and (cCoeff > .5*self.corrRefMax)
             if self.lockActive:
-                if abs(self.piezo.GetOffset()) > 20.0:
+                if abs(self.piezo.GetOffset()) > 20.0: # made >20 um of corrections - drop focus lock!
                     self.lockFocus = False
                     logger.info("focus lock released")
-                if abs(dz) > self.focusTolerance and self.lastAdjustment >= self.minDelay:
+                if abs(dz) > self.focusTolerance and self.timeSinceLastAdjustment >= self.minDelay:
                     zcorr = self.piezo.GetOffset() - self.correctionFraction*dz
                     if zcorr < - self.maxfac*self.focusTolerance:
                         zcorr = - self.maxfac*self.focusTolerance
@@ -366,9 +367,9 @@ class Correlator(object):
                     eventLog.logEvent('PYME2UpdateOffset', '%3.4f' % (zcorr))
                     
                     self.historyCorrections.append((time.time(), dz))
-                    self.lastAdjustment = 0
+                    self.timeSinceLastAdjustment = 0
                 else:
-                    self.lastAdjustment += 1
+                    self.timeSinceLastAdjustment += 1
             
             if self.logShifts:
                 self.piezo.LogShifts(dx, dy, dz, self.lockActive)
@@ -377,7 +378,7 @@ class Correlator(object):
             
     def reCalibrate(self):
         self.calibState = 0
-        self.corrRef = 0
+        self.corrRefMax = 0
         self.lockActive = False
         
     def register(self):
