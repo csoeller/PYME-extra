@@ -216,6 +216,36 @@ class N0FromInterpolationMap(ModuleBase):
 
         namespace[self.outputName] = mapped
 
+
+# here we process the data so that we keep one fixed N0max for each event and
+# rescale all nPhotons values to reflect the local change in N0
+# this is then more similar to what is described in the SIMPLER paper
+# and allows us to pass the filtered events to our students for further processing!
+@register_module('ScaleNPhotonsFromN0')
+class ScaleNPhotonsFromN0(ModuleBase):
+    inputName = Input('with_N0')
+    outputName = Output('nPhotonsScaled')
+    
+    def execute(self, namespace):
+        inp = namespace[self.inputName]
+        mapped = tabular.mappingFilter(inp)
+
+        N0 = inp['N0']
+        N0maxval = np.percentile(N0,97.5)
+        N0max = N0maxval * np.ones_like(N0, dtype='f')
+        nPhotonsScaled = inp['nPhotons'] * N0maxval / N0
+    
+        mapped.addColumn('N0', N0max)
+        mapped.addColumn('nPhotons', nPhotonsScaled)
+
+        # propagate metadata, if present
+        try:
+            mapped.mdh = namespace[self.inputName].mdh
+        except AttributeError:
+            pass
+
+        namespace[self.outputName] = mapped
+
         
 @register_module('SIMPLERzgenerator')
 class SIMPLERzgenerator(ModuleBase):
