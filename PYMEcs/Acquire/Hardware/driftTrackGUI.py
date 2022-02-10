@@ -47,6 +47,7 @@ class TrackerPlotPanel(PlotPanel):
             else:
                 do_plot = True
 
+            tolnm = 1e3*self.dt.get_focus_tolerance()
             if do_plot:
                 self.subplotxy.cla()
                 self.subplotxy.plot(t, dx, 'r')
@@ -56,6 +57,8 @@ class TrackerPlotPanel(PlotPanel):
                 
                 self.subplotz.cla()
                 self.subplotz.plot(t, 1000*dz, 'b')
+                self.subplotz.plot([t[0],t[-1]],[tolnm,tolnm], 'g--')
+                self.subplotz.plot([t[0],t[-1]],[-tolnm,-tolnm], 'g--')
                 self.subplotz.set_ylabel('dz [nm]')
                 self.subplotz.set_xlim(t.min(), t.max())
                 
@@ -140,6 +143,15 @@ class DriftTrackingControl(wx.Panel):
         self.bSetZfactor.Bind(wx.EVT_BUTTON, self.OnBSetZfactor)
         sizer_1.Add(hsizer,0, wx.EXPAND, 0)
         
+        hsizer = wx.BoxSizer(wx.HORIZONTAL)
+        hsizer.Add(wx.StaticText(self, -1, "Correction fraction (0.1..1):"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
+        self.tFraction = wx.TextCtrl(self, -1, '%3.1f'% self.dt.correctionFraction, size=[30,-1])
+        hsizer.Add(self.tFraction, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
+        self.bSetFraction = wx.Button(self, -1, 'Set', style=wx.BU_EXACTFIT)
+        hsizer.Add(self.bSetFraction, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
+        self.bSetFraction.Bind(wx.EVT_BUTTON, self.OnBSetFraction)
+        sizer_1.Add(hsizer,0, wx.EXPAND, 0)
+
         hsizer = wx.BoxSizer(wx.HORIZONTAL)
         hsizer.Add(wx.StaticText(self, -1, "feedback delay [frames]:"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
         self.tMinDelay = wx.TextCtrl(self, -1, '%d' % (self.dt.minDelay), size=[30,-1])
@@ -249,6 +261,14 @@ class DriftTrackingControl(wx.Panel):
 
     def OnBSetZfactor(self, event):
         self.dt.Zfactor = float(self.tZfactor.GetValue())
+
+    def OnBSetFraction(self, event):
+        fraction = float(self.tZfactor.GetValue())
+        if fraction < 0.1:
+            fraction = 0.1
+        if fraction > 1.0:
+            fraction = 1.0
+        self.dt.correctionFraction = fraction
 
     def OnBSetMinDelay(self, event):
         self.dt.minDelay = int(self.tMinDelay.GetValue())
