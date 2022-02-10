@@ -47,6 +47,7 @@ class TrackerPlotPanel(PlotPanel):
             else:
                 do_plot = True
 
+            tolnm = self.dt.get_focus_tolerance()
             if do_plot:
                 self.subplotxy.cla()
                 self.subplotxy.plot(t, dx, 'r')
@@ -56,6 +57,8 @@ class TrackerPlotPanel(PlotPanel):
                 
                 self.subplotz.cla()
                 self.subplotz.plot(t, 1000*dz, 'b')
+                self.subplotz.plot([t[0],t[-1]],[tolnm,tolnm], 'g--')
+                self.subplotz.plot([t[0],t[-1]],[-tolnm,-tolnm], 'g--')
                 self.subplotz.set_ylabel('dz [nm]')
                 self.subplotz.set_xlim(t.min(), t.max())
                 
