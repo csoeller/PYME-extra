@@ -47,7 +47,7 @@ class TrackerPlotPanel(PlotPanel):
             else:
                 do_plot = True
 
-            tolnm = self.dt.get_focus_tolerance()
+            tolnm = 1e3*self.dt.get_focus_tolerance()
             if do_plot:
                 self.subplotxy.cla()
                 self.subplotxy.plot(t, dx, 'r')
