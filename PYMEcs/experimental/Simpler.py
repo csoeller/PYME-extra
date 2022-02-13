@@ -153,16 +153,18 @@ class SIMPLER():
         ret = dlg.ShowModal()
         if ret == wx.ID_OK:
             minClumpSizePostFilt = dlg.GetClumpMinSize() + 2 # since 2 events are removed for edges
+            clumpName = recipe.new_output_name('with_clumps')
+            simplerName = recipe.new_output_name('simpler_filtered')
             recipe.add_modules_and_execute([FindClumps(recipe, inputName=pipeline.selectedDataSourceKey,
-                                                       outputName='with_clumps',
+                                                       outputName=clumpName,
                                                        timeWindow=0,
                                                        clumpRadiusVariable=dlg.GetClumpRadiusVariable(),
                                                        clumpRadiusScale=dlg.GetClumpRadiusMultiplier()),
-                                            FilterTable(recipe, inputName='with_clumps',
-                                                        outputName='simpler_filtered',
+                                            FilterTable(recipe, inputName=clumpName,
+                                                        outputName=simplerName,
                                                         filters={'clumpEdge' : [-0.1,0.1],
                                                                  'clumpSize' : [minClumpSizePostFilt-0.5,1e5]})])
-            self.visFr.pipeline.selectDataSource('simpler_filtered')
+            self.visFr.pipeline.selectDataSource(simplerName)
 
         dlg.Destroy()
 
