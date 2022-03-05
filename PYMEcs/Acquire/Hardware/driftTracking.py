@@ -123,7 +123,8 @@ class Correlator(object):
         
         
         self.history = []
-        
+        self.historyColNames = ['time','dx_nm','dy_nm','dz_nm','corrAmplitude','corrAmpMax','piezoOffset_nm','piezoPos_nm']
+        self.historyStartTime = time.time()
         self.historyCorrections = []
 
         
@@ -280,7 +281,9 @@ class Correlator(object):
 
         
         #return dx, dy, dz + posDelta, Cm, dz, nomPos, posInd, calPos, posDelta
+
         # TODO: check if dx and dy in nm works or if this gives issues down the line!
+        # UNITS: currently, dx & dy are in nm, dz in um -> make consistent?
         return dx*self.vsznm_x, dy*self.vsznm_y, dz, Cm, dz, nomPos, posInd, calPos, posDelta
         
     
@@ -332,6 +335,7 @@ class Correlator(object):
             #reset our history log
             self.history = []
             self.historyCorrections = []
+            self.historyStartTime = time.time()
             
             self.calibState += 1
             

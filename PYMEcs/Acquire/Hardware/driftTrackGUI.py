@@ -25,6 +25,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class TrackerPlotPanel(PlotPanel):
+    # import matplotlib.pyplot as plt # not needed if we use object based method for tight_layout
     def __init__(self, parent, driftTracker, *args, **kwargs):
         self.dt = driftTracker
         PlotPanel.__init__(self, parent, *args, **kwargs)    
@@ -39,6 +40,9 @@ class TrackerPlotPanel(PlotPanel):
                     self.subplotz = self.figure.add_subplot( 412 )
                     self.subploto = self.figure.add_subplot( 413 )
                     self.subplotc = self.figure.add_subplot(414)
+                    # hopefully this sets it always for this fig, see https://matplotlib.org/stable/tutorials/intermediate/tight_layout_guide.html
+                    self.figure.set_tight_layout(True)
+                    # plt.tight_layout() # can we call as object oriented? do we need to call each time plotted?
     
             try:
                 t, dx, dy, dz, corr, corrmax, poffset, pos  = np.array(self.dt.get_history(1000)).T
@@ -47,30 +51,34 @@ class TrackerPlotPanel(PlotPanel):
             else:
                 do_plot = True
 
-            tolnm = 1e3*self.dt.get_focus_tolerance()
             if do_plot:
+                # a few reused variables
+                tolnm = 1e3*self.dt.get_focus_tolerance()
+                tdelta = t - self.dt.historyStartTime
+                trange = [tdelta.min(), tdelta.max()]
+                
                 self.subplotxy.cla()
-                self.subplotxy.plot(t, dx, 'r')
-                self.subplotxy.plot(t, dy, 'g')
+                self.subplotxy.plot(tdelta, dx, 'r')
+                self.subplotxy.plot(tdelta, dy, 'g')
                 self.subplotxy.set_ylabel('dx/dy (r/g) [nm]')
-                self.subplotxy.set_xlim(t.min(), t.max())
+                self.subplotxy.set_xlim(*trange)
                 
                 self.subplotz.cla()
-                self.subplotz.plot(t, 1000*dz, 'b')
-                self.subplotz.plot([t[0],t[-1]],[tolnm,tolnm], 'g--')
-                self.subplotz.plot([t[0],t[-1]],[-tolnm,-tolnm], 'g--')
+                self.subplotz.plot(tdelta, 1000*dz, 'b')
+                self.subplotz.plot([tdelta[0],tdelta[-1]],[tolnm,tolnm], 'g--')
+                self.subplotz.plot([tdelta[0],tdelta[-1]],[-tolnm,-tolnm], 'g--')
                 self.subplotz.set_ylabel('dz [nm]')
-                self.subplotz.set_xlim(t.min(), t.max())
+                self.subplotz.set_xlim(*trange)
                 
                 self.subploto.cla()
-                self.subploto.plot(t, 1e3*poffset, 'm')
+                self.subploto.plot(tdelta, 1e3*poffset, 'm')
                 self.subploto.set_ylabel('offs [nm]')
-                self.subploto.set_xlim(t.min(), t.max())
+                self.subploto.set_xlim(*trange)
                 
                 self.subplotc.cla()
-                self.subplotc.plot(t, corr/corrmax, 'r')
+                self.subplotc.plot(tdelta, corr/corrmax, 'r')
                 self.subplotc.set_ylabel('C/C_m')
-                self.subplotc.set_xlim(t.min(), t.max())
+                self.subplotc.set_xlim(*trange)
 
     
             #except:
@@ -102,9 +110,9 @@ class DriftTrackingControl(wx.Panel):
         self.cbLock = wx.CheckBox(self, -1, 'Lock')
         self.cbLock.Bind(wx.EVT_CHECKBOX, self.OnCBLock)
         hsizer.Add(self.cbLock, 0, wx.ALL, 2)
-        #self.bSaveHist = wx.Button(self, -1, 'Save Hist')
-        #hsizer.Add(self.bSaveHist, 0, wx.ALL, 2)
-        #self.bSaveHist.Bind(wx.EVT_BUTTON, self.OnBSaveHist)
+        self.bSaveHist = wx.Button(self, -1, 'Save History')
+        hsizer.Add(self.bSaveHist, 0, wx.ALL, 2)
+        self.bSaveHist.Bind(wx.EVT_BUTTON, self.OnBSaveHist)
         self.cbLockActive = wx.CheckBox(self, -1, 'Lock Active')
         self.cbLockActive.Enable(False)
         hsizer.Add(self.cbLockActive, 0, wx.ALL, 2)        
@@ -192,6 +200,8 @@ class DriftTrackingControl(wx.Panel):
         # end wxGlade
 
         self.getMdh() # we should be able to use the metadata to look up pixel sizes?
+        # we pass this down to the drifttracker but could also do this only in driftTrackGUI when plotting?
+        # but seems preferable to keep this at the lower level as we then have the nm info in the events that are stored with data
         self.dt.vsznm_x = self.mdh.voxelsize_nm.x
         self.dt.vsznm_y = self.mdh.voxelsize_nm.y
         
@@ -212,9 +222,10 @@ class DriftTrackingControl(wx.Panel):
             self.showCalImages()
 
     def getMdh(self):
-        #metadata handling
+        # this methods gets us the cam metadata to check pixel sizes etc
+        # metadata handling
         mdh = MetaDataHandler.NestedClassMDHandler()
-        #loop over all providers of metadata
+        # loop over all providers of metadata
         for mdgen in MetaDataHandler.provideStartMetadata:
             mdgen(mdh)
 
@@ -248,11 +259,13 @@ class DriftTrackingControl(wx.Panel):
             Warn(self,"no history")
         else:
             dlg = wx.FileDialog(self, message="Save file as...",  
-                            defaultFile='history.txt', wildcard='txt File (*.txt)|*.txt', style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
+                                defaultFile='history.txt',
+                                wildcard='txt File (*.txt)|*.txt',
+                                style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
 
             if dlg.ShowModal() == wx.ID_OK:
                 historyfn = dlg.GetPath()
-                np.savetxt(historyfn, self.dt.history)
+                np.savetxt(historyfn, self.dt.history, header='# ' + ' '.join(self.dt.historyColNames))
                 Info(self,"history saved")
 
 
