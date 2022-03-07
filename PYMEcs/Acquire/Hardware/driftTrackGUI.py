@@ -79,6 +79,8 @@ class TrackerPlotPanel(PlotPanel):
                 self.subplotc.plot(tdelta, corr/corrmax, 'r')
                 self.subplotc.set_ylabel('C/C_m')
                 self.subplotc.set_xlim(*trange)
+                self.subplotc.set_xlabel('Time (s)')
+
 
     
             #except:
@@ -265,8 +267,8 @@ class DriftTrackingControl(wx.Panel):
 
             if dlg.ShowModal() == wx.ID_OK:
                 historyfn = dlg.GetPath()
-                np.savetxt(historyfn, self.dt.history, header='# ' + ' '.join(self.dt.historyColNames))
-                Info(self,"history saved")
+                np.savetxt(historyfn, self.dt.history, header=' '.join(self.dt.historyColNames))
+                # Info(self,"history saved")
 
 
     def OnBSetTolerance(self, event):
