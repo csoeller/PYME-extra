@@ -123,7 +123,7 @@ class Correlator(object):
         
         
         self.history = []
-        self.historyColNames = ['time','dx_nm','dy_nm','dz_um','corrAmplitude','corrAmpMax','piezoOffset_um','piezoPos_nm']
+        self.historyColNames = ['time','dx_nm','dy_nm','dz_nm','corrAmplitude','corrAmpMax','piezoOffset_nm','piezoPos_nm']
         self.historyStartTime = time.time()
         self.historyCorrections = []
 
@@ -348,7 +348,8 @@ class Correlator(object):
             #print dx, dy, dz
             
             #FIXME: logging shouldn't call piezo.GetOffset() etc ... for performance reasons
-            self.history.append((time.time(), dx, dy, dz, cCoeff, self.corrRefMax, self.piezo.GetOffset(), self.piezo.GetPos(0)))
+            # all history logged distances should now be in units of nm
+            self.history.append((time.time(), dx, dy, 1e3*dz, cCoeff, self.corrRefMax, 1e3*self.piezo.GetOffset(), self.piezo.GetPos(0)))
             eventLog.logEvent('PYME2ShiftMeasure', '%3.4f, %3.4f, %3.4f' % (dx, dy, dz))
 
             self.latestPosData = [posInd, calPos, posDelta]

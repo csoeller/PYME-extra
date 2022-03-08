@@ -52,6 +52,9 @@ class TrackerPlotPanel(PlotPanel):
                 do_plot = True
 
             if do_plot:
+                # note: we now assume that all history values that are distances are provided in nm
+                # this SHOULD match the conventions in driftTracking.py
+                
                 # a few reused variables
                 tolnm = 1e3*self.dt.get_focus_tolerance()
                 tdelta = t - self.dt.historyStartTime
@@ -64,14 +67,14 @@ class TrackerPlotPanel(PlotPanel):
                 self.subplotxy.set_xlim(*trange)
                 
                 self.subplotz.cla()
-                self.subplotz.plot(tdelta, 1000*dz, 'b')
+                self.subplotz.plot(tdelta, dz, 'b')
                 self.subplotz.plot([tdelta[0],tdelta[-1]],[tolnm,tolnm], 'g--')
                 self.subplotz.plot([tdelta[0],tdelta[-1]],[-tolnm,-tolnm], 'g--')
                 self.subplotz.set_ylabel('dz [nm]')
                 self.subplotz.set_xlim(*trange)
                 
                 self.subploto.cla()
-                self.subploto.plot(tdelta, 1e3*poffset, 'm')
+                self.subploto.plot(tdelta, poffset, 'm')
                 self.subploto.set_ylabel('offs [nm]')
                 self.subploto.set_xlim(*trange)
                 
