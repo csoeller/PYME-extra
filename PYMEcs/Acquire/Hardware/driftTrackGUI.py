@@ -309,8 +309,8 @@ class DriftTrackingControl(wx.Panel):
                 self.stError.SetLabel(("Error: x = %s nm y = %s nm " +
                                       "z = %s nm\nnoffs = %s nm c/cm = %4.2f posInd = %d") %
                                       ("{:>+3.2f}".format(dx), "{:>+3.2f}".format(dy),
-                                       "{:>+3.1f}".format(1e3*dz), "{:>+6.1f}".format(1e3*poffset),
-                                       corr/corrmax,posInd))
+                                       "{:>+3.1f}".format(dz), "{:>+6.1f}".format(poffset),
+                                       corr/corrmax, posInd))
 
             except IndexError:
                 pass

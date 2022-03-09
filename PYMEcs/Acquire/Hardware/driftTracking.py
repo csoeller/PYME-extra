@@ -123,7 +123,7 @@ class Correlator(object):
         
         
         self.history = []
-        self.historyColNames = ['time','dx_nm','dy_nm','dz_nm','corrAmplitude','corrAmpMax','piezoOffset_nm','piezoPos_nm']
+        self.historyColNames = ['time','dx_nm','dy_nm','dz_nm','corrAmplitude','corrAmpMax','piezoOffset_nm','piezoPos_um']
         self.historyStartTime = time.time()
         self.historyCorrections = []
 
