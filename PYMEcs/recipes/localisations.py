@@ -8,6 +8,30 @@ from PYME.IO import tabular
 import logging
 logger = logging.getLogger(__file__)
 
+@register_module('NNdist')
+class NNdist(ModuleBase):
+
+    inputName = Input('coalesced')
+    outputName = Output('withNNdist')
+    #columns = ListStr(['x', 'y', 'z'])
+
+    def execute(self, namespace):
+        inp = namespace[self.inputName]
+        mapped = tabular.mappingFilter(inp)
+
+        from scipy.spatial import KDTree
+        coords = np.vstack(inp[k] for k in ['x','y','z']).T
+        tree = KDTree(coords)
+        dd, ii = tree.query(coords,k=2)
+        mapped.addColumn('NNdist', dd[:,1])
+        
+        try:
+            mapped.mdh = inp.mdh
+        except AttributeError:
+            pass
+        
+        namespace[self.outputName] = mapped
+
 @register_module('FiducialTrack')
 class FiducialTrack(ModuleBase):
     """
