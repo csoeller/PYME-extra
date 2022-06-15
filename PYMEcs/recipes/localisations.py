@@ -20,7 +20,7 @@ class NNdist(ModuleBase):
         mapped = tabular.mappingFilter(inp)
 
         from scipy.spatial import KDTree
-        coords = np.vstack(inp[k] for k in ['x','y','z']).T
+        coords = np.vstack([inp[k] for k in ['x','y','z']]).T
         tree = KDTree(coords)
         dd, ii = tree.query(coords,k=2)
         mapped.addColumn('NNdist', dd[:,1])
