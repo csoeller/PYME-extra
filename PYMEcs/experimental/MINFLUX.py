@@ -5,6 +5,7 @@ def plot_errors(pipeline):
     curds = pipeline.selectedDataSourceKey
     pipeline.selectDataSource('coalesced_nz')
     p = pipeline
+    clumpSize = p['clumpSize']
     plt.figure()
     plt.subplot(221)
     if 'error_z' in pipeline.keys():
@@ -14,7 +15,13 @@ def plot_errors(pipeline):
     plt.ylabel('loc error - coalesced (nm)')
     pipeline.selectDataSource('with_clumps')
     plt.subplot(222)
-    plt.boxplot([p['fbg']],labels=['background'])
+    bp_dict = plt.boxplot([p['nPhotons'],p['fbg']],labels=['photons','background rate'])
+    for line in bp_dict['medians']:
+        # get position data for median line
+        x, y = line.get_xydata()[0] # top of median line
+        # overlay median value
+        plt.text(x, y, '%.0f' % y,
+                 horizontalalignment='right') # draw above, centered
     uids, idx = np.unique(p['clumpIndex'],return_index=True)
     plt.subplot(223)
     if 'error_z' in pipeline.keys():
@@ -24,7 +31,7 @@ def plot_errors(pipeline):
         plt.boxplot([p['error_x'][idx],p['error_y'][idx]],labels=['error_x','error_y'])
     plt.ylabel('loc error - raw (nm)')
     plt.subplot(224)
-    bp_dict = plt.boxplot([p['nPhotons']],labels=['photons'])
+    bp_dict = plt.boxplot([clumpSize],labels=['clump size'])
     for line in bp_dict['medians']:
         # get position data for median line
         x, y = line.get_xydata()[0] # top of median line
