@@ -5,7 +5,7 @@
 # in a pandas dataframe
 
 # currently, for reading into PYME we provide the functionality to write out as a CSV
-# from the pandas dataframe; PYME can parse pretty the generated CSV well upon reading
+# from the pandas dataframe; PYME can parse the generated CSV pretty well upon reading
 
 from scipy.stats import binned_statistic
 import pandas as pd
@@ -39,16 +39,16 @@ def minflux_npy2pyme(fname):
     
     if minflux_npy_detect_3D(data):
         is_3D = True
-        iterno_loc = 9
-        iterno_other = 6
+        iterno_loc = 9 # we pick up the most precise localisation from this iteration, also fbg
+        iterno_other = 6 # we pick up cfr, efo from this iteration
     else:
         is_3D = False
         iterno_loc = 4
         iterno_other = 4
 
-    posnm = 1e9*data['itr']['loc'][:,iterno_loc]
+    posnm = 1e9*data['itr']['loc'][:,iterno_loc] # we keep all distances in units of nm
     rawids = data['tid']
-    # we replace the non-sequential ids from MINFLUX with a set of sequential ids
+    # we replace the non-sequential trace ids from MINFLUX data with a set of sequential ids
     # this works better for clumpIndex assumptions in the end
     uids,revids = np.unique(rawids,return_inverse=True)
     newids = np.arange(1,uids.size+1,dtype='int32')[revids]
@@ -56,7 +56,8 @@ def minflux_npy2pyme(fname):
     counts = get_stddev_property(newids,posnm[:,0],statistic='count')
     stdy = get_stddev_property(newids,posnm[:,1])
     pymedct =  {'x' : posnm[:,0], 'y': posnm[:,1],
-                # for t we use time to ms precision (without rounding)
+                # for t we use time to ms precision (without rounding); this is a reasonably close
+                # correspondence to frame numbers as time coordinates in SMLM data
                 't': (1e3*data['tim']).astype('i'), 'clumpIndex': newids,
                 'cfr':data['itr']['cfr'][:,iterno_other], 'efo':data['itr']['efo'][:,iterno_other],
                 'error_x' : stdx, 'error_y' : stdy, 'clumpSize' : counts,
