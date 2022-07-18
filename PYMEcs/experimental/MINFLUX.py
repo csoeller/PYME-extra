@@ -72,6 +72,22 @@ def plot_cluster_analysis(pipeline, ds='dbscanClustered'):
     plt.tight_layout()
     pipeline.selectDataSource(curds)
 
+def plot_intra_clusters_dists(pipeline, ds='dbscanClustered',bins=15):
+    from scipy.spatial import KDTree
+    curds = pipeline.selectedDataSourceKey
+    pipeline.selectDataSource(ds)
+    p = pipeline
+    uids, cts = np.unique(p['dbscanClumpID'], return_counts=True)
+    checkids = uids[cts > 5.0]
+    dists = []
+    for cid in checkids:
+        coords = np.vstack([p[k][p['dbscanClumpID'] == cid] for k in ['x','y','z']]).T
+        tree = KDTree(coords)
+        dd, ii = tree.query(coords,k=2)
+        dists.extend(list(dd[:,1]))
+    pipeline.selectDataSource(curds)
+    plt.figure()
+    h=plt.hist(dists,bins=bins)
 
 class MINFLUXanalyser():
     def __init__(self, visFr):
