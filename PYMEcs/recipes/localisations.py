@@ -547,40 +547,48 @@ class DBSCANClustering2(ModuleBase):
     See `sklearn.cluster.dbscan` for more details about the underlying algorithm and parameter meanings.
 
     """
+
     import multiprocessing
     inputName = Input('filtered')
 
     columns = ListStr(['x', 'y', 'z'])
-    searchRadius = Float()
-    minClumpSize = Int()
-    numberOfJobs = Int(max(multiprocessing.cpu_count()-1,1)) # this is a feature of the latest dbscan in scipy
+    searchRadius = Float(10)
+    minClumpSize = Int(1)
     
+    #exposes sklearn parallelism. Recipe modules are generally assumed
+    #to be single-threaded. Enable at your own risk
+    multithreaded = Bool(False)
+    numberOfJobs = Int(max(multiprocessing.cpu_count()-1,1))
+    
+    clumpColumnName = CStr('dbscanClumpID')
+
     outputName = Output('dbscanClustered')
 
     def execute(self, namespace):
         from sklearn.cluster import dbscan
+        from scipy.stats import binned_statistic
 
         inp = namespace[self.inputName]
-        mapped = tabular.mappingFilter(inp)
+        mapped = tabular.MappingFilter(inp)
 
         # Note that sklearn gives unclustered points label of -1, and first value starts at 0.
-        try:
+        if self.multithreaded:
             core_samp, dbLabels = dbscan(np.vstack([inp[k] for k in self.columns]).T,
-                                         self.searchRadius, self.minClumpSize, n_jobs=self.numberOfJobs)
-            multiproc = True
-        except:
-            core_samp, dbLabels = dbscan(np.vstack([inp[k] for k in self.columns]).T,
-                                         self.searchRadius, self.minClumpSize)
-            multiproc = False
-
-        if multiproc:
-            logger.info('using dbscan multiproc version')
+                                         eps=self.searchRadius, min_samples=self.minClumpSize, n_jobs=self.numberOfJobs)
         else:
-            logger.info('falling back to dbscan single-threaded version')
+            #NB try-catch from Christians multithreaded example removed as I think we should see failure here
+            core_samp, dbLabels = dbscan(np.vstack([inp[k] for k in self.columns]).T,
+                                     eps=self.searchRadius, min_samples=self.minClumpSize)
 
-            # shift dbscan labels up by one to match existing convention that a clumpID of 0 corresponds to unclumped
-        mapped.addColumn('dbscanClumpID', dbLabels + 1)
+        # shift dbscan labels up by one to match existing convention that a clumpID of 0 corresponds to unclumped
+        dbids = dbLabels + 1
+        maxid = int(dbids.max())
+        edges = -0.5+np.arange(maxid+2)
+        resstat = binned_statistic(dbids, np.ones_like(dbids), statistic='sum', bins=edges)
 
+        mapped.addColumn(str(self.clumpColumnName), dbids)
+        mapped.addColumn('dbscanClumpSize',resstat[0][dbids])
+        
         # propogate metadata, if present
         try:
             mapped.mdh = inp.mdh
@@ -589,9 +597,20 @@ class DBSCANClustering2(ModuleBase):
 
         namespace[self.outputName] = mapped
 
+    
     @property
     def hide_in_overview(self):
         return ['columns']
+
+    def _view_items(self, params=None):
+        from traitsui.api import Item, TextEditor
+        return [Item('columns', editor=TextEditor(auto_set=False, enter_set=True, evaluate=ListStr)),
+                    Item('searchRadius'),
+                    Item('minClumpSize'),
+                    Item('multithreaded'),
+                    Item('numberOfJobs'),
+                    Item('clumpColumnName'),]
+
 
 @register_module('SnrCalculation')
 class SnrCalculation(ModuleBase):
