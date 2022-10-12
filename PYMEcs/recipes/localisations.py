@@ -13,7 +13,6 @@ class NNdist(ModuleBase):
 
     inputName = Input('coalesced')
     outputName = Output('withNNdist')
-    #columns = ListStr(['x', 'y', 'z'])
 
     def execute(self, namespace):
         inp = namespace[self.inputName]
@@ -22,8 +21,9 @@ class NNdist(ModuleBase):
         from scipy.spatial import KDTree
         coords = np.vstack([inp[k] for k in ['x','y','z']]).T
         tree = KDTree(coords)
-        dd, ii = tree.query(coords,k=2)
+        dd, ii = tree.query(coords,k=3)
         mapped.addColumn('NNdist', dd[:,1])
+        mapped.addColumn('NNdist2', dd[:,2])
         
         try:
             mapped.mdh = inp.mdh
@@ -31,6 +31,34 @@ class NNdist(ModuleBase):
             pass
         
         namespace[self.outputName] = mapped
+
+@register_module('NNfilter')
+class NNfilter(ModuleBase):
+
+    inputName = Input('withNNdist')
+    outputName = Output('NNfiltered')
+    nnMin = Float(0)
+    nnMax = Float(1e5)
+    
+
+    def execute(self, namespace):
+        inp = namespace[self.inputName]
+        mapped = tabular.mappingFilter(inp)
+
+        nn_good = (inp['NNdist'] > self.nnMin) * (inp['NNdist'] < self.nnMax)
+        nn2_good = (inp['NNdist2'] > self.nnMin) * (inp['NNdist2'] < self.nnMax)
+        nn_class = 1.0*nn_good + 2.0*(np.logical_not(nn_good)*nn2_good)
+        mapped.addColumn('NNclass', nn_class)
+
+        filterKeys = {'NNclass': (0.5,2.5)}
+        filtered = tabular.ResultsFilter(mapped, **filterKeys)
+        
+        try:
+            filtered.mdh = inp.mdh
+        except AttributeError:
+            pass
+        
+        namespace[self.outputName] = filtered
 
 @register_module('FiducialTrack')
 class FiducialTrack(ModuleBase):
