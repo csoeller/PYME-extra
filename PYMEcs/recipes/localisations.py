@@ -32,6 +32,33 @@ class NNdist(ModuleBase):
         
         namespace[self.outputName] = mapped
 
+@register_module('NNdistMutual')
+class NNdistMutual(ModuleBase):
+
+    inputChan1 = Input('channel1')
+    inputChan2 = Input('channel2')
+    outputName = Output('c1withNNdist')
+
+    def execute(self, namespace):
+        inpc1 = namespace[self.inputChan1]
+        inpc2 = namespace[self.inputChan2]
+        mapped = tabular.mappingFilter(inpc1)
+
+        from scipy.spatial import KDTree
+        coords1 = np.vstack([inpc1[k] for k in ['x','y','z']]).T
+        coords2 = np.vstack([inpc2[k] for k in ['x','y','z']]).T
+        tree = KDTree(coords2)
+        dd, ii = tree.query(coords1,k=2)
+        mapped.addColumn('NNdistMutual', dd[:,0])
+        mapped.addColumn('NNdistMutual2', dd[:,1])
+        
+        try:
+            mapped.mdh = inpc1.mdh
+        except AttributeError:
+            pass
+        
+        namespace[self.outputName] = mapped
+
 @register_module('NNfilter')
 class NNfilter(ModuleBase):
 
