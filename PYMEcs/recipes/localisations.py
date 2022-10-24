@@ -616,7 +616,7 @@ class DBSCANClustering2(ModuleBase):
     numberOfJobs = Int(max(multiprocessing.cpu_count()-1,1))
     
     clumpColumnName = CStr('dbscanClumpID')
-
+    sizeColumnName = CStr('dbscanClumpSize')
     outputName = Output('dbscanClustered')
 
     def execute(self, namespace):
@@ -642,7 +642,7 @@ class DBSCANClustering2(ModuleBase):
         resstat = binned_statistic(dbids, np.ones_like(dbids), statistic='sum', bins=edges)
 
         mapped.addColumn(str(self.clumpColumnName), dbids)
-        mapped.addColumn('dbscanClumpSize',resstat[0][dbids])
+        mapped.addColumn(str(self.sizeColumnName),resstat[0][dbids])
         
         # propogate metadata, if present
         try:

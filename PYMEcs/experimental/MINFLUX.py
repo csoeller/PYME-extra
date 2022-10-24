@@ -89,6 +89,65 @@ def plot_intra_clusters_dists(pipeline, ds='dbscanClustered',bins=15):
     plt.figure()
     h=plt.hist(dists,bins=bins)
 
+def cornercounts(pipeline,backgroundFraction=0.0):
+    curds = pipeline.selectedDataSourceKey
+    allds = 'withNNdist'
+    ds2 = 'group2'
+    ds3 = 'group3'
+    ds4 = 'group4'
+    p = pipeline
+    pipeline.selectDataSource(allds)
+    n_all = p['x'].size
+    pipeline.selectDataSource(ds2)
+    n_2 = p['x'].size
+    pipeline.selectDataSource(ds3)
+    n_3 = p['x'].size
+    pipeline.selectDataSource(ds4)
+    n_4 = p['x'].size
+    pipeline.selectDataSource(curds)
+    # note: we count RyRs, not corners
+    # double check these ideas
+    ccs = np.array([(1.0-backgroundFraction)*(n_all-(n_2+n_3+n_4)), n_2/2.0, n_3/3.0, n_4/4.0])
+    return ccs
+
+from scipy.special import binom
+from scipy.optimize import curve_fit
+
+def sigpn(p):
+    return pn(1,p)+pn(2,p)+pn(3,p)+pn(4,p)
+
+def sigptot(p):
+    return pn(0,p) + sigpn(p)
+
+def pn(k,p):
+    return (binom(4,k)*(np.power(p,k)*np.power((1-p),(4-k))))
+
+def pnn(k,p):
+    return (pn(k,p)/(1-pn(0,p)))
+
+def fourcornerplot(pipeline,sigma=None,backgroundFraction=0.0):
+    ccs = cornercounts(pipeline,backgroundFraction=backgroundFraction)
+    ccsn = ccs/ccs.sum()
+    ks = np.arange(4)+1
+    popt, pcov = curve_fit(pnn, ks, ccsn,sigma=sigma)
+    perr = np.sqrt(np.diag(pcov))
+    plt.figure()
+    ax = plt.subplot(111)
+    ax.bar(ks-0.4, ccsn, width=0.4, color='b', align='center')
+    ax.bar(ks, pnn(ks,popt[0]), width=0.4, color='g', align='center')
+    print('optimal p: %.3f +- %.3f' % (popt[0],perr[0]))
+    p_missed = pn(0,popt[0])
+    p_m_min = pn(0,popt[0]+perr[0])
+    p_m_max = pn(0,popt[0]-perr[0])
+    print('missed fraction: %.2f (%.2f...%.2f)' % (p_missed,p_m_min,p_m_max))
+
+
+sigmaDefault = [0.1,0.1,0.02,0.02]
+backgroundDefault = 0.15
+
+def fourcornerplot_default(pipeline):
+    fourcornerplot(pipeline,sigma=sigmaDefault,backgroundFraction=backgroundDefault)
+
 class MINFLUXanalyser():
     def __init__(self, visFr):
         self.visFr = visFr
