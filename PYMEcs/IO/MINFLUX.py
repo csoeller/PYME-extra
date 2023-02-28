@@ -55,12 +55,17 @@ def minflux_npy2pyme(fname):
     stdx = get_stddev_property(newids,posnm[:,0])
     counts = get_stddev_property(newids,posnm[:,0],statistic='count')
     stdy = get_stddev_property(newids,posnm[:,1])
-    pymedct =  {'x' : posnm[:,0], 'y': posnm[:,1],
+    pymedct =  {'x' : posnm[:,0],
+                'y': posnm[:,1],
                 # for t we use time to ms precision (without rounding); this is a reasonably close
                 # correspondence to frame numbers as time coordinates in SMLM data
-                't': (1e3*data['tim']).astype('i'), 'clumpIndex': newids,
-                'cfr':data['itr']['cfr'][:,iterno_other], 'efo':data['itr']['efo'][:,iterno_other],
-                'error_x' : stdx, 'error_y' : stdy, 'clumpSize' : counts,
+                't': (1e3*data['tim']).astype('i'),
+                'clumpIndex': newids,
+                'cfr':data['itr']['cfr'][:,iterno_other],
+                'efo':data['itr']['efo'][:,iterno_other],
+                'error_x' : stdx,
+                'error_y' : stdy,
+                'clumpSize' : counts,
                 'fbg': data['itr']['fbg'][:,iterno_loc],
                 # we assume for now the offset counts can be used to sum up
                 # and get the total photons harvested

@@ -185,30 +185,32 @@ def pn(k,p):
 def pnn(k,p):
     return (pn(k,p)/(1-pn(0,p)))
 
-def fourcornerplot(pipeline,sigma=None,backgroundFraction=0.0):
+def fourcornerplot(pipeline,sigma=None,backgroundFraction=0.0,showplot=True,quiet=False):
     ccs = cornercounts(pipeline,backgroundFraction=backgroundFraction)
     ccsn = ccs/ccs.sum()
     ks = np.arange(4)+1
     popt, pcov = curve_fit(pnn, ks, ccsn,sigma=sigma)
     perr = np.sqrt(np.diag(pcov))
-    plt.figure()
-    ax = plt.subplot(111)
-    ax.bar(ks-0.4, ccsn, width=0.4, color='b', align='center')
-    ax.bar(ks, pnn(ks,popt[0]), width=0.4, color='g', align='center')
-    ax.legend(['Experimental data', 'Fit'])
-    print('optimal p: %.3f +- %.3f' % (popt[0],perr[0]))
+    if showplot:
+        plt.figure()
+        ax = plt.subplot(111)
+        ax.bar(ks-0.4, ccsn, width=0.4, color='b', align='center')
+        ax.bar(ks, pnn(ks,popt[0]), width=0.4, color='g', align='center')
+        ax.legend(['Experimental data', 'Fit'])
     p_missed = pn(0,popt[0])
     p_m_min = pn(0,popt[0]+perr[0])
     p_m_max = pn(0,popt[0]-perr[0])
-    print('missed fraction: %.2f (%.2f...%.2f)' % (p_missed,p_m_min,p_m_max))
+    if not quiet:
+        print('optimal p: %.3f +- %.3f' % (popt[0],perr[0]))
+        print('missed fraction: %.2f (%.2f...%.2f)' % (p_missed,p_m_min,p_m_max))
     return (popt[0],perr[0],pnn(ks,popt[0]),ccsn)
 
 
-sigmaDefault = [0.1,0.1,0.02,0.02]
+sigmaDefault = [0.15,0.08,0.03,0.03]
 backgroundDefault = 0.15
 
-def fourcornerplot_default(pipeline):
-    return fourcornerplot(pipeline,sigma=sigmaDefault,backgroundFraction=backgroundDefault)
+def fourcornerplot_default(pipeline,sigma=sigmaDefault,backgroundFraction=backgroundDefault,showplot=True,quiet=False):
+    return fourcornerplot(pipeline,sigma=sigma,backgroundFraction=backgroundFraction,showplot=showplot,quiet=False)
 
 class MINFLUXanalyser():
     def __init__(self, visFr):
