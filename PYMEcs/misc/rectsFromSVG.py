@@ -71,7 +71,7 @@ def make_matplotrects(prects):
 def plot_rects(ax,matplotrects,alpha=1.0):
     # Create patch collection with specified colour/alpha
     pc = PatchCollection(matplotrects, facecolor='r', alpha=alpha,
-                         edgecolor='g')
+                         edgecolor='black',linewidth=1.0)
 
     # Add collection to axes
     ax.add_collection(pc,autolim=True)

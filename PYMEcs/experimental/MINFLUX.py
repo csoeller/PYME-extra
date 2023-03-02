@@ -72,7 +72,7 @@ def plot_cluster_analysis(pipeline, ds='dbscanClustered'):
     plt.tight_layout()
     pipeline.selectDataSource(curds)
 
-def plot_intra_clusters_dists(pipeline, ds='dbscanClustered',bins=15):
+def plot_intra_clusters_dists(pipeline, ds='dbscanClustered',bins=15,**kwargs):
     from scipy.spatial import KDTree
     curds = pipeline.selectedDataSourceKey
     pipeline.selectDataSource(ds)
@@ -87,7 +87,7 @@ def plot_intra_clusters_dists(pipeline, ds='dbscanClustered',bins=15):
         dists.extend(list(dd[:,1]))
     pipeline.selectDataSource(curds)
     plt.figure()
-    h=plt.hist(dists,bins=bins)
+    h=plt.hist(dists,bins=bins,**kwargs)
 
 def cornercounts(pipeline,backgroundFraction=0.0):
     curds = pipeline.selectedDataSourceKey

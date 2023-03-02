@@ -10,12 +10,12 @@ class SelectROIFT:
     def OnSelROIFT(self, event):
         try:
             #old glcanvas
-            x0, y0 = self.visFr.glCanvas.selectionStart
-            x1, y1 = self.visFr.glCanvas.selectionFinish
+            x0, y0 = self.visFr.glCanvas.selectionStart[0:2]
+            x1, y1 = self.visFr.glCanvas.selectionFinish[0:2]
         except AttributeError:
             #new glcanvas
-            x0, y0 = self.visFr.glCanvas.selectionSettings.start
-            x1, y1 = self.visFr.glCanvas.selectionSettings.finish
+            x0, y0 = self.visFr.glCanvas.selectionSettings.start[0:2]
+            x1, y1 = self.visFr.glCanvas.selectionSettings.finish[0:2]
 
         filters = {}
         filters['x'] = [float(min(x0, x1)), float(max(x0, x1))] # must ensure all values are eventually scalars to avoid issue with recipe yaml output
