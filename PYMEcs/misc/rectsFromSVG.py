@@ -102,11 +102,21 @@ def scale(prect,factor):
     return srect
 
 # code to get label points from scaled prect
-def points_from_sprect(sprect):
+def points_from_sprect(sprect,mode='default'):
     angle = sprect.get('rot_angle',0)
     origin = transform_rot(sprect['x'],sprect['y'],angle)
+    if mode == 'default':
+        corner_points = np.array([[3.5,3.5], [23.5,3.5], [23.5, 23.5], [3.5, 23.5]]) # anti-clock wise
+    elif mode == 'RyR-T1366':
+        corner_points = np.array([[6,5], [21.6,6.6], [20.2,22.5], [4.8,20.5]])
+    elif mode == 'RyR-T2023':
+        corner_points = np.array([[4.6,12.0], [15.5,4.8], [22.5,15.2], [11.9,22.5]])
+    elif mode == 'RyR-D4365':
+        corner_points = np.array([[2,13.2],[13.9,2.2],[25.3,14.0],[13.3,25.2]])
+
+    else:
+        raise RuntimeError('unknow RyR corner mode %s requested' % (mode))
     # first rotate corner points
-    corner_points = np.array([[3.5,3.5], [23.5,3.5], [23.5, 23.5], [3.5, 23.5]]) # clock wise
     R = rmat_ang(sprect.get('rot_angle',0))
     cpsr = corner_points[:,None,:].dot(R).squeeze()
     # now shift corner points to the origin of this rect
