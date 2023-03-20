@@ -147,7 +147,7 @@ def frc_from_image(image,channels,muwidth=2,zeropad=True,lowessFraction=5.0*0.01
     vx = 1e3*mdh['voxelsize.x']
     vy = 1e3*mdh['voxelsize.y']
     freqs,frc1,smoothed,L = frc(im0,im1,vx,vy,muwidth=2,zeropad=True,
-                                lowessFraction=5.0*0.01)
+                                lowessFraction=lowessFraction)
     halfbit = sigmaline(L)
     fhb = zc.zerocross1d(freqs,smoothed-halfbit)
     f7= zc.zerocross1d(freqs,smoothed-1.0/7.0)

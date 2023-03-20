@@ -584,7 +584,90 @@ class HistByID(ModuleBase):
                     Item('_'),
                     Item('outputName'), buttons=['OK'])
 
-    # a version of David's module which we include here so that we can test/hack a few things
+
+@register_module('subClump')
+class subClump(ModuleBase):
+    """
+    Groups clumps into smaller sub clumps of given max sub clump size
+    
+    Parameters
+    ----------
+
+        labelKey: datasource key serving as input clump index
+
+        subclumpMaxSize: target size of new subclumps - see also comments in the code
+
+        clumpColumnName: column name of generated sub clump index
+
+        sizeColumnName: column name of sub clump sizes
+    
+    """
+    inputName = Input('with_clumps')
+    labelKey = CStr('clumpIndex')
+    subclumpMaxSize = Int(4)
+    
+    clumpColumnName = CStr('subClumpID')
+    sizeColumnName = CStr('subClumpSize')
+    outputName = Output('with_subClumps')
+
+    def execute(self, namespace):
+
+        inp = namespace[self.inputName]
+        mapped = tabular.MappingFilter(inp)
+
+        # subid calculations
+        subids = np.zeros_like(inp['x'],dtype='int')
+        clumpids = inp[self.labelKey]
+        uids,revids,counts = np.unique(clumpids,return_inverse=True, return_counts=True)
+        # the clumpsz per se should not be needed, we just use the counts below
+        # clumpsz = counts[revids] # NOTE: could the case ID=0 be an issue? These are often points not part of clusters etc
+
+        # the code below has the task to split "long" clumps into subclumps
+        # we use the following strategy:
+        #    - don't split clumps with less than 2*scMaxSize events
+        #    - if clumps are larger than that break the clump into subclumps
+        #       - each subclump has at least scMaxSize events
+        #       - if there are "extra" events at the end that would not make a full scMaxSize clump
+        #            then add these to the otherwise previous subclump
+        #       - as a result generated subclumps have therefore from scMaxSize to 2*scMaxSize-1 events
+        # NOTE 1: this strategy is not the only possible one, reassess as needed
+        # NOTE 2: we do NOT explicitly sort by time of the events in the clump when grouping into sub clumps
+        #         (should not matter but think about again)
+        # NOTE 3: this has not necessarily been tuned for efficiency - tackle if needed
+        
+        scMaxSize = self.subclumpMaxSize
+        curbaseid = 1
+        for i,id in enumerate(uids):
+            if id > 0:
+                if counts[i] > 2*scMaxSize-1:
+                    cts = counts[i]
+                    ctrange = np.arange(cts,dtype='int') # a range we can use in splitting the events up into subclumps
+                    subs = cts // scMaxSize # the number of subclumps we are going to make
+                    # the last bit of the expression below ensures that events that would not make a full size subClump
+                    # get added to the last of the subclumps; a subclump has there from scMaxSize to 2*scMaxSize-1 events
+                    subids[revids == i] = curbaseid + ctrange // scMaxSize - (ctrange >= (subs * scMaxSize))
+                    curbaseid += subs
+                else:
+                    subids[revids == i] = curbaseid
+                    curbaseid += 1
+
+        suids,srevids,scounts = np.unique(subids,return_inverse=True, return_counts=True) # generate counts for new subclump IDs
+        subclumpsz = scounts[srevids] # NOTE: could the case ID==0 be an issue? These are often points not part of clusters etc
+        # end subid calculations
+        
+        mapped.addColumn(str(self.clumpColumnName), subids)
+        mapped.addColumn(str(self.sizeColumnName), subclumpsz)
+        
+        # propogate metadata, if present
+        try:
+            mapped.mdh = inp.mdh
+        except AttributeError:
+            pass
+
+        namespace[self.outputName] = mapped
+
+        
+# a version of David's module which we include here so that we can test/hack a few things
 @register_module('DBSCANClustering2')
 class DBSCANClustering2(ModuleBase):
     """
