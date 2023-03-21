@@ -42,36 +42,42 @@ def plot_errors(pipeline):
     pipeline.selectDataSource(curds)
     
 
-def plot_cluster_analysis(pipeline, ds='dbscanClustered'):
+def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True):
     curds = pipeline.selectedDataSourceKey
     pipeline.selectDataSource(ds)
     p = pipeline
     uids, cts = np.unique(p['dbscanClumpID'], return_counts=True)
     ctsgt1 = cts[cts > 1.1]
     pipeline.selectDataSource(curds)
-    plt.figure()
-    plt.subplot(221)
-    h = plt.hist(cts,bins=15)
-    plt.xlabel('Cluster Size')
-    plt.plot([np.mean(cts),np.mean(cts)],[0,h[0].max()])
-    plt.plot([np.median(cts),np.median(cts)],[0,h[0].max()],'--')
-    plt.subplot(222)
-    h = plt.hist(ctsgt1,bins=15)
-    plt.xlabel('Cluster Size (clusters > 1)')
-    plt.plot([np.mean(ctsgt1),np.mean(ctsgt1)],[0,h[0].max()])
-    plt.plot([np.median(ctsgt1),np.median(ctsgt1)],[0,h[0].max()],'--')
-    plt.subplot(223)
-    bp_dict = plt.boxplot([cts,ctsgt1],labels=['cluster size','clusters > 1'], showmeans=True)
-    for line in bp_dict['means']:
-        # get position data for median line
-        x, y = line.get_xydata()[0] # top of median line
-        # overlay median value
-        plt.text(x, y, '%.1f' % y,
-                 horizontalalignment='center') # draw above, centered
+    if showPlot:
+        plt.figure()
+        plt.subplot(221)
+        h = plt.hist(cts,bins=15)
+        plt.xlabel('Cluster Size')
+        plt.plot([np.mean(cts),np.mean(cts)],[0,h[0].max()])
+        plt.plot([np.median(cts),np.median(cts)],[0,h[0].max()],'--')
+        plt.subplot(222)
+        h = plt.hist(ctsgt1,bins=15)
+        plt.xlabel('Cluster Size (clusters > 1)')
+        plt.plot([np.mean(ctsgt1),np.mean(ctsgt1)],[0,h[0].max()])
+        plt.plot([np.median(ctsgt1),np.median(ctsgt1)],[0,h[0].max()],'--')
+        plt.subplot(223)
+        bp_dict = plt.boxplot([cts,ctsgt1],labels=['cluster size','clusters > 1'], showmeans=True)
+        for line in bp_dict['means']:
+            # get position data for median line
+            x, y = line.get_xydata()[0] # top of median line
+            # overlay median value
+            plt.text(x, y, '%.1f' % y,
+                     horizontalalignment='center') # draw above, centered
 
-    plt.tight_layout()
-    pipeline.selectDataSource(curds)
+        plt.tight_layout()
 
+    print("Mean cluster size: %.2f" % cts.mean())
+    print("Mean cluster size > 1: %.2f" % ctsgt1.mean())
+
+def cluster_analysis(pipeline):
+    plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=False)
+    
 def plot_intra_clusters_dists(pipeline, ds='dbscanClustered',bins=15,NNs=1,**kwargs):
     from scipy.spatial import KDTree
     curds = pipeline.selectedDataSourceKey
@@ -211,6 +217,9 @@ backgroundDefault = 0.15
 
 def fourcornerplot_default(pipeline,sigma=sigmaDefault,backgroundFraction=backgroundDefault,showplot=True,quiet=False):
     return fourcornerplot(pipeline,sigma=sigma,backgroundFraction=backgroundFraction,showplot=showplot,quiet=False)
+
+def subunitfit(pipeline):
+    return fourcornerplot_default(pipeline,showplot=False)
 
 class MINFLUXanalyser():
     def __init__(self, visFr):

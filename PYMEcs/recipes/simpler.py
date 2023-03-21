@@ -84,7 +84,7 @@ class ClusterModes(ModuleBase):
         from PYMEcs.Analysis.Simpler import clusterModes
         
         inp = namespace[self.inputName]
-        cmodes = tabular.mappingFilter(inp)
+        cmodes = tabular.MappingFilter(inp)
 
         ids = inp[self.IDkey] # I imagine this needs to be an int type key
         props = inp[self.PropertyKey]
@@ -188,7 +188,7 @@ class N0FromInterpolationMap(ModuleBase):
 
     def execute(self, namespace):
         inp = namespace[self.inputName]
-        mapped = tabular.mappingFilter(inp)
+        mapped = tabular.MappingFilter(inp)
 
         # we may want to cache the read! traits has a way to do this, see
         #    traits.has_traits.cached_property in https://docs.enthought.com/traits/traits_api_reference/has_traits.html
@@ -228,7 +228,7 @@ class ScaleNPhotonsFromN0(ModuleBase):
     
     def execute(self, namespace):
         inp = namespace[self.inputName]
-        mapped = tabular.mappingFilter(inp)
+        mapped = tabular.MappingFilter(inp)
 
         N0 = inp['N0']
         N0maxval = np.percentile(N0,97.5)
@@ -261,7 +261,7 @@ class SIMPLERzgenerator(ModuleBase):
     
     def execute(self, namespace):
         inp = namespace[self.inputName]
-        mapped = tabular.mappingFilter(inp)
+        mapped = tabular.MappingFilter(inp)
         if self.N0_is_uniform:
             N0 = np.ones_like(inp['x'])
         else:

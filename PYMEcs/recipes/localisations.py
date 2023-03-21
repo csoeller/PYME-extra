@@ -16,7 +16,7 @@ class NNdist(ModuleBase):
 
     def execute(self, namespace):
         inp = namespace[self.inputName]
-        mapped = tabular.mappingFilter(inp)
+        mapped = tabular.MappingFilter(inp)
 
         from scipy.spatial import KDTree
         coords = np.vstack([inp[k] for k in ['x','y','z']]).T
@@ -42,7 +42,7 @@ class NNdistMutual(ModuleBase):
     def execute(self, namespace):
         inpc1 = namespace[self.inputChan1]
         inpc2 = namespace[self.inputChan2]
-        mapped = tabular.mappingFilter(inpc1)
+        mapped = tabular.MappingFilter(inpc1)
 
         from scipy.spatial import KDTree
         coords1 = np.vstack([inpc1[k] for k in ['x','y','z']]).T
@@ -70,7 +70,7 @@ class NNfilter(ModuleBase):
 
     def execute(self, namespace):
         inp = namespace[self.inputName]
-        mapped = tabular.mappingFilter(inp)
+        mapped = tabular.MappingFilter(inp)
 
         nn_good = (inp['NNdist'] > self.nnMin) * (inp['NNdist'] < self.nnMax)
         nn2_good = (inp['NNdist2'] > self.nnMin) * (inp['NNdist2'] < self.nnMax)
@@ -122,7 +122,7 @@ class FiducialTrack(ModuleBase):
         import PYMEcs.Analysis.trackFiducials as tfs
 
         inp = namespace[self.inputName]
-        mapped = tabular.mappingFilter(inp)
+        mapped = tabular.MappingFilter(inp)
 
         if self.singleFiducial:
             # if all data is from a single fiducial we do not need to align
@@ -164,7 +164,7 @@ class FiducialApply(ModuleBase):
 
     def execute(self, namespace):
         inp = namespace[self.inputName]
-        mapped = tabular.mappingFilter(inp)
+        mapped = tabular.MappingFilter(inp)
 
         for dim in ['x','y','z']:
             try:
@@ -234,8 +234,8 @@ class FiducialApplyFromFiducials(ModuleBase):
         inp = namespace[self.inputData]
         fiducial = namespace[self.inputFiducials]
         
-        mapped = tabular.mappingFilter(inp)
-        out_f = tabular.mappingFilter(fiducial)
+        mapped = tabular.MappingFilter(inp)
+        out_f = tabular.MappingFilter(fiducial)
         
         for dim in ['x','y','z']:
             fiducial_dim = finterpDS(inp,fiducial,'fiducial_%s' % dim)
@@ -267,7 +267,7 @@ class ClusterTimeRange(ModuleBase):
         from scipy.stats import binned_statistic
         
         inp = namespace[self.inputName]
-        mapped = tabular.mappingFilter(inp)
+        mapped = tabular.MappingFilter(inp)
 
         ids = inp[self.IDkey]
         t = inp['t']
@@ -300,7 +300,7 @@ class ClusterStats(ModuleBase):
         from scipy.stats import binned_statistic
         
         inp = namespace[self.inputName]
-        mapped = tabular.mappingFilter(inp)
+        mapped = tabular.MappingFilter(inp)
 
         ids = inp[self.IDkey] # I imagine this needs to be an int type key
         prop = inp[self.StatKey]
@@ -351,7 +351,7 @@ class ValidClumps(ModuleBase):
         
         inp = namespace[self.inputName]
         valid = namespace[self.inputValid]
-        mapped = tabular.mappingFilter(inp)
+        mapped = tabular.MappingFilter(inp)
 
         # note: in coalesced data the clumpIndices are float!
         # this creates issues in comparisons unless these are converted to int before comparisons are made!!
@@ -376,7 +376,7 @@ class CopyMapped(ModuleBase):
 
     def execute(self, namespace):
         inp = namespace[self.inputName]
-        mapped = tabular.mappingFilter(inp)
+        mapped = tabular.MappingFilter(inp)
         namespace[self.outputName] = mapped
 
 @register_module('QindexScale')
@@ -389,7 +389,7 @@ class QindexScale(ModuleBase):
 
     def execute(self, namespace):
         inp = namespace[self.inputName]
-        mapped = tabular.mappingFilter(inp)
+        mapped = tabular.MappingFilter(inp)
         qkey = self.qIndexkey
         scaled = inp[qkey]
         qigood = inp[qkey] > 0
@@ -430,7 +430,7 @@ class QindexRatio(ModuleBase):
 
     def execute(self, namespace):
         inp = namespace[self.inputName]
-        mapped = tabular.mappingFilter(inp)
+        mapped = tabular.MappingFilter(inp)
         qkey1 = self.qIndexDenom
         qkey2 = self.qIndexNumer
 
@@ -472,7 +472,7 @@ class ObjectVolume(ModuleBase):
     def execute(self, namespace):
         from PYMEcs.Analysis.objectVolumes import objectVolumes
         inp = namespace[self.inputName]
-        mapped = tabular.mappingFilter(inp)
+        mapped = tabular.MappingFilter(inp)
 
         volumes = objectVolumes(np.vstack([inp[k] for k in ('x','y')]).T,inp['objectID'])
 
@@ -757,7 +757,7 @@ class SnrCalculation(ModuleBase):
    
     def execute(self, namespace):
         inp = namespace[self.inputName]
-        mapped = tabular.mappingFilter(inp)
+        mapped = tabular.MappingFilter(inp)
 
         if 'mdh' not in dir(inp):
             raise RuntimeError('SnrCalculation needs metadata')
@@ -796,7 +796,7 @@ class TimedSpecies(ModuleBase):
     
     def execute(self, namespace):
         inp = namespace[self.inputName]
-        mapped = tabular.mappingFilter(inp)
+        mapped = tabular.MappingFilter(inp)
         timedSpecies = self.populateTimedSpecies()
         
         mapped.addColumn('ColourNorm', np.ones_like(mapped['t'],'float'))
@@ -897,7 +897,7 @@ class BiplanePhotons(ModuleBase):
 
     def execute(self, namespace):
         inp = namespace[self.inputName]
-        mapped = tabular.mappingFilter(inp)
+        mapped = tabular.MappingFilter(inp)
 
         fdialog = wx.FileDialog(None, 'Please select PSF to use ...',
                                 #defaultDir=os.path.split(self.image.filename)[0],
