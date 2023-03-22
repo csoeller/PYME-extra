@@ -42,7 +42,7 @@ def plot_errors(pipeline):
     pipeline.selectDataSource(curds)
     
 
-def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True):
+def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True, return_means=False):
     curds = pipeline.selectedDataSourceKey
     pipeline.selectDataSource(ds)
     p = pipeline
@@ -72,11 +72,17 @@ def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True):
 
         plt.tight_layout()
 
-    print("Mean cluster size: %.2f" % cts.mean())
-    print("Mean cluster size > 1: %.2f" % ctsgt1.mean())
+    csm = cts.mean()
+    csgt1m = ctsgt1.mean()
+    print("Mean cluster size: %.2f" % csm)
+    print("Mean cluster size > 1: %.2f" % csgt1m)
+
+    if return_means:
+        return (csm,csgt1m)
+    
 
 def cluster_analysis(pipeline):
-    plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=False)
+    return plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=False,return_means=True)
     
 def plot_intra_clusters_dists(pipeline, ds='dbscanClustered',bins=15,NNs=1,**kwargs):
     from scipy.spatial import KDTree
