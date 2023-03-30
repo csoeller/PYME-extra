@@ -48,7 +48,7 @@ def minflux_npy2pyme(fname,return_original_array=False):
 
     posnm = 1e9*data['itr']['loc'][:,iterno_loc] # we keep all distances in units of nm
     if 'lnc' in data['itr'].dtype.fields:
-        posnm_raw = 1e9*data['itr']['lnc'][:,iterno_loc]
+        posnm_nc = 1e9*data['itr']['lnc'][:,iterno_loc]
         beamline_monitoring = True
     else:
         beamline_monitoring = False
@@ -81,10 +81,10 @@ def minflux_npy2pyme(fname,return_original_array=False):
         stdz = get_stddev_property(newids,posnm[:,2])
         pymedct.update({'z':posnm[:,2], 'error_z' : stdz})
     if beamline_monitoring:
-        pymedct.update({'x_raw' : posnm_raw[:,0],
-                        'y_raw' : posnm_raw[:,1]})
+        pymedct.update({'x_nc' : posnm_nc[:,0],
+                        'y_nc' : posnm_nc[:,1]})
         if is_3D:
-            pymedct.update({'z_raw' : posnm_raw[:,2]})
+            pymedct.update({'z_nc' : posnm_nc[:,2]})
     pymepd = pd.DataFrame.from_dict(pymedct)
     if return_original_array:
         return (pymepd,data)
