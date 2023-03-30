@@ -34,7 +34,7 @@ def minflux_npy_detect_3D(data):
                             (data['itr'].shape[1]))
 
 # this one should be able to deal both with 2d and 3D
-def minflux_npy2pyme(fname):
+def minflux_npy2pyme(fname,return_original_array=False):
     data = np.load(fname)
     
     if minflux_npy_detect_3D(data):
@@ -47,6 +47,11 @@ def minflux_npy2pyme(fname):
         iterno_other = 4
 
     posnm = 1e9*data['itr']['loc'][:,iterno_loc] # we keep all distances in units of nm
+    if 'lnc' in data['itr'].dtype.fields:
+        posnm_raw = 1e9*data['itr']['lnc'][:,iterno_loc]
+        beamline_monitoring = True
+    else:
+        beamline_monitoring = False
     rawids = data['tid']
     # we replace the non-sequential trace ids from MINFLUX data with a set of sequential ids
     # this works better for clumpIndex assumptions in the end
@@ -75,8 +80,16 @@ def minflux_npy2pyme(fname):
     if is_3D:
         stdz = get_stddev_property(newids,posnm[:,2])
         pymedct.update({'z':posnm[:,2], 'error_z' : stdz})
+    if beamline_monitoring:
+        pymedct.update({'x_raw' : posnm_raw[:,0],
+                        'y_raw' : posnm_raw[:,1]})
+        if is_3D:
+            pymedct.update({'z_raw' : posnm_raw[:,2]})
     pymepd = pd.DataFrame.from_dict(pymedct)
-    return pymepd
+    if return_original_array:
+        return (pymepd,data)
+    else:
+        return pymepd
                           
                            
 def save_minflux_as_csv(pd_data, fname):
