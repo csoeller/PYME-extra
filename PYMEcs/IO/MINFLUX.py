@@ -76,6 +76,7 @@ def minflux_npy2pyme(fname,return_original_array=False):
                 # and get the total photons harvested
                 # check with abberior
                 'nPhotons' : data['itr']['eco'].sum(axis=1),
+                'rawID' : rawids, # also keep the raw IDs for reference
                }
     if is_3D:
         stdz = get_stddev_property(newids,posnm[:,2])
