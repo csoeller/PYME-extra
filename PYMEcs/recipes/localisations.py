@@ -32,6 +32,45 @@ class NNdist(ModuleBase):
         
         namespace[self.outputName] = mapped
 
+@register_module('ClumpFromTID')
+class ClumpFromTID(ModuleBase):
+    """
+    Generate a clump index from the tid field (Trace ID from MINFLUX data)
+    generates contiguous indices, preferable if existing IDs not contiguous
+    (as otherwise will create empty clumps with zero clumpsize after merging)
+
+    Parameters
+    ----------
+    inputName: string - name of the data source containing a field named 'tid'
+    
+    Returns
+    -------
+    outputLocalizations : tabular.MappingFilter that contains new clumpIndex and clumpSize fields (will overwrite existing in inputName if present)
+    
+    """
+    inputName = Input('with_TID')
+    outputName = Output('with_clumps')
+
+    def execute(self, namespace):
+        inp = namespace[self.inputName]
+        mapped = tabular.MappingFilter(inp)
+
+        # we replace the non-sequential trace ids from MINFLUX data field TID with a set of sequential ids
+        # this works better for clumpIndex assumptions in the end (we think)
+        uids,revids,idcounts = np.unique(inp['tid'],return_inverse=True,return_counts=True)
+        ids = np.arange(1,uids.size+1,dtype='int32')[revids]
+        counts = idcounts[revids]
+
+        mapped.addColumn('clumpIndex', ids)
+        mapped.addColumn('clumpSize', counts)
+        
+        try:
+            mapped.mdh = inp.mdh
+        except AttributeError:
+            pass
+        
+        namespace[self.outputName] = mapped
+
 @register_module('NNdistMutual')
 class NNdistMutual(ModuleBase):
 

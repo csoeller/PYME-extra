@@ -34,7 +34,7 @@ def minflux_npy_detect_3D(data):
                             (data['itr'].shape[1]))
 
 # this one should be able to deal both with 2d and 3D
-def minflux_npy2pyme(fname,return_original_array=False):
+def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,with_cfr_std=False):
     data = np.load(fname)
     
     if minflux_npy_detect_3D(data):
@@ -49,49 +49,72 @@ def minflux_npy2pyme(fname,return_original_array=False):
     posnm = 1e9*data['itr']['loc'][:,iterno_loc] # we keep all distances in units of nm
     if 'lnc' in data['itr'].dtype.fields:
         posnm_nc = 1e9*data['itr']['lnc'][:,iterno_loc]
-        beamline_monitoring = True
+        has_lnc = True
     else:
-        beamline_monitoring = False
+        has_lnc = False
+
+    pymedct = {}
+        
     rawids = data['tid']
-    # we replace the non-sequential trace ids from MINFLUX data with a set of sequential ids
-    # this works better for clumpIndex assumptions in the end
-    uids,revids = np.unique(rawids,return_inverse=True)
-    newids = np.arange(1,uids.size+1,dtype='int32')[revids]
-    stdx = get_stddev_property(newids,posnm[:,0])
-    counts = get_stddev_property(newids,posnm[:,0],statistic='count')
-    stdy = get_stddev_property(newids,posnm[:,1])
-    pymedct =  {'x' : posnm[:,0],
-                'y': posnm[:,1],
-                # for t we use time to ms precision (without rounding); this is a reasonably close
-                # correspondence to frame numbers as time coordinates in SMLM data
-                't': (1e3*data['tim']).astype('i'),
-                'clumpIndex': newids,
-                'cfr':data['itr']['cfr'][:,iterno_other],
-                'efo':data['itr']['efo'][:,iterno_other],
-                'error_x' : stdx,
-                'error_y' : stdy,
-                'clumpSize' : counts,
-                'fbg': data['itr']['fbg'][:,iterno_loc],
-                # we assume for now the offset counts can be used to sum up
-                # and get the total photons harvested
-                # check with abberior
-                'nPhotons' : data['itr']['eco'].sum(axis=1),
-                'rawID' : rawids, # also keep the raw IDs for reference
-               }
+
+    if make_clump_index:
+        # we replace the non-sequential trace ids from MINFLUX data with a set of sequential ids
+        # this works better for clumpIndex assumptions in the end
+        uids,revids = np.unique(rawids,return_inverse=True)
+        ids = np.arange(1,uids.size+1,dtype='int32')[revids]
+        counts = get_stddev_property(ids,posnm[:,0],statistic='count')
+        pymedct.update({'clumpIndex': ids,
+                        'clumpSize' : counts,
+                        })
+    else:
+        ids = rawids
+
+    stdx = get_stddev_property(ids,posnm[:,0])
+    # we expect this to only happen when clumpSize == 1, because then std dev comes back as 0
+    stdx[stdx < 1e-3] = 100.0 # if error estimate is too small, replace with 100 as "large" flag
+    stdy = get_stddev_property(ids,posnm[:,1])
+    stdy[stdy < 1e-3] = 100.0
     if is_3D:
-        stdz = get_stddev_property(newids,posnm[:,2])
+        stdz = get_stddev_property(ids,posnm[:,2])
+        stdz[stdz < 1e-3] = 100.0
         pymedct.update({'z':posnm[:,2], 'error_z' : stdz})
-    if beamline_monitoring:
+
+    if with_cfr_std: # we also compute on request a cfr std dev across a trace ID (=clump in PYME)
+        pymedct.update({'cfr_std':get_stddev_property(ids,data['itr']['cfr'][:,iterno_other])})
+        
+    pymedct.update({'x' : posnm[:,0],
+                    'y': posnm[:,1],
+                    # for t we use time to ms precision (without rounding); this is a reasonably close
+                    # correspondence to frame numbers as time coordinates in SMLM data
+                    't': (1e3*data['tim']).astype('i'),
+                    'cfr':data['itr']['cfr'][:,iterno_other],
+                    'efo':data['itr']['efo'][:,iterno_other],
+                    'error_x' : stdx,
+                    'error_y' : stdy,
+                    'fbg': data['itr']['fbg'][:,iterno_loc],
+                    # we assume for now the offset counts can be used to sum up
+                    # and get the total photons harvested
+                    # check with abberior
+                    'nPhotons' : data['itr']['eco'].sum(axis=1),
+                    })
+
+    if has_lnc:
         pymedct.update({'x_nc' : posnm_nc[:,0],
                         'y_nc' : posnm_nc[:,1]})
         if is_3D:
             pymedct.update({'z_nc' : posnm_nc[:,2]})
+
+    # copy a few entries verbatim
+    for key in ['tid','act','vld']:
+        pymedct[key] = data[key].astype('i') # these are either integer types or should be converted to integer
+
     pymepd = pd.DataFrame.from_dict(pymedct)
     if return_original_array:
         return (pymepd,data)
     else:
         return pymepd
-                          
-                           
+
+
+# convenience function                           
 def save_minflux_as_csv(pd_data, fname):
     pd_data.to_csv(fname,index=False)
