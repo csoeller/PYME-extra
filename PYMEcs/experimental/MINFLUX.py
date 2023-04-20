@@ -42,7 +42,29 @@ def plot_errors(pipeline):
     pipeline.selectDataSource(curds)
     
 
-def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True, return_means=False):
+def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', **kwargs):
+    plt.figure()
+    plt.subplot(221)
+    h = plt.hist(cts,**kwargs)
+    plt.xlabel(xlabel)
+    plt.plot([np.mean(cts),np.mean(cts)],[0,h[0].max()])
+    plt.plot([np.median(cts),np.median(cts)],[0,h[0].max()],'--')
+    plt.subplot(222)
+    h = plt.hist(ctsgt1,**kwargs)
+    plt.xlabel('%s ( > 1)' % xlabel)
+    plt.plot([np.mean(ctsgt1),np.mean(ctsgt1)],[0,h[0].max()])
+    plt.plot([np.median(ctsgt1),np.median(ctsgt1)],[0,h[0].max()],'--')
+    plt.subplot(223)
+    bp_dict = plt.boxplot([cts,ctsgt1],labels=['cluster size','clusters > 1'], showmeans=True)
+    for line in bp_dict['means']:
+        # get position data for median line
+        x, y = line.get_xydata()[0] # top of median line
+        # overlay median value
+        plt.text(x, y, '%.1f' % y,
+                 horizontalalignment='center') # draw above, centered    
+    plt.tight_layout()
+
+def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True, return_means=False, psu=None, bins=15, **kwargs):
     curds = pipeline.selectedDataSourceKey
     pipeline.selectDataSource(ds)
     p = pipeline
@@ -50,32 +72,22 @@ def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True, return_m
     ctsgt1 = cts[cts > 1.1]
     pipeline.selectDataSource(curds)
     if showPlot:
-        plt.figure()
-        plt.subplot(221)
-        h = plt.hist(cts,bins=15)
-        plt.xlabel('Cluster Size')
-        plt.plot([np.mean(cts),np.mean(cts)],[0,h[0].max()])
-        plt.plot([np.median(cts),np.median(cts)],[0,h[0].max()],'--')
-        plt.subplot(222)
-        h = plt.hist(ctsgt1,bins=15)
-        plt.xlabel('Cluster Size (clusters > 1)')
-        plt.plot([np.mean(ctsgt1),np.mean(ctsgt1)],[0,h[0].max()])
-        plt.plot([np.median(ctsgt1),np.median(ctsgt1)],[0,h[0].max()],'--')
-        plt.subplot(223)
-        bp_dict = plt.boxplot([cts,ctsgt1],labels=['cluster size','clusters > 1'], showmeans=True)
-        for line in bp_dict['means']:
-            # get position data for median line
-            x, y = line.get_xydata()[0] # top of median line
-            # overlay median value
-            plt.text(x, y, '%.1f' % y,
-                     horizontalalignment='center') # draw above, centered
-
-        plt.tight_layout()
-
+        if psu is not None:
+            _plot_clustersize_counts(cts, ctsgt1,bins=bins,xlabel='# subunits',**kwargs)
+        else:
+            _plot_clustersize_counts(cts, ctsgt1,bins=bins,**kwargs)
+        if psu is not None:
+            _plot_clustersize_counts(cts/4.0/psu, ctsgt1/4.0/psu, xlabel='# RyRs, corrected', bins='auto',**kwargs)
+    
     csm = cts.mean()
     csgt1m = ctsgt1.mean()
+    csmd = np.median(cts)
+    csgt1md = np.median(ctsgt1)
+    
     print("Mean cluster size: %.2f" % csm)
     print("Mean cluster size > 1: %.2f" % csgt1m)
+    print("Median cluster size: %.2f" % csmd)
+    print("Median cluster size > 1: %.2f" % csgt1md)
 
     if return_means:
         return (csm,csgt1m)
