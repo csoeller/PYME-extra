@@ -77,7 +77,7 @@ def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True, return_m
         else:
             _plot_clustersize_counts(cts, ctsgt1,bins=bins,**kwargs)
         if psu is not None:
-            _plot_clustersize_counts(cts/4.0/psu, ctsgt1/4.0/psu, xlabel='# RyRs, corrected', bins='auto',**kwargs)
+            _plot_clustersize_counts(cts/4.0/psu, ctsgt1/4.0/psu, xlabel='# RyRs, corrected', bins=bins,**kwargs)
     
     csm = cts.mean()
     csgt1m = ctsgt1.mean()
