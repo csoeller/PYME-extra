@@ -26,30 +26,42 @@ defconfig = {
 #callps = np.vstack([rs.points_from_sprect(sprect) for sprect in sprects])
 import pandas as pd
 
-def points_from_sprectarray_3d(sprects, mode='default', config=None):
+def points_from_sprectarray_3d(sprects, mode='default', config=None, return_all=False):
     pointdf_array = []
     sulocdf_array = []
+    m1df_array = []
+    m2df_array = []
     for count, rect in enumerate(sprects):
         # as currently done the points are constructed each time afresh for each rect (i.e. RyR)
         # could cache this in a suitable way
-        dyedf,m1,m2,sulocdf = points_from_sprect_3d(rect,mode=mode,config=config,return_locs=True)
-        dyedf['ryrid'] = count + 1 # give each RyR a unique id (starting at 1)
+        dyedf,m1df,m2df,sulocdf = points_from_sprect_3d(rect,mode=mode,config=config,return_locs=True)
+        ryrid = count + 1 # give each RyR a unique id (starting at 1)
+        dyedf['ryrid'] = ryrid
         pointdf_array.append(dyedf)
-        sulocdf['ryrid'] = count + 1 # give each RyR a unique id (starting at 1)
+        sulocdf['ryrid'] = ryrid
         sulocdf_array.append(sulocdf)
+        m1df['ryrid'] = ryrid
+        m2df['ryrid'] = ryrid
+        m1df_array.append(m1df)
+        m2df_array.append(m2df)
     alldyesdf = pd.concat(pointdf_array,axis=0,ignore_index=True)
     allsulocdf = pd.concat(sulocdf_array,axis=0,ignore_index=True)
-    return alldyesdf, allsulocdf
+    allm1df = pd.concat(m1df_array,axis=0,ignore_index=True)
+    allm2df = pd.concat(m2df_array,axis=0,ignore_index=True)
+    if return_all:
+        return alldyesdf, allm1df, allm2df, allsulocdf
+    else:
+        return alldyesdf, allsulocdf
 
 def points_from_sprect_3d(sprect,mode='default', config=None, return_locs=False):
-    dyedf, m1, m2, sulocdf = get_all_points(mode,config)
+    dyedf, m1df, m2df, sulocdf = get_all_points(mode,config)
     dyedft = transform_dye_locs(dyedf,sprect)
     sulocdft = transform_dye_locs(sulocdf,sprect)
-    m1t = transform_locs(m1,sprect)
-    m2t = transform_locs(m2,sprect)
+    m1dft = transform_dye_locs(m1df,sprect)
+    m2dft = transform_dye_locs(m2df,sprect)
     # do we also want to return m1, m2, sulocs?
     if return_locs:
-        return (dyedft, m1t, m2t, sulocdft)
+        return (dyedft, m1dft, m2dft, sulocdft)
     else:
         return dyedft
     
@@ -66,7 +78,7 @@ def get_all_points(mode,config):
     # one array for all m1 positions
     # one array for all m2 positions
     # one array for the subunit centroids
-    dyedf, m1, m2, sulocdf = derive_all_others_from_q1(q1ctrd,config)
+    dyedf, m1df, m2df, sulocdf = derive_all_others_from_q1(q1ctrd,config)
     # TODO: possibly transform all back to 0,0 based coordinates
     dyedfs = dyedf.copy()
     dyecoords = np.stack((dyedf['x'],dyedf['y'],dyedf['z']),axis=-1)
@@ -81,9 +93,21 @@ def get_all_points(mode,config):
     sulocdfs['y'] = suloc_coordss[:,1]
     sulocdfs['z'] = suloc_coordss[:,2]
     # assign transformed coordinates
-    m1s = transform_to_centered_coords(m1,forward=False)
-    m2s = transform_to_centered_coords(m2,forward=False)
-    return (dyedfs, m1s, m2s, sulocdfs)
+    m1dfs = m1df.copy()
+    m1_coords = np.stack((m1df['x'],m1df['y'],m1df['z']),axis=-1)
+    m1_coordss = transform_to_centered_coords(m1_coords,forward=False)
+    m1dfs['x'] = m1_coordss[:,0]
+    m1dfs['y'] = m1_coordss[:,1]
+    m1dfs['z'] = m1_coordss[:,2]
+
+    m2dfs = m2df.copy()
+    m2_coords = np.stack((m2df['x'],m2df['y'],m2df['z']),axis=-1)
+    m2_coordss = transform_to_centered_coords(m2_coords,forward=False)
+    m2dfs['x'] = m2_coordss[:,0]
+    m2dfs['y'] = m2_coordss[:,1]
+    m2dfs['z'] = m2_coordss[:,2]
+    
+    return (dyedfs, m1dfs, m2dfs, sulocdfs)
     
 def transform_dye_locs(dyedf,sprect):
     dyedfpts = np.stack((dyedf['x'],dyedf['y'],dyedf['z']),axis=-1)
@@ -138,6 +162,16 @@ def derive_all_others_from_q1(q1reference,config):
     sulocsdf['mid'] = -1
     sulocsdf['qid'] = np.arange(4,dtype='i')
     sulocsdf['did'] = -1
+
+    m1df = pd.DataFrame.from_dict({'x' : m1[:,0],'y' : m1[:,1],'z' : m1[:,2],})
+    m1df['mid'] = np.zeros((4),dtype='i')
+    m1df['qid'] = np.arange(4,dtype='i')
+    m1df['did'] = -1
+    
+    m2df = pd.DataFrame.from_dict({'x' : m2[:,0],'y' : m2[:,1],'z' : m2[:,2],})
+    m2df['mid'] = np.ones((4),dtype='i')
+    m2df['qid'] = np.arange(4,dtype='i')
+    m2df['did'] = -1
     
     dyedf1 = pd.DataFrame.from_dict({'x' : d1[:,0],'y' : d1[:,1],'z' : d1[:,2],})
     dyedf1['mid'] = 0
@@ -157,7 +191,7 @@ def derive_all_others_from_q1(q1reference,config):
     dyedf4['did'] = 3
     
     dyedf = pd.concat([dyedf1,dyedf2,dyedf3,dyedf4],axis=0,ignore_index=True)
-    return dyedf, m1, m2, sulocsdf
+    return dyedf, m1df, m2df, sulocsdf
     
 def get_q1_point(mode):
     if mode == 'default':
@@ -228,6 +262,29 @@ def join_dye_su(blinkdf,sudf):
     sudfe = rs.pymedf_add_err(sudf,locerr=0.01) # we use a very small locerr
     sudfe['muid'] = -1 # no unique marker ID
     jointdfs = pd.concat([blinkdf,sudfe],axis=0,ignore_index=True)
+    jointdfs['suid'] = 10 * jointdfs['ryrid'] + jointdfs['qid'] # unique subunit ID
+
+    return jointdfs
+
+def join_dye_all(blinkdf,dyedf,sudf,m1df,m2df):
+    blinkdf['loctype'] = 0 # loctype 0: blink location
+    sudf['loctype'] = 1 # loctype 1: subunit location
+    sudfe = rs.pymedf_add_err(sudf,locerr=0.01) # we use a very small locerr
+    sudfe['muid'] = -1 # no unique marker ID
+    
+    m1df['loctype'] = 2 # loctype 2: marker 1
+    m1dfe = rs.pymedf_add_err(m1df,locerr=0.01) # we use a very small locerr
+    m1dfe['muid'] = -1 # no unique marker ID
+    
+    m2df['loctype'] = 3 # loctype 3: marker 2
+    m2dfe = rs.pymedf_add_err(m2df,locerr=0.01) # we use a very small locerr
+    m2dfe['muid'] = -1 # no unique marker ID
+
+    dyedf['loctype'] = 4 # loctype 4: dye positions
+    dyedfe = rs.pymedf_add_err(dyedf,locerr=0.01) # we use a very small locerr
+    dyedfe['muid'] = -1 # no unique marker ID
+    
+    jointdfs = pd.concat([blinkdf,sudfe,m1dfe,m2dfe,dyedfe],axis=0,ignore_index=True)
     jointdfs['suid'] = 10 * jointdfs['ryrid'] + jointdfs['qid'] # unique subunit ID
 
     return jointdfs
