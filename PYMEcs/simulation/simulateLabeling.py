@@ -298,3 +298,192 @@ def labelfrac2(alldf):
     blinks = alldf.loc[alldf['loctype'] == 0]
     sulocdf = alldf.loc[alldf['loctype'] == 1]
     return float(np.unique(blinks['suid']).size)/np.unique(sulocdf['suid']).size
+
+#For error rate simulations
+def expected_subunits(alldf):
+    blinks = alldf.loc[alldf['loctype'] == 0]
+    return (np.unique(blinks['suid']).size)
+
+def find_msug(data):    
+    msug_counting = []
+    for val in (np.unique(data.ryrid)):
+        data_to_check = data.su_num[data.ryrid == val].tolist()
+        duplicateFrequencies = {}
+        for i in set(data_to_check):
+            duplicateFrequencies[i] = data_to_check.count(i)
+        count_msugs(duplicateFrequencies, 13.00, msug_counting)
+        count_msugs(duplicateFrequencies, 31.00, msug_counting)
+        count_msugs(duplicateFrequencies, 101.00, msug_counting)
+        count_msugs(duplicateFrequencies, 269.00, msug_counting)
+
+    return(msug_counting)
+
+
+def count_msugs(freq_dict, val, msug_counting):    
+    try:
+        if freq_dict[val] > 1:
+            msug_counting.append(freq_dict[val])
+    except:
+        pass
+    
+    return
+
+
+def subunit_grouping_number(alldf):
+    su_num_mapping = [13.00, 31.00, 101.00, 269.00]
+    su_num = [su_num_mapping[value] for value in alldf.qid]
+    alldf2 = alldf.assign(su_num=su_num)
+    return alldf2
+
+
+def wrong_su(data):
+    acceptable_su_values = [13.00, 31.00, 101.00, 269.00]
+    incorrect_grouping_val = [round(item,2) for item in data.su_num if round(item, 2) not in acceptable_su_values]
+  
+    return (incorrect_grouping_val) 
+
+
+def distancecalc(x2,y2,z2, x1,y1,z1):
+    dist = ((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2)**0.5
+    
+    return dist, x2-x1, y2-y1, z2-z1
+
+
+def nearest_neighbour_with_deltas(sulocdf, coalesced, NN, dx, dy, dz):
+    NNs = []; dxs = []; dys = []; dzs = []
+    
+    coalesced = coalesced.reset_index(drop=True)
+    sulocdf = sulocdf.reset_index(drop=True)
+    
+    actualsu_locations= [[sulocdf['x'][val], sulocdf['y'][val], sulocdf['z'][val]] for val in range (len(sulocdf['x']))]
+    clump_end = [[coalesced.x[val], coalesced.y[val], coalesced.z[val]] for val in range(coalesced.x.size)]
+    for val in clump_end:
+        dist =[]
+        xs =[]
+        ys =[]
+        zs =[]
+        for originalpoint in actualsu_locations:              
+            NN_distances, delta_x, delta_y, delta_z = distancecalc(val[0], val[1], val[2], originalpoint[0], originalpoint[1], originalpoint[2])
+            dist.append(NN_distances)
+            xs.append(delta_x)
+            ys.append(delta_y)
+            zs.append(delta_z)
+        
+        NNs.append(np.min(dist))
+        dxs.append(xs[np.argmin(dist)])
+        dys.append(ys[np.argmin(dist)])
+        dzs.append(zs[np.argmin(dist)])
+    # In order to keep everything the same size. 
+    NN.append(NNs)
+    dx.append(dxs)
+    dy.append(dys)
+    dz.append(dzs)
+
+
+def subunit_locations(sulocdf, coalesced, su_index, su_val):
+    act_su = sulocdf[sulocdf.qid == su_index]
+    su = coalesced[coalesced.su_num == su_val]
+    
+    return act_su, su
+
+
+def create_df(data):
+    coalesced = pd.DataFrame({
+        "x": data.x,
+        "y" : data.y,
+        "z": data.z,
+        "su_num": data.su_num,
+        "ryr_id":data.ryrid,   
+    })
+    
+    return coalesced
+
+
+def run_simulations_for_errors(num_repeats, save_location, recipe_location, layout, dyedf, sulocdf, dye1=0.20,dye2=0):
+    import PYMEcs.simulation.simulateLabeling as sl
+    from PYMEcs.recipes import localisations
+    from PYME.LMVis import pipeline
+
+    dbscan_dist = 8
+    if layout == "RyR-D4365":
+        dbscan_dist = 7
+     
+    labfraction = []
+
+    NN = [[] for _ in range(4)]
+    dx = [[] for _ in range(4)]
+    dy = [[] for _ in range(4)]
+    dz = [[] for _ in range(4)]
+
+    msug = []; wsug = []
+
+    classifications_made = []; expected_classifications = []
+    correct_classifications = []; misclassifications = []
+
+    for j in range (num_repeats):    
+        blinks = pickdyes(dyedf, dye1, dye2, 1.0,locerr=2.0) 
+        alldf = sl.join_dye_su(blinks,sulocdf) # Join the blinks with the actual subunit locations
+        alldf = subunit_grouping_number(alldf) # Add a new column with distinct numbers based on the qid
+
+        labfraction.append(100*labelfrac2(alldf))
+
+        alldf.to_csv(save_location + "/example_data_v{0}.csv".format(j),index=False) # Save each simulation to csv    
+
+        data = pipeline.Pipeline(save_location + "/example_data_v{0}.csv".format(j))  # Load the newly created .csv into PyME
+        data.recipe.update_from_yaml(recipe_location + "/Separate actual from event and clump dbscan_{}nm_v2.yaml".format(dbscan_dist)) # Run the DBScan recipe
+        data.selectDataSource('merged') #Select the coalesced data
+
+        coalesced = create_df(data)
+
+        for i in range(4):
+            act_su, su = subunit_locations(sulocdf, coalesced, i, [13, 31, 101, 269][i]) # Filter the data to only have a single subunit type
+            nearest_neighbour_with_deltas(act_su, su, NN[i], dx[i], dy[i], dz[i]) # Calculate NN & deltas for individual subunits 0-3
+
+        msug_initial_counter = find_msug(data) 
+        msug_val = sum(msug_initial_counter)-len(msug_initial_counter) # This catches missed subunit groupings by inspecting events with the same RyR and SU #s.
+        msug.append(msug_val)
+
+        wsug_val = len(wrong_su(data)) # This catches wrong subunit groupings by inspecting the SU# and checking if the value matches those expected 
+        wsug.append(wsug_val)
+
+        misclassifications.append(msug_val+wsug_val) # This is the sum of the 2 possible misclassifications 
+        correct_classifications.append(data.x.size-msug_val-wsug_val)     
+        classifications_made.append(data.x.size)
+        expected_classifications.append(expected_subunits(alldf))
+
+    #Once the simulations are complete, save the data. 
+    dyes_found_per = [round(100*(correct_classifications[i]/expected_classifications[i]),2) for i in range(len(correct_classifications))]
+    correct_classification_per = [round(100*(correct_classifications[i]/classifications_made[i]),2) for i in range(len(correct_classifications))]
+    misclassification_per = [round(100*(misclassifications[i]/classifications_made[i]),2) for i in range(len(correct_classifications))]
+    wsug_per = [round(100*(wsug[i]/classifications_made[i]),2) for i in range(len(correct_classifications))]
+    msug_per = [round(100*(msug[i]/classifications_made[i]),2) for i in range(len(correct_classifications))]
+
+    result = pd.DataFrame({
+        "labelfrac": labfraction,
+        "dye_locations" : expected_classifications,
+        "classifications_made": classifications_made,
+        "correct_classifications": correct_classifications,
+        "misclassifications":misclassifications,
+        "wrong_subunit_grouping" : wsug,
+        "missed_subunit_grouping" : msug,    
+        "correct_classification_per": correct_classification_per,
+        "misclassification_per": misclassification_per,
+        "dyes_found_per": dyes_found_per,
+        "msug_per" : msug_per,
+        "wsug_per" : wsug_per,
+    })
+
+    result.to_csv(save_location + "/results.csv".format(j),index=False)
+    
+    delta_lists = [
+    {
+        "dx_list": [item for sublist in dx for item in sublist],
+        "dy_list": [item for sublist in dy for item in sublist],
+        "dz_list": [item for sublist in dz for item in sublist],
+    }
+    for dx, dy, dz in zip([dx[0], dx[1], dx[2], dx[3]], [dy[0], dy[1], dy[2], dy[3]], [dz[0], dz[1], dz[2], dz[3]])
+    ]
+
+    for i, delta_list in enumerate(delta_lists):
+        df = pd.DataFrame(delta_list)
+        df.to_csv(save_location + "/delta_lists_su{}.csv".format(i), index=False)

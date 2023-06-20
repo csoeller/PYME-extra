@@ -52,6 +52,13 @@ class IOcaml:
         keys = ['x','y','t','A','error_x','error_y']
         if 'sig' in pipeline.keys():
             keys.append('sig')
+        if 'dbscanClumpID' in pipeline.keys():
+            keys.append('dbscanClumpID')
+        if 'nPhotons' in pipeline.keys():
+            keys.append('nPhotons')
+        if 'nchi2' in pipeline.keys():
+            keys.append('nchi2')
+        
         filename = wx.FileSelector('Save events for CAML (select basename)...',
                                    wildcard="CSV files (*.csv)|*.csv", 
                                    flags = wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
