@@ -304,6 +304,7 @@ def expected_subunits(alldf):
     blinks = alldf.loc[alldf['loctype'] == 0]
     return (np.unique(blinks['suid']).size)
 
+
 def find_msug(data):    
     msug_counting = []
     for val in (np.unique(data.ryrid)):
