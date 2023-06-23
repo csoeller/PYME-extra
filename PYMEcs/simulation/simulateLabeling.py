@@ -400,15 +400,11 @@ def create_df(data):
     return coalesced
 
 
-def run_simulations_for_errors(num_repeats, save_location, recipe_location, layout, dyedf, sulocdf, dye1=0.20,dye2=0):
+def run_simulations_for_errors(num_repeats, save_location, recipe_location, dyedf, sulocdf, dye1=0.20,dye2=0):
     import PYMEcs.simulation.simulateLabeling as sl
     from PYMEcs.recipes import localisations
     from PYME.LMVis import pipeline
 
-    dbscan_dist = 8
-    if layout == "RyR-D4365":
-        dbscan_dist = 7
-     
     labfraction = []
 
     NN = [[] for _ in range(4)]
@@ -431,7 +427,7 @@ def run_simulations_for_errors(num_repeats, save_location, recipe_location, layo
         alldf.to_csv(save_location + "/example_data_v{0}.csv".format(j),index=False) # Save each simulation to csv    
 
         data = pipeline.Pipeline(save_location + "/example_data_v{0}.csv".format(j))  # Load the newly created .csv into PyME
-        data.recipe.update_from_yaml(recipe_location + "/Separate actual from event and clump dbscan_{}nm_v2.yaml".format(dbscan_dist)) # Run the DBScan recipe
+        data.recipe.update_from_yaml(recipe_location) # Run the DBScan recipe
         data.selectDataSource('merged') #Select the coalesced data
 
         coalesced = create_df(data)
