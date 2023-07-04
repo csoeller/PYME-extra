@@ -96,6 +96,7 @@ def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,wit
                     # and get the total photons harvested
                     # check with abberior
                     'nPhotons' : data['itr']['eco'].sum(axis=1),
+                    'tim': data['tim'], # we also keep the original float time index, units are [s]                  
                     })
 
     if has_lnc:
