@@ -89,6 +89,7 @@ def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,wit
                     't': (1e3*data['tim']).astype('i'),
                     'cfr':data['itr']['cfr'][:,iterno_other],
                     'efo':data['itr']['efo'][:,iterno_other],
+                    'dcr':data['itr']['dcr'][:,iterno_other],
                     'error_x' : stdx,
                     'error_y' : stdy,
                     'fbg': data['itr']['fbg'][:,iterno_loc],
