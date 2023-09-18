@@ -40,11 +40,13 @@ def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,wit
     if minflux_npy_detect_3D(data):
         is_3D = True
         iterno_loc = 9 # we pick up the most precise localisation from this iteration, also fbg
-        iterno_other = 6 # we pick up cfr, efo from this iteration
+        iterno_other = 9 # we pick up dcr, efo from this iteration
+        iterno_cfr = 6
     else:
         is_3D = False
         iterno_loc = 4
         iterno_other = 4
+        iterno_cfr = 4
 
     posnm = 1e9*data['itr']['loc'][:,iterno_loc] # we keep all distances in units of nm
     if 'lnc' in data['itr'].dtype.fields:
@@ -80,19 +82,19 @@ def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,wit
         pymedct.update({'z':posnm[:,2], 'error_z' : stdz})
 
     if with_cfr_std: # we also compute on request a cfr std dev across a trace ID (=clump in PYME)
-        pymedct.update({'cfr_std':get_stddev_property(ids,data['itr']['cfr'][:,iterno_other])})
+        pymedct.update({'cfr_std':get_stddev_property(ids,data['itr']['cfr'][:,iterno_cfr])})
         
     pymedct.update({'x' : posnm[:,0],
                     'y': posnm[:,1],
                     # for t we use time to ms precision (without rounding); this is a reasonably close
                     # correspondence to frame numbers as time coordinates in SMLM data
                     't': (1e3*data['tim']).astype('i'),
-                    'cfr':data['itr']['cfr'][:,iterno_other],
+                    'cfr':data['itr']['cfr'][:,iterno_cfr],
                     'efo':data['itr']['efo'][:,iterno_other],
                     'dcr':data['itr']['dcr'][:,iterno_other],
                     'error_x' : stdx,
                     'error_y' : stdy,
-                    'fbg': data['itr']['fbg'][:,iterno_loc],
+                    'fbg': data['itr']['fbg'][:,iterno_other],
                     # we assume for now the offset counts can be used to sum up
                     # and get the total photons harvested
                     # check with abberior
