@@ -122,3 +122,40 @@ def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,wit
 # convenience function                           
 def save_minflux_as_csv(pd_data, fname):
     pd_data.to_csv(fname,index=False)
+
+# we are monkeypatching pipeline and VisGUIFrame methods to sneak MINFLUX npy IO in;
+# in future we will ask for a way to get this considered by David B for a proper hook
+# in the IO code
+def monkeypatch_npy_io(visFr):
+    import types
+    import logging
+    import os
+    from PYME.IO import MetaDataHandler
+
+    logger = logging.getLogger(__name__)
+    logger.info("MINFLUX monkeypatching IO")
+    def _populate_open_args_npy(self, filename):
+        # this is currently just the minmal functionality for .npy,
+        # we should really check a few things before going any further
+        # .mat and CSV files give examples...
+        if os.path.splitext(filename)[1] == '.npy':
+            return {}
+        else:
+            return self._populate_open_args_original(filename)
+
+    visFr._populate_open_args_original = visFr._populate_open_args
+    visFr._populate_open_args = types.MethodType(_populate_open_args_npy,visFr)
+
+    def _ds_from_file_npy(self, filename, **kwargs):
+        if os.path.splitext(filename)[1] == '.npy': # MINFLUX NPY file
+            logger.info('.npy file, trying to load as MINFLUX npy ...')
+            from PYMEcs.IO.tabular import MinfluxNpySource
+            ds = MinfluxNpySource(filename)
+            ds.mdh = MetaDataHandler.NestedClassMDHandler()
+            return ds
+        else:
+            return self._ds_from_file_original(filename, **kwargs)
+
+    visFr.pipeline._ds_from_file_original = visFr.pipeline._ds_from_file
+    visFr.pipeline._ds_from_file = types.MethodType(_ds_from_file_npy,visFr.pipeline)
+    logger.info("MINFLUX monkeypatching IO completed")
