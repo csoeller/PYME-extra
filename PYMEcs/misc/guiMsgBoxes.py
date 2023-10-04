@@ -20,3 +20,8 @@ def Warn(parent, message, caption = 'Warning!'):
     dlg.ShowModal()
     dlg.Destroy()
 
+
+def Error(parent, message, caption = 'Error!'):
+    dlg = wx.MessageDialog(parent, message, caption, wx.OK | wx.ICON_ERROR)
+    dlg.ShowModal()
+    dlg.Destroy()

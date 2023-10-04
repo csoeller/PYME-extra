@@ -3,44 +3,49 @@ from PYMEcs.IO.MINFLUX import get_stddev_property
 import numpy as np
 import matplotlib.pyplot as plt
 
-def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo):
+def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, times, showTimeAverages=False):
     
     fig, (ax1, ax2) = plt.subplots(2, 2)
     h = ax1[0].hist(deltas,bins=40)
     dtmedian = np.median(deltas)
     ax1[0].plot([dtmedian,dtmedian],[0,h[0].max()])
     # this is time between one dye molecule and the next dye molecule being seen
-    ax1[0].set_xlabel('time between traces')
+    ax1[0].set_xlabel('time between traces (TBT) [s]')
     ax1[0].text(0.95, 0.8, 'median %.2f' % dtmedian, horizontalalignment='right',
              verticalalignment='bottom', transform=ax1[0].transAxes)
 
     h = ax1[1].hist(durations,bins=40)
     durmedian = np.median(durations)
     ax1[1].plot([durmedian,durmedian],[0,h[0].max()])
-    ax1[1].set_xlabel('duration of "traces"')
+    ax1[1].set_xlabel('duration of "traces" [s]')
     ax1[1].text(0.95, 0.8, 'median %.2f' % durmedian, horizontalalignment='right',
              verticalalignment='bottom', transform=ax1[1].transAxes)
 
     h = ax2[0].hist(tdiff,bins=50,range=(0,0.1))
     ax2[0].plot([tdmedian,tdmedian],[0,h[0].max()])
     # these are times between repeated localisations of the same dye molecule
-    ax2[0].set_xlabel('time between localisations in same trace')
+    ax2[0].set_xlabel('time between localisations in same trace [s]')
     ax2[0].text(0.95, 0.8, 'median %.2f' % tdmedian, horizontalalignment='right',
              verticalalignment='bottom', transform=ax2[0].transAxes)
 
-    
-    h = ax2[1].hist(1e-3*efo,bins=100,range=(0,200))
-    # ax2[0].plot([tdmedian,tdmedian],[0,h[0].max()])
-    ax2[1].set_xlabel('efo (photon rate kHz)')
-    #ax2[0].text(0.95, 0.8, 'median %.2f' % tdmedian, horizontalalignment='right',
-    #         verticalalignment='bottom', transform=ax2[0].transAxes)
+
+    if showTimeAverages:
+        ax2[1].plot(times,efo_or_dtovertime)
+        ax2[1].set_xlabel('TBT running time average [s]')
+        ax2[1].set_ylim([0, None])
+    else:
+        h = ax2[1].hist(1e-3*efo_or_dtovertime,bins=100,range=(0,200))
+        # ax2[0].plot([tdmedian,tdmedian],[0,h[0].max()])
+        ax2[1].set_xlabel('efo (photon rate kHz)')
+        #ax2[0].text(0.95, 0.8, 'median %.2f' % tdmedian, horizontalalignment='right',
+        #         verticalalignment='bottom', transform=ax2[0].transAxes)
        
     plt.tight_layout()
 
 
 # this function assumes a pandas dataframe
 # the pandas frame should generally be generated via the function minflux_npy2pyme from PYMEcs.IO.MINFLUX
-def analyse_locrate_pdframe(datain,use_invalid=False):
+def analyse_locrate_pdframe(datain,use_invalid=False,showTimeAverages=False):
 
     if np.any(datain['vld'] < 1):
         data = datain[datain['vld'] >= 1]
@@ -76,18 +81,25 @@ def analyse_locrate_pdframe(datain,use_invalid=False):
     tdiff = data['tim'].values[1:]-data['tim'].values[:-1]
     tdsmall = tdiff[tdiff <= 0.1]
     tdmedian = np.median(tdsmall)
+
+    start_times = data.loc[startindex,'tim'][:-1].values # we use those for binning the deltas, we discard final time to match size of deltas
     
     if has_invalid and use_invalid:
         durations_proper = durations
     else:
         durations_proper = durations + tdmedian # we count one extra localisation, using the median duration
         # the extra is because we leave at least one localisation out from the total timing when we subtract ends-starts
- 
-    plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, data['efo'])
+
+    if showTimeAverages:
+        delta_averages, bin_edges, binnumber = binned_statistic(start_times,deltas,statistic='mean', bins=50)
+        delta_av_times = 0.5*(bin_edges[:-1] + bin_edges[1:]) # bin centres
+        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, delta_averages, delta_av_times, showTimeAverages=True)
+    else:
+        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, data['efo'], None)
 
 
 # similar version but now using a pipeline
-def analyse_locrate(data,datasource='Localizations'):
+def analyse_locrate(data,datasource='Localizations',showTimeAverages=False):
     curds = data.selectedDataSourceKey
     data.selectDataSource(datasource)
     bins = np.arange(int(data['clumpIndex'].max())+1) + 0.5
@@ -100,5 +112,12 @@ def analyse_locrate(data,datasource='Localizations'):
     tdmedian = np.median(tdsmall)
     durations_proper = durations + tdmedian # we count one extra localisation, using the median duration
     # the extra is because we leave at least one localisation out from the total timing when we subtract ends-starts
+    data.selectDataSource(curds)
     
-    plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, data['efo'])
+    if showTimeAverages:
+        delta_averages, bin_edges, binnumber = binned_statistic(starts[:-1],deltas,statistic='mean', bins=50)
+        delta_av_times = 0.5*(bin_edges[:-1] + bin_edges[1:]) # bin centres
+        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, delta_averages, delta_av_times, showTimeAverages=True)
+    else:
+        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, data['efo'], None)
+

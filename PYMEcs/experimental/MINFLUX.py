@@ -239,6 +239,9 @@ def fourcornerplot_default(pipeline,sigma=sigmaDefault,backgroundFraction=backgr
 def subunitfit(pipeline):
     return fourcornerplot_default(pipeline,showplot=False)
 
+from PYMEcs.Analysis.MINFLUX import analyse_locrate
+from PYMEcs.misc.guiMsgBoxes import Error
+
 class MINFLUXanalyser():
     def __init__(self, visFr):
         self.visFr = visFr
@@ -246,7 +249,9 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('Experimental>MINFLUX', "Localisation Error analysis", self.OnErrorAnalysis)
         visFr.AddMenuItem('Experimental>MINFLUX', "Cluster sizes - 3D", self.OnCluster3D)
         visFr.AddMenuItem('Experimental>MINFLUX', "Cluster sizes - 2D", self.OnCluster2D)
-
+        visFr.AddMenuItem('Experimental>MINFLUX', "Analyse Localization Rate", self.OnLocalisationRate)
+        visFr.AddMenuItem('Experimental>MINFLUX', "EFO histogram (photon rates)", self.OnEfoAnalysis)
+        
     def OnErrorAnalysis(self, event):
         plot_errors(self.visFr.pipeline)
 
@@ -256,6 +261,33 @@ class MINFLUXanalyser():
     def OnCluster2D(self, event):
         plot_cluster_analysis(self.visFr.pipeline, ds='dbscan2D')
 
+    def OnLocalisationRate(self, event):
+        datasource = 'Localizations'
+        pipeline = self.visFr.pipeline
+        curds = pipeline.selectedDataSourceKey
+        pipeline.selectDataSource(datasource)
+        if not 'cfr' in pipeline.keys():
+            Error(self.visFr,'no property called "cfr", likely no MINFLUX data - aborting')
+            pipeline.selectDataSource(curds)
+            return
+        if not 'tim' in pipeline.keys():
+            Error(self.visFr,'no property called "tim", you need to convert to CSV with a more recent version of PYME-Extra - aborting')
+            pipeline.selectDataSource(curds)
+            return
+        pipeline.selectDataSource(curds)
+
+        analyse_locrate(pipeline,datasource=datasource,showTimeAverages=True)
+
+    def OnEfoAnalysis(self, event):
+        pipeline = self.visFr.pipeline
+        if not 'efo' in pipeline.keys():
+            Error(self.visFr,'no property called "efo", likely no MINFLUX data or wrong datasource (CHECK) - aborting')
+            return
+        plt.figure()
+        h = plt.hist(1e-3*pipeline['efo'],bins='auto',range=(0,200))
+        dskey = pipeline.selectedDataSourceKey
+        plt.xlabel('efo (photon rate in kHz)')
+        plt.title("EFO stats, using datasource '%s'" % dskey)
         
 def Plug(visFr):
     return MINFLUXanalyser(visFr)
