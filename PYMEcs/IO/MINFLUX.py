@@ -57,7 +57,9 @@ def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,wit
 
     pymedct = {}
         
-    rawids = data['tid']
+    # this way we ensure that the valid vs invalid portions of the same trace get separate ids
+    #  it becomes important for calculation std_devs for traces
+    rawids = 2*data['tid'] + data['vld']
 
     if make_clump_index:
         # we replace the non-sequential trace ids from MINFLUX data with a set of sequential ids
