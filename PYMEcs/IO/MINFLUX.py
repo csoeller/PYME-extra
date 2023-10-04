@@ -159,3 +159,27 @@ def monkeypatch_npy_io(visFr):
     visFr.pipeline._ds_from_file_original = visFr.pipeline._ds_from_file
     visFr.pipeline._ds_from_file = types.MethodType(_ds_from_file_npy,visFr.pipeline)
     logger.info("MINFLUX monkeypatching IO completed")
+
+# below we make a class Pipeline that inherits from PYME.LMVis.pipeline.Pipeline
+# and changes the relevant method in the subclass
+#
+# in your own code (e.g. Python notebook) use as
+#
+#    from PYMEcs.IO.MINFLUX import Pipeline # use this instead of PYME.LMVis.pipeline
+#    data = Pipeline('my_minflux_file.npy')
+#
+from PYME.LMVis import pipeline
+from PYME.IO import MetaDataHandler
+import os
+import logging
+class Pipeline(pipeline.Pipeline):
+    
+    def _ds_from_file(self, filename, **kwargs):
+        if os.path.splitext(filename)[1] == '.npy': # MINFLUX NPY file
+            logging.getLogger(__name__).info('.npy file, trying to load as MINFLUX npy ...')
+            from PYMEcs.IO.tabular import MinfluxNpySource
+            ds = MinfluxNpySource(filename)
+            ds.mdh = MetaDataHandler.NestedClassMDHandler()
+            return ds
+        else:
+            return super()._ds_from_file(filename, **kwargs)
