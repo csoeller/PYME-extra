@@ -3,7 +3,7 @@ from PYMEcs.IO.MINFLUX import get_stddev_property
 import numpy as np
 import matplotlib.pyplot as plt
 
-def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, times, showTimeAverages=False):
+def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, times, showTimeAverages=False, dsKey=None):
     
     fig, (ax1, ax2) = plt.subplots(2, 2)
     h = ax1[0].hist(deltas,bins=40)
@@ -39,13 +39,14 @@ def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, ti
         ax2[1].set_xlabel('efo (photon rate kHz)')
         #ax2[0].text(0.95, 0.8, 'median %.2f' % tdmedian, horizontalalignment='right',
         #         verticalalignment='bottom', transform=ax2[0].transAxes)
-       
+    if dsKey is not None:
+        plt.suptitle('Location rate analysis from datasource %s' % dsKey)
     plt.tight_layout()
 
 
 # this function assumes a pandas dataframe
 # the pandas frame should generally be generated via the function minflux_npy2pyme from PYMEcs.IO.MINFLUX
-def analyse_locrate_pdframe(datain,use_invalid=False,showTimeAverages=False):
+def analyse_locrate_pdframe(datain,use_invalid=False,showTimeAverages=True):
 
     if np.any(datain['vld'] < 1):
         data = datain[datain['vld'] >= 1]
@@ -99,7 +100,7 @@ def analyse_locrate_pdframe(datain,use_invalid=False,showTimeAverages=False):
 
 
 # similar version but now using a pipeline
-def analyse_locrate(data,datasource='Localizations',showTimeAverages=False):
+def analyse_locrate(data,datasource='Localizations',showTimeAverages=True):
     curds = data.selectedDataSourceKey
     data.selectDataSource(datasource)
     bins = np.arange(int(data['clumpIndex'].max())+1) + 0.5
@@ -117,7 +118,7 @@ def analyse_locrate(data,datasource='Localizations',showTimeAverages=False):
     if showTimeAverages:
         delta_averages, bin_edges, binnumber = binned_statistic(starts[:-1],deltas,statistic='mean', bins=50)
         delta_av_times = 0.5*(bin_edges[:-1] + bin_edges[1:]) # bin centres
-        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, delta_averages, delta_av_times, showTimeAverages=True)
+        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, delta_averages, delta_av_times, showTimeAverages=True, dsKey = datasource)
     else:
-        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, data['efo'], None)
+        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, data['efo'], None, dsKey = datasource)
 
