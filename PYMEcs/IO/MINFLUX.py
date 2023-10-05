@@ -22,6 +22,17 @@ def get_stddev_property(ids, prop, statistic='std'):
     std_events = propstd[ids]
     return std_events
 
+from PYME.warnings import warn
+def npy_is_minflux_data(filename):
+    data = np.load(filename)
+    for field in ['itr','tim','tid','vld']:
+        if data.dtype.fields is None:
+            warn('no fields in NPY data, likely not a MINFLUX data set')
+            return False
+        if not field in data.dtype.fields:
+            warn('no "%s" field in NPY data, likely not a MINFLUX data set' % field)
+            return False
+    return True
 
 # here we check for size either 5 (2D) or 10 (3D); any other size raises an error
 def minflux_npy_detect_3D(data):
@@ -58,7 +69,8 @@ def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,wit
     pymedct = {}
         
     # this way we ensure that the valid vs invalid portions of the same trace get separate ids
-    #  it becomes important for calculation std_devs for traces
+    #      it becomes important for calculating std_devs for traces which are otherwise contamined by NaNs
+    #      from the invalid part of a trace
     rawids = 2*data['tid'] + data['vld']
 
     if make_clump_index:
@@ -151,6 +163,8 @@ def monkeypatch_npy_io(visFr):
     def _ds_from_file_npy(self, filename, **kwargs):
         if os.path.splitext(filename)[1] == '.npy': # MINFLUX NPY file
             logger.info('.npy file, trying to load as MINFLUX npy ...')
+            if not npy_is_minflux_data(filename):
+                return # this is not MINFLUX NPY data - we give up
             from PYMEcs.IO.tabular import MinfluxNpySource
             ds = MinfluxNpySource(filename)
             ds.mdh = MetaDataHandler.NestedClassMDHandler()
@@ -179,6 +193,8 @@ class Pipeline(pipeline.Pipeline):
     def _ds_from_file(self, filename, **kwargs):
         if os.path.splitext(filename)[1] == '.npy': # MINFLUX NPY file
             logging.getLogger(__name__).info('.npy file, trying to load as MINFLUX npy ...')
+            if not npy_is_minflux_data(filename):
+                raise RuntimeError("can't read pipeline data from NPY file - not a MINFLUX data set")
             from PYMEcs.IO.tabular import MinfluxNpySource
             ds = MinfluxNpySource(filename)
             ds.mdh = MetaDataHandler.NestedClassMDHandler()
