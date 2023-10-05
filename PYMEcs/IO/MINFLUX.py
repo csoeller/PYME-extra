@@ -126,6 +126,8 @@ def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,wit
     for key in ['tid','act','vld']:
         pymedct[key] = data[key].astype('i') # these are either integer types or should be converted to integer
 
+    # TODO: think this through - we don't really need a dataframe here,
+    # could return a record array, or at least make that optional
     pymepd = pd.DataFrame.from_dict(pymedct)
     if return_original_array:
         return (pymepd,data)
@@ -144,7 +146,9 @@ def monkeypatch_npy_io(visFr):
     import types
     import logging
     import os
+    import wx
     from PYME.IO import MetaDataHandler
+    from PYME.IO.FileUtils import nameUtils
 
     logger = logging.getLogger(__name__)
     logger.info("MINFLUX monkeypatching IO")
@@ -153,6 +157,8 @@ def monkeypatch_npy_io(visFr):
         # we should really check a few things before going any further
         # .mat and CSV files give examples...
         if os.path.splitext(filename)[1] == '.npy':
+            if not npy_is_minflux_data(filename):
+                return # this is not MINFLUX NPY data - we give up
             return {}
         else:
             return self._populate_open_args_original(filename)
@@ -163,8 +169,6 @@ def monkeypatch_npy_io(visFr):
     def _ds_from_file_npy(self, filename, **kwargs):
         if os.path.splitext(filename)[1] == '.npy': # MINFLUX NPY file
             logger.info('.npy file, trying to load as MINFLUX npy ...')
-            if not npy_is_minflux_data(filename):
-                return # this is not MINFLUX NPY data - we give up
             from PYMEcs.IO.tabular import MinfluxNpySource
             ds = MinfluxNpySource(filename)
             ds.mdh = MetaDataHandler.NestedClassMDHandler()
@@ -174,7 +178,32 @@ def monkeypatch_npy_io(visFr):
 
     visFr.pipeline._ds_from_file_original = visFr.pipeline._ds_from_file
     visFr.pipeline._ds_from_file = types.MethodType(_ds_from_file_npy,visFr.pipeline)
+
+    # we install this as new Menu item as File>Open is already assigned
+    # however the new File>Open MINFLUX NPY entry can also open all other allowed file types
+    def OnOpenFileNPY(self, event):
+        filename = wx.FileSelector("Choose a file to open", 
+                                   nameUtils.genResultDirectoryPath(), 
+                                   wildcard='|'.join(['All supported formats|*.h5r;*.txt;*.mat;*.csv;*.hdf;*.3d;*.3dlp;*.npy',
+                                                      'PYME Results Files (*.h5r)|*.h5r',
+                                                      'Tab Formatted Text (*.txt)|*.txt',
+                                                      'Matlab data (*.mat)|*.mat',
+                                                      'Comma separated values (*.csv)|*.csv',
+                                                      'HDF Tabular (*.hdf)|*.hdf',
+                                                      'MINFLUX NPY (*.npy)|*.npy']))
+
+        if not filename == '':
+            self.OpenFile(filename)
+
+    
+    visFr.OnOpenFileNPY = types.MethodType(OnOpenFileNPY,visFr)
+    visFr.AddMenuItem('File', "Open MINFLUX NPY", visFr.OnOpenFileNPY)
+    
     logger.info("MINFLUX monkeypatching IO completed")
+
+    # set option to make choosing filetype options available in FileDialogs on macOS
+    # TDO: check if this can also be set on non-macOS systems!
+    wx.SystemOptions.SetOption(u"osx.openfiledialog.always-show-types", 1)
 
 # below we make a class Pipeline that inherits from PYME.LMVis.pipeline.Pipeline
 # and changes the relevant method in the subclass

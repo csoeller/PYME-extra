@@ -21,7 +21,8 @@ class MinfluxNpySource(TabularBase):
 
         # check for invalid localisations:
         # possible TODO - is this needed/helpful, or should we propagate missing values further?
-        # FIXME - this does not seem to work properly yet when invalid data is present
+        # FIXED - minflux_npy2pyme should now also work properly when invalid data is present
+        #         so returning just the valid events to PYME should be ok
         if np.any(self.res['vld'] < 1):
             self.res = self.res[self.res['vld'] >= 1]
 
