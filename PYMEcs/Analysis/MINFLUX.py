@@ -3,7 +3,8 @@ from PYMEcs.IO.MINFLUX import get_stddev_property
 import numpy as np
 import matplotlib.pyplot as plt
 
-def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, times, showTimeAverages=False, dsKey=None):
+def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, times,
+                       showTimeAverages=False, dsKey=None, areaString=None):
     
     fig, (ax1, ax2) = plt.subplots(2, 2)
     h = ax1[0].hist(deltas,bins=40)
@@ -11,21 +12,24 @@ def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, ti
     ax1[0].plot([dtmedian,dtmedian],[0,h[0].max()])
     # this is time between one dye molecule and the next dye molecule being seen
     ax1[0].set_xlabel('time between traces (TBT) [s]')
-    ax1[0].text(0.95, 0.8, 'median %.2f' % dtmedian, horizontalalignment='right',
+    ax1[0].text(0.95, 0.8, 'median %.2f s' % dtmedian, horizontalalignment='right',
              verticalalignment='bottom', transform=ax1[0].transAxes)
-
+    if not areaString is None:
+        ax1[0].text(0.95, 0.6, areaString, horizontalalignment='right',
+             verticalalignment='bottom', transform=ax1[0].transAxes)
+    
     h = ax1[1].hist(durations,bins=40)
     durmedian = np.median(durations)
     ax1[1].plot([durmedian,durmedian],[0,h[0].max()])
     ax1[1].set_xlabel('duration of "traces" [s]')
-    ax1[1].text(0.95, 0.8, 'median %.2f' % durmedian, horizontalalignment='right',
+    ax1[1].text(0.95, 0.8, 'median %.0f ms' % (1e3*durmedian), horizontalalignment='right',
              verticalalignment='bottom', transform=ax1[1].transAxes)
 
     h = ax2[0].hist(tdiff,bins=50,range=(0,0.1))
     ax2[0].plot([tdmedian,tdmedian],[0,h[0].max()])
     # these are times between repeated localisations of the same dye molecule
     ax2[0].set_xlabel('time between localisations in same trace [s]')
-    ax2[0].text(0.95, 0.8, 'median %.2f' % tdmedian, horizontalalignment='right',
+    ax2[0].text(0.95, 0.8, 'median %.0f ms' % (1e3*tdmedian), horizontalalignment='right',
              verticalalignment='bottom', transform=ax2[0].transAxes)
 
 
@@ -113,12 +117,16 @@ def analyse_locrate(data,datasource='Localizations',showTimeAverages=True):
     tdmedian = np.median(tdsmall)
     durations_proper = durations + tdmedian # we count one extra localisation, using the median duration
     # the extra is because we leave at least one localisation out from the total timing when we subtract ends-starts
+
+    lenx_um = 1e-3*(data['x'].max()-data['x'].min())
+    leny_um = 1e-3*(data['y'].max()-data['y'].min())
+    area_string = 'area %.1fx%.1f um^2' % (lenx_um,leny_um)
     data.selectDataSource(curds)
     
     if showTimeAverages:
         delta_averages, bin_edges, binnumber = binned_statistic(starts[:-1],deltas,statistic='mean', bins=50)
         delta_av_times = 0.5*(bin_edges[:-1] + bin_edges[1:]) # bin centres
-        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, delta_averages, delta_av_times, showTimeAverages=True, dsKey = datasource)
+        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, delta_averages, delta_av_times, showTimeAverages=True, dsKey = datasource, areaString=area_string)
     else:
-        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, data['efo'], None, dsKey = datasource)
+        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, data['efo'], None, dsKey = datasource, areaString=area_string)
 
