@@ -3,6 +3,7 @@ from __future__ import print_function    # (at top of module)
 import numpy as np
 from scipy import ndimage
 from collections import OrderedDict
+import warnings
 
 import logging
 logger = logging.getLogger(__name__)
@@ -145,13 +146,21 @@ def AverageTrack(ds, tracks, filter='Gaussian', filterScale=10.0, align=True):
             meas = meas - d[:,None]
             n_iters +=1
             print(n_iters, dm)
-         
-        mm = np.nanmean(meas, 0)
+
+        # nanmean can generate warnings with all nan values
+        # we catch them in this block only
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message='Mean of empty slice')
+            mm = np.nanmean(meas, 0)
+        
         print('Finished:', n_iters, dm)
         return mm
 
     def _simpleav(meas):
-        mm = np.nanmean(meas, 0)
+        # as above
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message='Mean of empty slice')
+            mm = np.nanmean(meas, 0)
         return mm
         
     if align:

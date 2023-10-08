@@ -140,8 +140,12 @@ def save_minflux_as_csv(pd_data, fname):
     pd_data.to_csv(fname,index=False)
 
 # we are monkeypatching pipeline and VisGUIFrame methods to sneak MINFLUX npy IO in;
+# this gets called from the MINFLUX plugin in the Plug routine;
+# this way it can patch the relevant VisGUIFrame and Pipeline methods in the instances
+# of these classes in the visGUI app
+#
 # in future we will ask for a way to get this considered by David B for a proper hook
-# in the IO code
+# in the file loading code and possibly allow registering file load hooks for new formats
 def monkeypatch_npy_io(visFr):
     import types
     import logging
@@ -202,7 +206,7 @@ def monkeypatch_npy_io(visFr):
     logger.info("MINFLUX monkeypatching IO completed")
 
     # set option to make choosing filetype options available in FileDialogs on macOS
-    # TDO: check if this can also be set on non-macOS systems!
+    # seems to be ok to be set on non-macOS systems, too
     wx.SystemOptions.SetOption(u"osx.openfiledialog.always-show-types", 1)
 
 # below we make a class Pipeline that inherits from PYME.LMVis.pipeline.Pipeline

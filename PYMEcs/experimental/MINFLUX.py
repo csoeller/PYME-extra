@@ -1,7 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+from PYME.warnings import warn
 def plot_errors(pipeline):
+    if not 'coalesced_nz' in pipeline.dataSources:
+        warn('no data source named "coalesced_nz" - check recipe and ensure this is MINFLUX data')
+        return
     curds = pipeline.selectedDataSourceKey
     pipeline.selectDataSource('coalesced_nz')
     p = pipeline
@@ -65,6 +69,9 @@ def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', **kwargs):
     plt.tight_layout()
 
 def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True, return_means=False, psu=None, bins=15, **kwargs):
+    if not ds in pipeline.dataSources:
+        warn('no data source named "%s" - check recipe and ensure this is MINFLUX data' % ds)
+        return
     curds = pipeline.selectedDataSourceKey
     pipeline.selectDataSource(ds)
     p = pipeline
@@ -97,6 +104,9 @@ def cluster_analysis(pipeline):
     return plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=False,return_means=True)
     
 def plot_intra_clusters_dists(pipeline, ds='dbscanClustered',bins=15,NNs=1,**kwargs):
+    if not ds in pipeline.dataSources:
+        warn('no data source named "%s" - check recipe and ensure this is MINFLUX data' % ds)
+        return
     from scipy.spatial import KDTree
     curds = pipeline.selectedDataSourceKey
     pipeline.selectDataSource(ds)
