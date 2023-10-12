@@ -10,6 +10,9 @@
 from scipy.stats import binned_statistic
 import pandas as pd
 import numpy as np
+import os
+
+warning_msg = ""
 
 def get_stddev_property(ids, prop, statistic='std'):
     maxid = int(ids.max())
@@ -23,16 +26,28 @@ def get_stddev_property(ids, prop, statistic='std'):
     return std_events
 
 from PYME.warnings import warn
-def npy_is_minflux_data(filename):
+def npy_is_minflux_data(filename, warning=False, return_msg=False):
     data = np.load(filename)
-    for field in ['itr','tim','tid','vld']:
-        if data.dtype.fields is None:
-            warn('no fields in NPY data, likely not a MINFLUX data set')
-            return False
-        if not field in data.dtype.fields:
-            warn('no "%s" field in NPY data, likely not a MINFLUX data set' % field)
-            return False
-    return True
+    valid = True
+    msg = None
+    if data.dtype.fields is None:
+        valid = False
+        msg = 'no fields in NPY data, likely not a MINFLUX data set'
+    else:
+        for field in ['itr','tim','tid','vld']:
+            if not field in data.dtype.fields:
+                valid = False
+                msg = 'no "%s" field in NPY data, likely not a MINFLUX data set' % field
+                break
+
+    if not valid and warning:
+        if not msg is None:
+                warn(msg)
+
+    if return_msg:
+        return (valid,msg)
+    else:
+        return valid
 
 # here we check for size either 5 (2D) or 10 (3D); any other size raises an error
 def minflux_npy_detect_3D(data):
@@ -161,9 +176,12 @@ def monkeypatch_npy_io(visFr):
         # we should really check a few things before going any further
         # .mat and CSV files give examples...
         if os.path.splitext(filename)[1] == '.npy':
-            if not npy_is_minflux_data(filename):
+            valid, warnmsg = npy_is_minflux_data(filename,warning=False,return_msg=True)
+            if not valid:
+                warn('file "%s" does not look like a valid MINFLUX NPY file:\n"%s"\n\nOPENING ABORTED'
+                     % (os.path.basename(filename),warnmsg))
                 return # this is not MINFLUX NPY data - we give up
-            return {}
+            return {} # all good, just return empty args
         else:
             return self._populate_open_args_original(filename)
 
@@ -226,7 +244,7 @@ class Pipeline(pipeline.Pipeline):
     def _ds_from_file(self, filename, **kwargs):
         if os.path.splitext(filename)[1] == '.npy': # MINFLUX NPY file
             logging.getLogger(__name__).info('.npy file, trying to load as MINFLUX npy ...')
-            if not npy_is_minflux_data(filename):
+            if not npy_is_minflux_data(filename,warning=True):
                 raise RuntimeError("can't read pipeline data from NPY file - not a MINFLUX data set")
             from PYMEcs.IO.tabular import MinfluxNpySource
             ds = MinfluxNpySource(filename)
