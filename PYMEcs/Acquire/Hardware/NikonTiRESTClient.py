@@ -7,7 +7,7 @@ from PYMEcs.Acquire.Hardware.NikonTiSim import LightPath as TiLightPath
 logger = logging.getLogger(__name__)
 
 class LPClient(TiLightPath):
-    def __init__(self, url="http://127.0.0.1:5000", timeout=2):
+    def __init__(self, url="http://127.0.0.1:5000", timeout=15):
         self.url = url
         self.timeout = timeout
         self.wantChangeNotification = []

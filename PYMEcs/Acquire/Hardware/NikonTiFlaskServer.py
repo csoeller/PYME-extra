@@ -11,6 +11,7 @@ def create_app(mode='simulated'):
     else:
         from PYME.Acquire.Hardware import NikonTi
         lp = NikonTi.LightPath()
+        # lp.SetPosition(2)
 
     @app.get("/names")
     def get_names():
@@ -40,3 +41,5 @@ def create_app(mode='simulated'):
 
     return app
 
+if __name__ == '__main__':
+    app.run(threaded=False, processes=1)
