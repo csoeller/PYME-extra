@@ -61,7 +61,7 @@ class onTimer:
         visFr = self.visFr
         pipeline = visFr.pipeline
 
-        dens, intens, trange = evtDensity(pipeline)
+        dens, intens1, intens2, trange = evtDensity(pipeline)
         area = getarea(pipeline)
 
         if dens is None:
@@ -70,10 +70,11 @@ class onTimer:
             infostr = \
 """
 Event density:        %.1f events/um^2
-Normalised intensity: %.1f events/um^2/5K-fr
+Norm. intens.: %.1f events/um^2/5K-fr
+Norm. intens.: %.1f events/(20um)^2/fr
 Number of Events:     %d events
 Area probed:          %.2f um^2
-Time range:           %.2fK frames""" % (dens, intens, dens*area, area, trange/1e3)
+Time range:           %.2fK frames""" % (dens, intens1, intens2, dens*area, area, trange/1e3)
             Info(visFr,infostr)
 
 

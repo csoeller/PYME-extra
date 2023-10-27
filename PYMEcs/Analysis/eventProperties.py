@@ -41,7 +41,10 @@ def evtDensity(p):
     nEvents = p['x'].size
 
     if area > 1e-6:
-        dens = nEvents / area
-        return (dens, dens / trange * 5e3, trange)
+        dens = nEvents / area # events per um^2
+
+        intens1 = dens / trange * 5e3 # events per um^2 per 5k frames
+        intens2 = 400 * dens / trange # events per (20um)^2 per frame
+        return (dens, intens1, intens2, trange)
     else:
         return None
