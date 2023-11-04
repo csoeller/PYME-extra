@@ -6,14 +6,18 @@ from PYMEcs.Acquire.Hardware.NikonTiSim import LightPath as TiLightPath
 
 logger = logging.getLogger(__name__)
 
+# by basing it on the simulator we inherit the "generic" methods, i.e.
+# ProvideMetadata, OnChange and Poll
+# which are required for the functional object when used with
+# PYMEAcquire
 class LPClient(TiLightPath):
     def __init__(self, url="http://127.0.0.1:5000", timeout=15):
         self.url = url
         self.timeout = timeout
         self.wantChangeNotification = []
 
-        self.names = self.GetNames()
-        self.lastPosition = self.GetPosition()
+        self.names = self.GetNames() # execute the method ones and then keep the values cached
+        self.lastPosition = self.GetPosition() # initialise here as later used in Poll method
 
     def GetPosition(self):
         response = requests.get(urljoin(self.url,'position'),timeout=self.timeout)
