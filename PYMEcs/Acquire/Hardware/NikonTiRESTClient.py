@@ -16,7 +16,7 @@ class LPClient(TiLightPath):
         self.timeout = timeout
         self.wantChangeNotification = []
 
-        self.names = self.GetNames() # execute the method ones and then keep the values cached
+        self.names = self.GetNames() # execute the method once and then keep the values cached
         self.lastPosition = self.GetPosition() # initialise here as later used in Poll method
 
     def GetPosition(self):

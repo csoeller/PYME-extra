@@ -4,25 +4,12 @@ import logging
 from PYMEcs.Acquire.Hardware.NikonTiSim import LightPath
 from http import HTTPStatus
 
-class commandObject(object):
-    def __init__(self,cmd,*args):
-        self.cmd = cmd
-        self.args = args
-
-    def __repr__(self):
-        return 'CMDMSG : %s!' % (self.cmd) +  \
-            '[' + ','.join(str(x) for x in self.args) + ']'
-
-class returnObject(object):
-    def __init__(self,cmd,status,*args):
-        self.cmd = cmd
-        self.status = status
-        self.return_args = args
-        
-    def __repr__(self):
-        return 'RETMSG : %s!%s!' % (self.cmd,self.status) + \
-            '[' + ','.join(str(x) for x in self.return_args) + ']'
-
+# derived class of NikonTi.LightPath that provides "safe" methods that catch certain exceptions
+# and return a status if the method invocation was successful
+#
+# in actual hardware version we would check for a com_error only, all other exceptions will not be
+# caught, i.e.
+#
 # from pywintypes import com_error
 # ...
 # except com_error:
@@ -30,7 +17,6 @@ class returnObject(object):
 
 # note that we use HTTP status codes as we use a REST server anyway and
 # thus having status values we can directly pass back via HTTP responses are useful
-
 class LPSafe(LightPath):
     def __init__(self):
         super().__init__()
@@ -87,6 +73,27 @@ class LPSafe(LightPath):
 
         return status
     
+# objects that are used to pass info to and from the
+# threaded version of the LightPath object 
+class commandObject(object):
+    def __init__(self,cmd,*args):
+        self.cmd = cmd
+        self.args = args
+
+    def __repr__(self):
+        return 'CMDMSG : %s!' % (self.cmd) +  \
+            '[' + ','.join(str(x) for x in self.args) + ']'
+
+class returnObject(object):
+    def __init__(self,cmd,status,*args):
+        self.cmd = cmd
+        self.status = status
+        self.return_args = args
+        
+    def __repr__(self):
+        return 'RETMSG : %s!%s!' % (self.cmd,self.status) + \
+            '[' + ','.join(str(x) for x in self.return_args) + ']'
+
 
 class LPThread(Thread):
     def __init__(self, *args, **kwargs):
