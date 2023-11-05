@@ -53,7 +53,11 @@ class LPSafe(LightPath):
             port = None
         return status, port
 
+    # we check the input argument range and return a suitable status
+    # if an invalid argument was provided
     def SetPortS(self,port):
+        if port not in self.names:
+            return HTTPStatus.BAD_REQUEST
         try:
             self.SetPort(port)
         except:
@@ -72,6 +76,8 @@ class LPSafe(LightPath):
         return status, pos
 
     def SetPositionS(self,pos):
+        if pos not in range(len(self.names)):
+            return HTTPStatus.BAD_REQUEST
         try:
             self.SetPosition(pos)
         except:
@@ -95,12 +101,13 @@ class LPThread(Thread):
         while True:
             cmd = self.command_queue.get()
             logging.debug('received command %s' % cmd)
-            result = self.parse_command(cmd)
+            result = self._parse_command_and_execute(cmd)
             self.results_queue.put(result)
 
-    def parse_command(self,cmd):
+    def _parse_command_and_execute(self,cmd):
         if (not cmd.cmd) or (cmd.cmd is None):
             return returnObject(None, HTTPStatus.NO_CONTENT, 'no command received')
+            logging.warn('no command received')
         elif cmd.cmd == 'GetPort':
             status, port = self.lp.GetPortS()
             return returnObject(cmd.cmd, status, port)
@@ -118,15 +125,21 @@ class LPThread(Thread):
             return returnObject(cmd.cmd, status, names)
         else:
             return returnObject(cmd.cmd, HTTPStatus.NOT_IMPLEMENTED)
+            logging.warn('received unknown command %s' % cmd)
 
+    # primary external facing method to execute a command in the NikonTi LP thread
+    # and return in a form suitable for the excecute command (e.g. getter, setter, array getter)
     def run_command(self,cmd,*args):
         self.command_queue.put(commandObject(cmd,*args))
         logging.debug('running command %s' % cmd)
         ret = self.results_queue.get()
+        # setter command
         if len(ret.return_args) == 0:
             return ret.status
+        # getter command
         elif len(ret.return_args) == 1:
             return ret.status, ret.return_args[0]
+        # getter command that expects an array back
         else:
             return ret.status, ret.return_args
 

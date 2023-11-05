@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, make_response
 from http import HTTPStatus
+import logging
 
 def create_app(mode='simulated'):
     # create and configure the app
@@ -10,7 +11,11 @@ def create_app(mode='simulated'):
     else:
         from PYMEcs.Acquire.Hardware.LPthreadedSimple import LPThread
 
-    lpt = LPThread()
+    # so that we can see which thread processes the various messages, commands
+    logging.basicConfig(level=logging.DEBUG,
+                        format='(%(threadName)-9s) %(message)s',)
+
+    lpt = LPThread(name='NikonTiThread')
     lpt.start()
 
     @app.get("/names")
