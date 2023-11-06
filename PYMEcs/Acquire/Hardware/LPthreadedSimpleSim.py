@@ -150,10 +150,69 @@ class LPThread(Thread):
         else:
             return ret.status, ret.return_args
 
+    # below we replicate the normal LightPath interface and allow using the threaded
+    # version as a stand-in for the "plain" LightPath
+    def GetPort(self):
+        status, port = self.run_command('GetPort')
+        if status == HTTPStatus.OK:
+            return port
+        else:
+            raise RuntimeError('GetPort: received HTTP status %s' % status)
+
+    def SetPort(self,port):
+        status = self.run_command('SetPort',port)
+        if status != HTTPStatus.OK:
+            raise RuntimeError('SetPort: received HTTP status %s' % status)
+        self.lastPosition = self.GetPosition()
+        self.OnChange()
+
+    def GetNames(self):
+        status, names = self.run_command('GetNames')
+        if status == HTTPStatus.OK:
+            return names
+        else:
+            raise RuntimeError('GetPort: received HTTP status %s' % status)
+
+    def GetPosition(self):
+        status, pos = self.run_command('GetPosition')
+        if status == HTTPStatus.OK:
+            return pos
+        else:
+            raise RuntimeError('GetPosition: received HTTP status %s' % status)
+
+    def SetPosition(self,pos):
+        status = self.run_command('SetPosition',pos)
+        if status != HTTPStatus.OK:
+            raise RuntimeError('SetPosition: received HTTP status %s' % status)
+        self.lastPosition = pos
+        self.OnChange()
+
+    def ProvideMetadata(self,mdh):
+        mdh.setEntry('NikonTi.LightPath', self.GetPort())
+        
+    def OnChange(self):
+        for a in self.wantChangeNotification:
+            a()
+
+    def Poll_initialize(self):
+        if self.is_alive(): # make sure we are already running
+            self.lastPosition = self.GetPosition()
+            self.names = self.GetNames()
+            self.wantChangeNotification = []
+        else:
+            logging.warn('Thread not running - Poll initialisation failed')
+        
+    def Poll(self):
+        pos = self.GetPosition()
+        if not self.lastPosition == pos:
+            self.lastPosition = pos
+            self.OnChange()
+
 # test some aspects of the code here
 def main():
     lpt = LPThread(name='LPThread')
     lpt.start()
+    lpt.Poll_initialize()
 
     status,port = lpt.run_command('GetPort')
     if status == HTTPStatus.OK:
@@ -173,6 +232,8 @@ def main():
     if status == HTTPStatus.OK:
         print('Names:',names)
 
+    print('Testing high level interface: Port is %s' % lpt.GetPort())
+    
     status = lpt.run_command(None)   
 
     print(commandObject('GetIt',1,'L100'))

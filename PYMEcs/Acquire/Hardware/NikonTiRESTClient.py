@@ -34,6 +34,8 @@ class LPClient(TiLightPath):
             newpos = int(response.content.decode())
             if newpos != position:
                 logger.warn("asked for position '%d' but got position '%s'" % (newpos,position))
+            self.lastPosition = newpos # update so that OnChange works ok
+            self.OnChange()
         else:
             logger.warn("HTTP response error: got status %d" % response.status_code)
 
@@ -53,6 +55,8 @@ class LPClient(TiLightPath):
                 newport = response.content.decode()
                 if newport != port:
                     logger.warn("asked for port '%s' but got port '%s'" % (newport,port))
+                self.lastPosition = self.GetPosition() # update so that OnChange works ok
+                self.OnChange()
             else:
                 logger.warn("HTTP response error: got status %d" % response.status_code)
         else:
