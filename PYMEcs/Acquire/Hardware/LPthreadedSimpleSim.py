@@ -200,7 +200,7 @@ class LPThread(Thread):
             self.names = self.GetNames()
             self.wantChangeNotification = []
         else:
-            logging.warn('Thread not running - Poll initialisation failed')
+            logging.warning('Thread not running - Poll initialisation failed')
         
     def Poll(self):
         pos = self.GetPosition()
@@ -211,8 +211,9 @@ class LPThread(Thread):
 # test some aspects of the code here
 def main():
     lpt = LPThread(name='LPThread')
+    lpt.Poll_initialize() # this one should give a warning, thread not yet started
     lpt.start()
-    lpt.Poll_initialize()
+    lpt.Poll_initialize() # this one is done at the proper time
 
     status,port = lpt.run_command('GetPort')
     if status == HTTPStatus.OK:
