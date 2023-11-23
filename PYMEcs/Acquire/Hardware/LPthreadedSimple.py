@@ -209,6 +209,8 @@ class LPThread(Thread):
 
 # test some aspects of the code here
 def main():
+    import time
+    
     lpt = LPThread(name='LPThread')
     lpt.Poll_initialize() # this one should give a warning, thread not yet started
     lpt.start()
@@ -219,7 +221,7 @@ def main():
         print('Port is %s' % port)
 
     status = lpt.run_command('SetPort','L100')
-    wait(2.0) # wait two seconds for the command to complete
+    time.sleep(2.0) # wait two seconds for the command to complete
 
     status, port = lpt.run_command('GetPort')
     if status == HTTPStatus.OK:
