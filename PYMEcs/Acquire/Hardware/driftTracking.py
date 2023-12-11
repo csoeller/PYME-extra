@@ -349,6 +349,17 @@ class Correlator(object):
             
             #FIXME: logging shouldn't call piezo.GetOffset() etc ... for performance reasons
             # all history logged distances should now be in units of nm
+
+            # note that eventLog.logEvent injects into this instance of PYMEAcquire which runs the drift tracking
+            # this does not inject into the data acquired by the primary PYMEAcquire instance which are all done by the
+            # offset piezo and happen via the REST server communication
+            # as such, we need to modify the REST server methods to enable passing other parameters, e.g. the
+            # correlation strength
+            #
+            # it may be possible to achieve this via subclassing from offsetPiezoREST.OffsetPiezo and
+            # offsetPiezoREST.OffsetPiezoClient, for example by introducing a new method on both server and client
+            # Question: can we do it from within here? Probably more likely new module for offsetPiezoREST subclass
+            # and use in init file for driftracking
             self.history.append((time.time(), dx, dy, 1e3*dz, cCoeff, self.corrRefMax, 1e3*self.piezo.GetOffset(), self.piezo.GetPos(0)))
             eventLog.logEvent('PYME2ShiftMeasure', '%3.4f, %3.4f, %3.4f' % (dx, dy, dz))
 
@@ -377,7 +388,10 @@ class Correlator(object):
                     self.timeSinceLastAdjustment += 1
             
             if self.logShifts:
-                self.piezo.LogShifts(dx, dy, dz, self.lockActive)
+                if hasattr(self.piezo, 'LogShiftsCorrelAmp'):
+                    self.piezo.LogShiftsCorrelAmp(dx, dy, dz, self.lockActive, coramp=cCoeff/self.corrRefMax)
+                else:
+                    self.piezo.LogShifts(dx, dy, dz, self.lockActive)
         
         self._last_target_z = targetZ                    
             
@@ -408,76 +422,3 @@ class Correlator(object):
     #     self.setRefC()
     #     piezo.MoveTo(0, p)
 
-
-def correlator(scope, piezo=None):
-    # API compatible constructor for Py2
-    import Pyro.core
-    class klass(Pyro.core.ObjBase):
-        def __init__(self, scope, piezo=None):
-            Pyro.core.ObjBase.__init__(self)
-            Correlator.__init__(self, scope, piezo=piezo)
-
-    return klass
-
-
-class ServerThread(threading.Thread):
-    def __init__(self, driftTracker):
-        threading.Thread.__init__(self)
-        import Pyro.core
-        import Pyro.naming
-
-        import socket
-        ip_addr = socket.gethostbyname(socket.gethostname())
-        
-        compName = GetComputerName()
-        
-        Pyro.core.initServer()
-
-        pname = "%s.DriftTracker" % compName
-        
-        try:
-            from PYME.misc import pyme_zeroconf 
-            ns = pyme_zeroconf.getNS()
-        except:
-            ns=Pyro.naming.NameServerLocator().getNS()
-
-            if not compName in [n[0] for n in ns.list('')]:
-                ns.createGroup(compName)
-
-            #get rid of any previous instance
-            try:
-                ns.unregister(pname)
-            except Pyro.errors.NamingError:
-                pass        
-        
-        self.daemon=Pyro.core.Daemon(host = ip_addr)
-        self.daemon.useNameServer(ns)
-        
-        self.driftCorr = piezoOffsetProxy(driftTracker)
-        
-        #pname = "%s.Piezo" % compName
-        
-        
-        
-        uri=self.daemon.connect(self.driftCorr,pname)
-        
-    def run(self):
-        #print 'foo'
-        #try:
-        self.daemon.requestLoop()
-        #finally:
-        #    daemon.shutdown(True)
-        
-    def cleanup(self):
-        logger.info('Shutting down drift tracking Server')
-        self.daemon.shutdown(True)
-    
-def getClient(compName = GetComputerName()):
-    try:
-        from PYME.misc import pyme_zeroconf 
-        ns = pyme_zeroconf.getNS()
-        URI = ns.resolve('%s.DriftTracker' % compName)
-    except:
-        URI ='PYRONAME://%s.DriftTracker'%compName
-
-    return Pyro.core.getProxyForURI(URI)
