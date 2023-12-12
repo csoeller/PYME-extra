@@ -44,7 +44,7 @@ class IOcaml:
         self.visFr = visFr
         self.pipeline = visFr.pipeline
 
-        visFr.AddMenuItem('Experimental>IO', "Save event data to CSV and JSON for CAML",self.OnSaveCaml)
+        visFr.AddMenuItem('Experimental>Deprecated>IO', "Save event data to CSV and JSON for CAML",self.OnSaveCaml)
 
     def OnSaveCaml(self,event):
         import os

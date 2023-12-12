@@ -3,7 +3,7 @@ class TimedSpecies:
         self.visFr = visFr
         self.pipeline = visFr.pipeline
         
-        visFr.AddMenuItem('Experimental', "&Sequential Imaging - Timed species assignment",self.OnTimedSpecies)
+        visFr.AddMenuItem('Experimental>Deprecated', "Sequential Imaging - Timed species assignment",self.OnTimedSpecies)
 
     def OnTimedSpecies(self,event):
         from PYMEcs.recipes import localisations
