@@ -25,44 +25,61 @@ class EventProcessing:
         offupd = piecewiseMapping.GeneratePMFromEventList(p.events, p.mdh, p.mdh.getEntry('StartTime'), 0, b'PiezoOffsetUpdate',0)
         tminutes = offupd.xvals * p.mdh['Camera.CycleTime'] / 60.0
 
-        if offupd.yvals.size > 0:
-            plt.figure()
-            plt.step(tminutes,offupd.yvals,where='post')
-            plt.xlabel('time (minutes)')
-            plt.ylabel('OffsetPiezo offset (um)')
-            plt.title('OffsetPiezo offsets from PiezoOffsetUpdate events')
-
         offsets = piecewiseMapping.GeneratePMFromEventList(p.events, p.mdh, p.mdh.getEntry('StartTime'), 0, b'PiezoOffset',0)
-        if offsets.yvals.size > 0:
-            offsVSt = offsets(p['t']-0.01)
-            plt.figure()
-            plt.plot(p['t'],offsVSt)
-            plt.xlabel('time (frame number)')
-            plt.ylabel('OffsetPiezo offset (um)')
-            plt.title('OffsetPiezo offsets from PiezoOffset events')
+        correlamp = piecewiseMapping.GeneratePMFromEventList(p.events, p.mdh, p.mdh.getEntry('StartTime'), 0, b'CorrelationAmplitude',0)
+        
+        has_offsets = offsets.yvals.size > 0
+        has_offupd = offupd.yvals.size > 0 # not using this one at the moment
+        has_correlamp = correlamp.yvals.size > 0
+        has_drift = 'driftx' in p.keys()
 
-        if 'driftx' in p.keys():
-            plt.figure()
-            plt.subplot(311)
+        plot_rows = 0
+        if has_offsets:
+            plot_rows += 1
+        if has_correlamp:
+            plot_rows += 1
+        if has_drift:
+            plot_rows += 3
+
+        row = 1
+        plt.figure(figsize=(6.4,6.4))
+        plt.subplot(plot_rows,1,1)
+        if has_drift:
             plt.plot(p['t'],p['driftx'])
             plt.title('Drift in x (nm)')
-            plt.subplot(312)
+            plt.subplot(plot_rows,1,row+1)
             plt.plot(p['t'],p['drifty'])
             plt.title('Drift in y (nm)')
-            plt.subplot(313)
+            plt.subplot(plot_rows,1,row+2)
             plt.plot(p['t'],1e3*p['driftz']) # is driftz in um?
             plt.title('Drift in z (nm)')
-            plt.tight_layout()
+            row += 3
 
+        if has_offsets:
+            offsVSt = offsets(p['t']-0.01)
+            plt.subplot(plot_rows,1,row)
+            plt.plot(p['t'],offsVSt)
+            plt.xlabel('time (frame number)')
+            plt.ylabel('offset (um)')
+            plt.title('OffsetPiezo offsets from PiezoOffset events')
+            row += 1
 
-        correlamp = piecewiseMapping.GeneratePMFromEventList(p.events, p.mdh, p.mdh.getEntry('StartTime'), 0, b'CorrelationAmplitude',0)
-        if correlamp.yvals.size > 0:
+        if has_correlamp:
             campVSt = correlamp(p['t']-0.01)
-            plt.figure()
+            plt.subplot(plot_rows,1,row)
             plt.plot(p['t'],campVSt)
             plt.xlabel('time (frame number)')
-            plt.ylabel('Correlation amplitude')
+            plt.ylabel('amp')
             plt.title('normalised correlation amplitude')
+            plt.ylim(0.3,1.2)
+            row += 1
+
+        plt.tight_layout()
+
+            #plt.step(tminutes,offupd.yvals,where='post')
+            #plt.xlabel('time (minutes)')
+            #plt.ylabel('OffsetPiezo offset (um)')
+            #plt.title('OffsetPiezo offsets from PiezoOffsetUpdate events')
 
 
 def Plug(visFr):
