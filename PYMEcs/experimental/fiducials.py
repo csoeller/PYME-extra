@@ -149,10 +149,10 @@ class FiducialAnalyser:
     def __init__(self, visFr):
         self.visFr = visFr
 
-        visFr.AddMenuItem('Experimental>FiducialsOld', "Estimate drift from Fiducials", self.FindBeadsAndTrack)
-        visFr.AddMenuItem('Experimental>FiducialsOld', 'Apply fiducial correction', self.OnApplyFiducial,
+        visFr.AddMenuItem('Experimental>Deprecated>FiducialsOld', "Estimate drift from Fiducials", self.FindBeadsAndTrack)
+        visFr.AddMenuItem('Experimental>Deprecated>FiducialsOld', 'Apply fiducial correction', self.OnApplyFiducial,
                           helpText='Apply fiducial to x, y, z')
-        visFr.AddMenuItem('Experimental>FiducialsOld', 'Revert fiducial correction', self.OnRevertFiducial,
+        visFr.AddMenuItem('Experimental>Deprecated>FiducialsOld', 'Revert fiducial correction', self.OnRevertFiducial,
                           helpText='Revert fiducial correction to x, y, z')
 
     def FindBeadsAndTrack(self, event):      

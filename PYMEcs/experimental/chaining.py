@@ -4,7 +4,7 @@ class ParticleTracker2:
     def __init__(self, visFr):
         self.visFr = visFr
 
-        visFr.AddMenuItem('Experimental>Chaining', "Clump consecutive appearances", self.OnCoalesce)
+        visFr.AddMenuItem('Experimental>Deprecated>Chaining', "Clump consecutive appearances", self.OnCoalesce)
 
     def OnCoalesce(self, event):
         from PYMEcs.recipes import localisations

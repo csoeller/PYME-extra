@@ -56,17 +56,17 @@ class ClusterTracker:
         self.alignmentTime = 0
         self.averagePeriod = 50
 
-        visFr.AddMenuItem('Experimental>Clusters', 'DBSCAN Clump', self.OnClumpDBSCAN,
+        visFr.AddMenuItem('Experimental>Deprecated>Clusters', 'DBSCAN Clump', self.OnClumpDBSCAN,
                           helpText='Calculate ClumpIndex using DBSCAN algorithm')
-        visFr.AddMenuItem('Experimental>Clusters', 'Track Clumps', self.OnTrackClumps,
+        visFr.AddMenuItem('Experimental>Deprecated>Clusters', 'Track Clumps', self.OnTrackClumps,
                           helpText='extract the tracks for all clusters (clumps) that we found')
-        visFr.AddMenuItem('Experimental>Clusters', 'Plot Tracks', self.OnShowTracks,
+        visFr.AddMenuItem('Experimental>Deprecated>Clusters', 'Plot Tracks', self.OnShowTracks,
                           helpText='plot tracks of clusters (clumps) that we found')
-        visFr.AddMenuItem('Experimental>Clusters', 'Plot Tracks Filtered', self.OnShowTracksFiltered,
+        visFr.AddMenuItem('Experimental>Deprecated>Clusters', 'Plot Tracks Filtered', self.OnShowTracksFiltered,
                           helpText='plot filtered tracks of clusters (clumps) that we found')
-        visFr.AddMenuItem('Experimental>Clusters', 'Clear Tracks', self.OnClearTracks,
+        visFr.AddMenuItem('Experimental>Deprecated>Clusters', 'Clear Tracks', self.OnClearTracks,
                           helpText='clear tracks from memory')
-        visFr.AddMenuItem('Experimental>Clusters', 'Set Alignment Time', self.OnSetAlignmentTime,
+        visFr.AddMenuItem('Experimental>Deprecated>Clusters', 'Set Alignment Time', self.OnSetAlignmentTime,
                           helpText='set alignment time')
         
 

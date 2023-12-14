@@ -18,3 +18,4 @@ PYMEcs.experimental.regExtraCmaps
 PYMEcs.experimental.pyme2caml
 PYMEcs.experimental.Simpler
 PYMEcs.experimental.MINFLUX
+PYMEcs.experimental.eventProcessing

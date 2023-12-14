@@ -51,35 +51,35 @@ class ExtraColumns:
         self.visFr = visFr
         self.pipeline = visFr.pipeline
 
-        visFr.AddMenuItem('Experimental>ExtraColumns',
+        visFr.AddMenuItem('Experimental>Deprecated>ExtraColumns',
                           'Add random value column',
                           self.OnRandMap,
                           helpText='the added random value column can be used to select a fraction of all events')
-        visFr.AddMenuItem('Experimental>ExtraColumns',
+        visFr.AddMenuItem('Experimental>Deprecated>ExtraColumns',
                           'Add time block choice column',
                           self.OnTimeBlocks,
                           helpText='the added column can be used to select blocks of frames as even or odd numbered blocks')
-        visFr.AddMenuItem('Experimental>ExtraColumns',
+        visFr.AddMenuItem('Experimental>Deprecated>ExtraColumns',
                           'Select 50% of events from even numbered time blocks - EVEN',
                           self.OnSelectTB1,
                           helpText='select half of all events for FRC - even numbered time blocks')
-        visFr.AddMenuItem('Experimental>ExtraColumns',
+        visFr.AddMenuItem('Experimental>Deprecated>ExtraColumns',
                           'Select 50% of events from from odd numbered time blocks - ODD',
                           self.OnSelectTB2,
                           helpText='select half of all events for FRC - second half')
-        visFr.AddMenuItem('Experimental>ExtraColumns',
+        visFr.AddMenuItem('Experimental>Deprecated>ExtraColumns',
                           'Select 50% of events from random value column - half 1',
                           self.OnSelectHalf1,
                           helpText='select half of all events for FRC - first half')
-        visFr.AddMenuItem('Experimental>ExtraColumns',
+        visFr.AddMenuItem('Experimental>Deprecated>ExtraColumns',
                           'Select 50% of events from random value column - half 2',
                           self.OnSelectHalf2,
                           helpText='select half of all events for FRC - second half')
-        visFr.AddMenuItem('Experimental>ExtraColumns',
+        visFr.AddMenuItem('Experimental>Deprecated>ExtraColumns',
                           'Add channel based time selection column',
                           self.OnTimeSelectChannel,
                           helpText='the added column can be used to select a time window of events of a specific colour, filter tsel_channel in range (0.5,2)')
-        visFr.AddMenuItem('Experimental>ExtraColumns',
+        visFr.AddMenuItem('Experimental>Deprecated>ExtraColumns',
                           'Add channel based random fraction selection column',
                           self.OnRandomSelectChannel,
                           helpText='the added column can be used to select a fraction of events of a specific colour by random sub-sampling, filter rand_channel in range (-.1,fraction)')

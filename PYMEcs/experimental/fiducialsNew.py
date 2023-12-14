@@ -34,22 +34,22 @@ class FiducialTracker:
         self.visFr = visFr
         self.pipeline = visFr.pipeline
     
-        visFr.AddMenuItem('Experimental>Fiducials', 'Add mean fiducial track', self.OnFiducialTrack,
+        visFr.AddMenuItem('Experimental>Deprecated>Fiducials', 'Add mean fiducial track', self.OnFiducialTrack,
                           helpText='Add mean fiducial track')
-        visFr.AddMenuItem('Experimental>Fiducials', 'New DS with mean fiducial track applied',
+        visFr.AddMenuItem('Experimental>Deprecated>Fiducials', 'New DS with mean fiducial track applied',
                           self.OnFiducialCorrectDS,
                           helpText='Apply mean fiducial track')
-        visFr.AddMenuItem('Experimental>Fiducials', "Plot Fiducial Track", self.OnPlotFiducial,
+        visFr.AddMenuItem('Experimental>Deprecated>Fiducials', "Plot Fiducial Track", self.OnPlotFiducial,
                           helpText='Plot mean fiducial tracks for all available dims')
-        visFr.AddMenuItem('Experimental>Fiducials', "Set Z Parameters", self.OnSetZPars,
+        visFr.AddMenuItem('Experimental>Deprecated>Fiducials', "Set Z Parameters", self.OnSetZPars,
                           helpText='Set shift and scale parameters for driftz track')
-        visFr.AddMenuItem('Experimental>Fiducials', "Set Z drift (from aligned driftz)", self.OnSetZDrift,
+        visFr.AddMenuItem('Experimental>Deprecated>Fiducials', "Set Z drift (from aligned driftz)", self.OnSetZDrift,
                           helpText='Set Z drift compensation from scaled and aligned driftz track')
-        visFr.AddMenuItem('Experimental>Fiducials', "Clear Z driftz mapping", self.clearDriftZ,
+        visFr.AddMenuItem('Experimental>Deprecated>Fiducials', "Clear Z driftz mapping", self.clearDriftZ,
                           helpText='Remove Z drift mapping by popping any mapping for z')
-        visFr.AddMenuItem('Experimental>Fiducials', "Diagnose Fiducials", lambda e: self.fiducial_diagnosis(),
+        visFr.AddMenuItem('Experimental>Deprecated>Fiducials', "Diagnose Fiducials", lambda e: self.fiducial_diagnosis(),
                           helpText='Diagnose quality of fiducial correction')
-        visFr.AddMenuItem('Experimental>Fiducials', "Compare fiducial and drift", self.fiducialvsdrift,
+        visFr.AddMenuItem('Experimental>Deprecated>Fiducials', "Compare fiducial and drift", self.fiducialvsdrift,
                           helpText='Compare fiducial and drift information')
         visFr.AddMenuItem('Experimental>Corrections',"Fiducial - extract fiducial track and correct datasource",
                           self.OnFiducialCorrectNew,

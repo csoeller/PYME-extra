@@ -189,7 +189,7 @@ class splitRenderPlugin:
             'JitterFactor' : 1.0,
             'SamplesToAverage' : 40}
 
-        visFr.AddMenuItem('Experimental>Rendering',
+        visFr.AddMenuItem('Experimental>Deprecated>Rendering',
                           'Split Render by Time Blocks',
                           self.deprecated, # self.OnSplitRender,
                           helpText='this renders a 2 channel image with events split by time blocks that can be used to evaluate the FRC; for multi-colour images the correct colour needs to be selected')
