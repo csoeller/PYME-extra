@@ -3,7 +3,8 @@ from PYME.warnings import warn
 
 class EventProcessing:
     """
-    plugins to conduct some event processing in h5r data
+    plugins to conduct some event processing from events in h5r data
+    currently mostly using events from Piezobased tracking
     """
     def __init__(self, visFr):
         self.visFr = visFr
@@ -42,17 +43,20 @@ class EventProcessing:
             plot_rows += 3
 
         row = 1
-        plt.figure(figsize=(6.4,6.4))
-        plt.subplot(plot_rows,1,1)
+        fig, axs = plt.subplots(nrows=plot_rows,figsize=(6.4,6.4), num='OffsetPiezo Event Analysis')
         if has_drift:
+            plt.subplot(plot_rows,1,row)
             plt.plot(p['t'],p['driftx'])
             plt.title('Drift in x (nm)')
+            plt.ylabel('Drift')
             plt.subplot(plot_rows,1,row+1)
             plt.plot(p['t'],p['drifty'])
             plt.title('Drift in y (nm)')
+            plt.ylabel('Drift')
             plt.subplot(plot_rows,1,row+2)
             plt.plot(p['t'],1e3*p['driftz']) # is driftz in um?
             plt.title('Drift in z (nm)')
+            plt.ylabel('Drift')
             row += 3
 
         if has_offsets:
@@ -72,6 +76,8 @@ class EventProcessing:
             plt.ylabel('amp')
             plt.title('normalised correlation amplitude')
             plt.ylim(0.3,1.2)
+            axs[-1].set_yticks([0.75],minor=True)
+            plt.grid(which='both',axis='y')
             row += 1
 
         plt.tight_layout()

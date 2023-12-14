@@ -8,6 +8,11 @@ from PYME.util import webframework
 import logging
 logger = logging.getLogger(__name__)
 
+# we modify the OffsetPiezo server and client to do additional logging by preserving the correlation amplitude information
+# this is simply achieved by inheriting from the classes in offsetPiezoREST and adding a couple new methods
+# the final bit is a change in our version of driftTracking.py that checks if the LogShiftsCorrelAmp method is available
+# in the client and uses it in that case for the additional event logging
+
 class OffsetPiezoCorrelLog(offsetPiezoREST.OffsetPiezo):
 
     @webframework.register_endpoint('/LogShiftsCA', output_is_json=False)
