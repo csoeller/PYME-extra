@@ -54,6 +54,17 @@ class EventProcessing:
             plt.title('Drift in z (nm)')
             plt.tight_layout()
 
+
+        correlamp = piecewiseMapping.GeneratePMFromEventList(p.events, p.mdh, p.mdh.getEntry('StartTime'), 0, b'CorrelationAmplitude',0)
+        if correlamp.yvals.size > 0:
+            campVSt = correlamp(p['t']-0.01)
+            plt.figure()
+            plt.plot(p['t'],campVSt)
+            plt.xlabel('time (frame number)')
+            plt.ylabel('Correlation amplitude')
+            plt.title('normalised correlation amplitude')
+
+
 def Plug(visFr):
     """Plugs this module into the gui"""
     EventProcessing(visFr)
