@@ -255,12 +255,24 @@ from PYMEcs.misc.guiMsgBoxes import Error
 class MINFLUXanalyser():
     def __init__(self, visFr):
         self.visFr = visFr
+        self.minfluxRIDs = {}
 
         visFr.AddMenuItem('Experimental>MINFLUX', "Localisation Error analysis", self.OnErrorAnalysis)
         visFr.AddMenuItem('Experimental>MINFLUX', "Cluster sizes - 3D", self.OnCluster3D)
         visFr.AddMenuItem('Experimental>MINFLUX', "Cluster sizes - 2D", self.OnCluster2D)
         visFr.AddMenuItem('Experimental>MINFLUX', "Analyse Localization Rate", self.OnLocalisationRate)
         visFr.AddMenuItem('Experimental>MINFLUX', "EFO histogram (photon rates)", self.OnEfoAnalysis)
+
+        import PYME.config
+        customRecipes = PYME.config.get_custom_recipes()
+        minfluxRecipes = dict((k, v) for k, v in customRecipes.items() if k.startswith('MINFLUX'))
+        if len(minfluxRecipes) > 0:
+            for r in minfluxRecipes:
+                ID = visFr.AddMenuItem('Experimental>MINFLUX>Recipes', r, self.OnLoadCustom).GetId()
+                self.minfluxRIDs[ID] = minfluxRecipes[r]
+
+    def OnLoadCustom(self, event):
+        self.visFr._recipe_manager.LoadRecipe(self.minfluxRIDs[event.GetId()])
         
     def OnErrorAnalysis(self, event):
         plot_errors(self.visFr.pipeline)
