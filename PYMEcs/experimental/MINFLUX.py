@@ -249,6 +249,30 @@ def fourcornerplot_default(pipeline,sigma=sigmaDefault,backgroundFraction=backgr
 def subunitfit(pipeline):
     return fourcornerplot_default(pipeline,showplot=False)
 
+def plot_tracking(pipeline):
+    p = pipeline
+
+    if 'z_nc' in pipeline.keys():
+        nrows = 3
+    else:
+        nrows = 2
+    
+    plt.figure(num='beamline monitoring corrections')
+    plt.subplot(nrows,1,1)
+    plt.plot(1e-3*p['t'],p['x']-p['x_nc'])
+    plt.xlabel('Time (s)')
+    plt.ylabel('x-difference (nm)')
+    plt.subplot(nrows,1,2)
+    plt.plot(1e-3*p['t'],p['y']-p['y_nc'])
+    plt.xlabel('Time (s)')
+    plt.ylabel('y-difference (nm)')
+    if 'z_nc' in pipeline.keys():
+        plt.subplot(nrows,1,3)
+        plt.plot(1e-3*p['t'],p['z']-p['z_nc'])
+        plt.xlabel('Time (s)')
+        plt.ylabel('z-difference (nm)')
+    plt.tight_layout()
+
 from PYMEcs.Analysis.MINFLUX import analyse_locrate
 from PYMEcs.misc.guiMsgBoxes import Error
 
@@ -262,6 +286,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX', "Cluster sizes - 2D", self.OnCluster2D)
         visFr.AddMenuItem('MINFLUX', "Analyse Localization Rate", self.OnLocalisationRate)
         visFr.AddMenuItem('MINFLUX', "EFO histogram (photon rates)", self.OnEfoAnalysis)
+        visFr.AddMenuItem('MINFLUX', "plot tracking correction (if available)", self.OnTrackPlot)
 
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -314,6 +339,13 @@ class MINFLUXanalyser():
         dskey = pipeline.selectedDataSourceKey
         plt.xlabel('efo (photon rate in kHz)')
         plt.title("EFO stats, using datasource '%s'" % dskey)
+
+    def OnTrackPlot(self, event):
+        p = self.visFr.pipeline
+        curds = p.selectedDataSourceKey
+        p.selectDataSource('Localizations')
+        plot_tracking(p)
+        p.selectDataSource(curds)
         
 def Plug(visFr):
     # we are trying to monkeypatch pipeline and VisGUIFrame methods to sneak MINFLUX npy IO in;
