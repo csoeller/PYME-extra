@@ -161,41 +161,41 @@ class QPCalc:
             raise RuntimeError("Invalid useTau mode %d (must be 1 or 2)" % self.useTau)
 
         
-        visFr.AddMenuItem('qPAINT', "From Image - Set driftpars",self.OnSetDriftPars)
-        visFr.AddMenuItem('qPAINT', "From Image - Set ROI clipping",self.OnClipFromImage)
-        visFr.AddMenuItem('qPAINT', "From Image - Set objectIDs",self.OnGetIDsfromImage)
-        visFr.AddMenuItem('qPAINT', "From Image - Get Areas by ID",self.OnAreaFromLabels)
-        visFr.AddMenuItem('qPAINT', "Qindex - Measure object ID dark times",self.OnMeasureTau2)
-        visFr.AddMenuItem('qPAINT', "All in 1 go: select Image, set drift, IDs, measure qindex, areas",
+        visFr.AddMenuItem('Experimental>qPAINT', "From Image - Set driftpars",self.OnSetDriftPars)
+        visFr.AddMenuItem('Experimental>qPAINT', "From Image - Set ROI clipping",self.OnClipFromImage)
+        visFr.AddMenuItem('Experimental>qPAINT', "From Image - Set objectIDs",self.OnGetIDsfromImage)
+        visFr.AddMenuItem('Experimental>qPAINT', "From Image - Get Areas by ID",self.OnAreaFromLabels)
+        visFr.AddMenuItem('Experimental>qPAINT', "Qindex - Measure object ID dark times",self.OnMeasureTau2)
+        visFr.AddMenuItem('Experimental>qPAINT', "All in 1 go: select Image, set drift, IDs, measure qindex, areas",
                           self.OnSelectImgAndProcess)
 
-        visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
-        visFr.AddMenuItem('qPAINT', "Multicolour - set timed species by Dialog",self.OnTimedSpecies)
-        visFr.AddMenuItem('qPAINT', "Multicolour - set timed species from image",self.OnTimedSpeciesFromImage)
-        visFr.AddMenuItem('qPAINT', "Multicolour - qIndex by channel",self.OnChannelMeasureTau)
-        visFr.AddMenuItem('qPAINT', "Multicolour - Merge Channel Measures", self.OnMergeChannelMeasures)
-        visFr.AddMenuItem('qPAINT', "Multicolour - Calculate Channel Ratios", self.OnChannelMeasurementRatios)
-        visFr.AddMenuItem('qPAINT', "Multicolour - calibrate channel qIndices (Pseudo test function)",self.OnChannelCalibrate)
-        visFr.AddMenuItem('qPAINT', "Multicolour - in 1 go: select Image, set drift, IDs, areas, species, qIndex & merge & ratio",
+        visFr.AddMenuItem('Experimental>qPAINT', itemType='separator') #--------------------------
+        visFr.AddMenuItem('Experimental>qPAINT', "Multicolour - set timed species by Dialog",self.OnTimedSpecies)
+        visFr.AddMenuItem('Experimental>qPAINT', "Multicolour - set timed species from image",self.OnTimedSpeciesFromImage)
+        visFr.AddMenuItem('Experimental>qPAINT', "Multicolour - qIndex by channel",self.OnChannelMeasureTau)
+        visFr.AddMenuItem('Experimental>qPAINT', "Multicolour - Merge Channel Measures", self.OnMergeChannelMeasures)
+        visFr.AddMenuItem('Experimental>qPAINT', "Multicolour - Calculate Channel Ratios", self.OnChannelMeasurementRatios)
+        visFr.AddMenuItem('Experimental>qPAINT', "Multicolour - calibrate channel qIndices (Pseudo test function)",self.OnChannelCalibrate)
+        visFr.AddMenuItem('Experimental>qPAINT', "Multicolour - in 1 go: select Image, set drift, IDs, areas, species, qIndex & merge & ratio",
                           self.OnSelectImgAndProcessMulticol)
         
-        visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
-        visFr.AddMenuItem('qPAINT', 'Points based: Set objectIDs by DBSCAN clumping', self.OnClumpObjects,
+        visFr.AddMenuItem('Experimental>qPAINT', itemType='separator') #--------------------------
+        visFr.AddMenuItem('Experimental>qPAINT', 'Points based: Set objectIDs by DBSCAN clumping', self.OnClumpObjects,
                           helpText='Calculate objectID using DBSCAN algorithm')
-        visFr.AddMenuItem('qPAINT', "Points based: Measure object ID volumes (area if 2D) by convex hull",self.OnMeasureVol)
+        visFr.AddMenuItem('Experimental>qPAINT', "Points based: Measure object ID volumes (area if 2D) by convex hull",self.OnMeasureVol)
 
-        visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
-        visFr.AddMenuItem('qPAINT', "Darktime distribution of selected events\tCtrl+T",self.OnDarkT)
-        visFr.AddMenuItem('qPAINT', "Select Fit Settings",self.OnFitSettings)
-        visFr.AddMenuItem('qPAINT', "Calibrate a qIndex (or any column)",self.OnQindexCalibrate)
-        visFr.AddMenuItem('qPAINT', "Ratio two qIndices (or any two columns)",self.OnQindexRatio)
+        visFr.AddMenuItem('Experimental>qPAINT', itemType='separator') #--------------------------
+        visFr.AddMenuItem('Experimental>qPAINT', "Darktime distribution of selected events\tCtrl+T",self.OnDarkT)
+        visFr.AddMenuItem('Experimental>qPAINT', "Select Fit Settings",self.OnFitSettings)
+        visFr.AddMenuItem('Experimental>qPAINT', "Calibrate a qIndex (or any column)",self.OnQindexCalibrate)
+        visFr.AddMenuItem('Experimental>qPAINT', "Ratio two qIndices (or any two columns)",self.OnQindexRatio)
 
-        visFr.AddMenuItem('qPAINT', itemType='separator') #--------------------------
-        visFr.AddMenuItem('qPAINT', "Plot histogram of one data column",self.OnGeneralHist)
-        visFr.AddMenuItem('qPAINT', "Scatter plot by ID",self.OnScatterByID)
-        visFr.AddMenuItem('qPAINT', "Image of qPAINT measure from label image",self.OnLabelLookupByID)
-        visFr.AddMenuItem('qPAINT', "Load Measurements",self.OnLoadMeasurements)
-        visFr.AddMenuItem('qPAINT', "Save Measurements",self.OnSaveMeasurements)
+        visFr.AddMenuItem('Experimental>qPAINT', itemType='separator') #--------------------------
+        visFr.AddMenuItem('Experimental>qPAINT', "Plot histogram of one data column",self.OnGeneralHist)
+        visFr.AddMenuItem('Experimental>qPAINT', "Scatter plot by ID",self.OnScatterByID)
+        visFr.AddMenuItem('Experimental>qPAINT', "Image of qPAINT measure from label image",self.OnLabelLookupByID)
+        visFr.AddMenuItem('Experimental>qPAINT', "Load Measurements",self.OnLoadMeasurements)
+        visFr.AddMenuItem('Experimental>qPAINT', "Save Measurements",self.OnSaveMeasurements)
 
         
     def OnClumpObjects(self, event=None):
