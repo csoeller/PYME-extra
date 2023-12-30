@@ -973,3 +973,46 @@ class BiplanePhotons(ModuleBase):
         
         namespace[self.outputName] = mapped
 
+@register_module('NPCAnalysisByID')
+class NPCAnalysisByID(ModuleBase):
+    
+    inputName = Input('processed')
+    outputName = Output('withNPCanalysis')
+
+    IDkey = CStr('objectID')
+    SegmentThreshold = Int(10)
+    SecondPass = Bool(False)
+    FitMode = Enum(['abs','square'])
+
+    def execute(self, namespace):
+        from PYMEcs.Analysis.NPC import estimate_nlabeled
+        npcs = namespace[self.inputName]
+        ids = npcs[self.IDkey]
+        x = npcs['x']
+        y = npcs['y']
+
+        uids,revids,idcounts = np.unique(ids,return_inverse=True,return_counts=True)
+
+        npcnlabeled = np.zeros_like(uids,dtype = 'int')
+
+        for i, id in enumerate(uids):
+            if (id > 0) and (idcounts[i] > 0):
+                idx_thisid = ids == id
+                xid = x[idx_thisid]
+                yid = y[idx_thisid]
+                npcnlabeled[i] = estimate_nlabeled(xid,yid,nthresh=self.SegmentThreshold,
+                                                   do_plot=False,secondpass=self.SecondPass,
+                                                   fitmode=self.FitMode)
+
+        npcnall = npcnlabeled[revids] # map back on all events
+        mapped = tabular.MappingFilter(npcs)
+        mapped.addColumn('NPCnlabeled', npcnall)
+
+        try:
+            mapped.mdh = npcs.mdh
+        except AttributeError:
+            pass
+        
+        namespace[self.outputName] = mapped
+
+        

@@ -118,7 +118,7 @@ def uniqueByID(ids,column):
     return uids[valid], ucol[valid]
 
 def selectWithDialog(choices, message='select image from list', caption='Selection'):
-    dlg = wx.SingleChoiceDialog(None, message, caption, choices, wx.CHOICEDLG_STYLE)
+    dlg = wx.SingleChoiceDialog(None, message, caption, list(choices), wx.CHOICEDLG_STYLE)
     if dlg.ShowModal() == wx.ID_OK:
         item = dlg.GetStringSelection()
     else:
@@ -328,7 +328,7 @@ class QPCalc:
         from PYME.DSView import dsviewer
         
         if img is None:
-            selection = selectWithDialog(dsviewer.openViewers.keys())
+            selection = selectWithDialog(list(dsviewer.openViewers.keys()))
             if selection is not None:
                 img = dsviewer.openViewers[selection].image
 

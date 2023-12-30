@@ -19,3 +19,4 @@ PYMEcs.experimental.pyme2caml
 PYMEcs.experimental.Simpler
 PYMEcs.experimental.MINFLUX
 PYMEcs.experimental.eventProcessing
+PYMEcs.experimental.NPCcalcLM
