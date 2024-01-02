@@ -129,14 +129,19 @@ class NPCcalc():
         uidnz = uids > 0
 
         nlabel_uq = pipeline['NPCnlabeled'][indices[uidnz]]
-        
+
+        ds_mdh = pipeline.selectedDataSource.mdh
         plt.figure()
         nlab, bions, patches = plt.hist(nlabel_uq,bins=-0.5+np.arange(10,dtype='int'))
         plabel, nlabels, perr = npclabel_fit(nlab)
         plt.plot(np.arange(9),nlabels,'-o')
         plt.xlabel('Number of segments labeled')
         plt.ylabel('Frequency')
-        plt.title('NPC labeling statistics, pl_fit = %.2f+-%.3f' % (plabel,perr))
+        title = 'NPC labeling statistics, pl_fit = %.2f+-%.3f' % (plabel,perr)
+        if 'NPCAnalysis.EventThreshold' in ds_mdh:
+            title += "\nEvent threshold = %d, mode = %s" % (int(ds_mdh['NPCAnalysis.EventThreshold']),
+                                                              ds_mdh['NPCAnalysis.RotationAlgorithm'])
+        plt.title(title)
         plt.tight_layout()
 
         

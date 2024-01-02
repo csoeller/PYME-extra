@@ -994,24 +994,30 @@ class NPCAnalysisByID(ModuleBase):
         uids,revids,idcounts = np.unique(ids,return_inverse=True,return_counts=True)
 
         npcnlabeled = np.zeros_like(uids,dtype = 'int')
-
+        npcradius = np.zeros_like(uids,dtype = 'float')
         for i, id in enumerate(uids):
             if (id > 0) and (idcounts[i] > 0):
                 idx_thisid = ids == id
                 xid = x[idx_thisid]
                 yid = y[idx_thisid]
-                npcnlabeled[i] = estimate_nlabeled(xid,yid,nthresh=self.SegmentThreshold,
+                npcnlabeled[i],npcradius[i] = estimate_nlabeled(xid,yid,nthresh=self.SegmentThreshold,
                                                    do_plot=False,secondpass=self.SecondPass,
-                                                   fitmode=self.FitMode)
+                                                   fitmode=self.FitMode, return_radius=True)
 
         npcnall = npcnlabeled[revids] # map back on all events
+        npcradall = npcradius[revids] # map back on all events
         mapped = tabular.MappingFilter(npcs)
         mapped.addColumn('NPCnlabeled', npcnall)
+        mapped.addColumn('NPCradius', npcradall)
 
         try:
-            mapped.mdh = npcs.mdh
+            mapped.mdh = NestedClassMDHandler(npcs.mdh)
         except AttributeError:
-            pass
+            mapped.mdh = NestedClassMDHandler() # make empty mdh
+
+        mapped.mdh['NPCAnalysis.EventThreshold'] = self.SegmentThreshold
+        mapped.mdh['NPCAnalysis.RotationAlgorithm'] = self.FitMode
+        mapped.mdh['NPCAnalysis.SecondPass'] = self.SecondPass
         
         namespace[self.outputName] = mapped
 

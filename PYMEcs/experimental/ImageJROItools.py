@@ -25,7 +25,10 @@ class ImageJROItools:
         roimask = np.zeros(self.dsviewer.image.data_xytc.shape[0:2],dtype='int')
         counter = 1
         for roi in rois:
-            if roi.roitype == rf.ROI_TYPE.OVAL: # this needs to be relaxed pretty soonish!
+            if roi.roitype in [rf.ROI_TYPE.RECT,
+                               rf.ROI_TYPE.OVAL,
+                               rf.ROI_TYPE.POLYGON,
+                               rf.ROI_TYPE.FREEHAND]: # this needs to be relaxed pretty soonish!
                 coords = np.round(roi.coordinates()).astype('int')
                 r = coords[:,0]
                 c = coords[:,1]

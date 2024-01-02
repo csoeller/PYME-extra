@@ -107,7 +107,7 @@ def rfilt(xn,yn,r0,dr=25.0):
     rimask = (ri >r0-dr)*(ri < r0+dr)
     return (xn[rimask],yn[rimask])
 
-def estimate_nlabeled(x,y,nthresh=10,do_plot=False,secondpass=False,fitmode='abs'):
+def estimate_nlabeled(x,y,nthresh=10,do_plot=False,secondpass=False,fitmode='abs',return_radius=False):
     xc, yc, r0, sigma = fitcirc(x,y)
     xn, yn = centreshift(x, y, xc, yc)
     radrot = estimate_rotation(xn,yn,mode=fitmode)
@@ -125,19 +125,35 @@ def estimate_nlabeled(x,y,nthresh=10,do_plot=False,secondpass=False,fitmode='abs
     Nlabeled = np.sum(nhist>nthresh)
     
     if do_plot:
+        segment_radius = 80.0
         fig, axs = plt.subplots(2)
+        # first subplot
         axs[0].set_aspect('equal')
         axs[0].scatter(xr,yr,s=5)
         axs[0].scatter([0],[0],marker='+')
-        plot_segments(80.0,ax=axs[0])
+        plot_segments(segment_radius,ax=axs[0])
         cir2 = plt.Circle((0, 0), r0, color='r',fill=False)
         axs[0].add_patch(cir2)
-        axs[0].set_title('N = %d, r0 = %.1f' % (Nlabeled,r0))
+        from matplotlib.patches import Wedge
+        phibinedges_deg = np.degrees(phibinedges)
+        for i in range(nhist.size):
+            if nhist[i] > nthresh:
+                axs[0].add_patch(Wedge(
+                    (0, 0),         # (x,y)
+                    segment_radius,            # radius
+                    phibinedges_deg[i],             # theta1 (in degrees)
+                    phibinedges_deg[i+1],            # theta2
+                    color="r", alpha=0.1))
+        axs[0].set_title('NPC Segments = %d, r0 = %.1f nm\nEvent threshold = %d, mode = %s' % (Nlabeled,r0,nthresh,fitmode))
+        # second suplot
         axs[1].hist(phis,bins=phibinedges)
         axs[1].plot([phibinedges[0],phibinedges[-1]],[nthresh,nthresh],'r--')
         plt.tight_layout()
 
-    return Nlabeled
+    if return_radius:
+        return (Nlabeled,r0)
+    else:
+        return Nlabeled
 
 from scipy.special import binom
 from scipy.optimize import curve_fit
