@@ -139,10 +139,10 @@ def estimate_nlabeled(x,y,nthresh=10,do_plot=False,secondpass=False,fitmode='abs
         for i in range(nhist.size):
             if nhist[i] > nthresh:
                 axs[0].add_patch(Wedge(
-                    (0, 0),         # (x,y)
-                    segment_radius,            # radius
-                    phibinedges_deg[i],             # theta1 (in degrees)
-                    phibinedges_deg[i+1],            # theta2
+                    (0, 0),                # (x,y)
+                    segment_radius,        # radius
+                    phibinedges_deg[i],    # theta1 (in degrees)
+                    phibinedges_deg[i+1],  # theta2
                     color="r", alpha=0.1))
         axs[0].set_title('NPC Segments = %d, r0 = %.1f nm\nEvent threshold = %d, mode = %s' % (Nlabeled,r0,nthresh,fitmode))
         # second suplot

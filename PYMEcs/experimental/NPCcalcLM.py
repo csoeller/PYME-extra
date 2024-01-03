@@ -35,10 +35,10 @@ class NPCcalc():
         self.visFr = visFr
 
         visFr.AddMenuItem('Experimental>NPCs', "Analyse single NPC", self.OnAnalyseSingleNPC)
-        visFr.AddMenuItem('Experimental>NPCs', "Analyse NPCs by ID", self.OnAnalyseNPCsByID)
         visFr.AddMenuItem('Experimental>NPCs', "Select NPCs by Mask", self.OnSelectNPCsByMask)
-        visFr.AddMenuItem('Experimental>NPCs', "NPC labeling Statistics", self.OnNPCstats)
-        visFr.AddMenuItem('Experimental>NPCs', 'adjust NPC Analysis settings', self.OnNPCsettings)
+        visFr.AddMenuItem('Experimental>NPCs', "Analyse NPCs by ID", self.OnAnalyseNPCsByID)
+        visFr.AddMenuItem('Experimental>NPCs', "Show NPC labeling Statistics", self.OnNPCstats)
+        visFr.AddMenuItem('Experimental>NPCs', 'NPC Analysis settings', self.OnNPCsettings)
 
         self.NPCsettings = NPCsettings()
 
