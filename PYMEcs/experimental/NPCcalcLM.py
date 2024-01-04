@@ -34,10 +34,11 @@ class NPCcalc():
     def __init__(self, visFr):
         self.visFr = visFr
 
-        visFr.AddMenuItem('Experimental>NPCs', "Analyse single NPC", self.OnAnalyseSingleNPC)
+        visFr.AddMenuItem('Experimental>NPCs', "Analyse single NPC\tCtrl+N", self.OnAnalyseSingleNPC)
         visFr.AddMenuItem('Experimental>NPCs', "Select NPCs by Mask", self.OnSelectNPCsByMask)
         visFr.AddMenuItem('Experimental>NPCs', "Analyse NPCs by ID", self.OnAnalyseNPCsByID)
         visFr.AddMenuItem('Experimental>NPCs', "Show NPC labeling Statistics", self.OnNPCstats)
+        visFr.AddMenuItem('Experimental>NPCs', "Select by mask, analyse and show stats", self.OnNPCcombinedFuncs)
         visFr.AddMenuItem('Experimental>NPCs', 'NPC Analysis settings', self.OnNPCsettings)
 
         self.NPCsettings = NPCsettings()
@@ -65,18 +66,25 @@ class NPCcalc():
                           do_plot=True,secondpass=self.NPCsettings.SecondPass,fitmode=self.NPCsettings.FitMode)
         
 
-    def OnAnalyseNPCsByID(self, event):
+    def OnAnalyseNPCsByID(self, event=None):
         from PYMEcs.recipes.localisations import NPCAnalysisByID
         pipeline = self.visFr.pipeline
         recipe = pipeline.recipe
         with_npclinfo = unique_name('with_npcinfo',pipeline.dataSources.keys())
-        recipe.add_module(NPCAnalysisByID(inputName=pipeline.selectedDataSourceKey,outputName=with_npclinfo))
-        recipe.execute()
+        # for the NPCAnalysisByID module use the current NPCsettings
+        npcanalysis = NPCAnalysisByID(inputName=pipeline.selectedDataSourceKey,outputName=with_npclinfo,
+                                      SegmentThreshold=self.NPCsettings.SegmentThreshold,
+                                      SecondPass=self.NPCsettings.SecondPass,FitMode=self.NPCsettings.FitMode)
+        if not npcanalysis.configure_traits(kind='modal'):
+            return
 
+        recipe.add_module(npcanalysis)
+        recipe.execute()
+        
         pipeline.selectDataSource(with_npclinfo)
 
 
-    def OnSelectNPCsByMask(self,event):
+    def OnSelectNPCsByMask(self,event=None):
         from PYME.DSView import dsviewer
 
         pipeline = self.visFr.pipeline
@@ -118,7 +126,7 @@ class NPCcalc():
         
         pipeline.selectDataSource(valid_ids)
 
-    def OnNPCstats(self,event):
+    def OnNPCstats(self,event=None):
         pipeline = self.visFr.pipeline
         for prop in ['NPCnlabeled','objectID']:
             if prop not in pipeline.keys():
@@ -144,6 +152,10 @@ class NPCcalc():
         plt.title(title)
         plt.tight_layout()
 
+    def OnNPCcombinedFuncs(self,event):
+        self.OnSelectNPCsByMask()
+        self.OnAnalyseNPCsByID()
+        self.OnNPCstats()
         
 def Plug(visFr):
     """Plugs this module into the gui"""
