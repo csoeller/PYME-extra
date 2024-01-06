@@ -148,6 +148,8 @@ def estimate_nlabeled(x,y,nthresh=10,do_plot=False,secondpass=False,fitmode='abs
         # second suplot
         axs[1].hist(phis,bins=phibinedges)
         axs[1].plot([phibinedges[0],phibinedges[-1]],[nthresh,nthresh],'r--')
+        axs[1].set_xlabel('Angle range $\phi$, $\pi/4$ per segment (radians -$\pi,\cdots,\pi$)')
+        axs[1].set_ylabel('Events in segment')
         plt.tight_layout()
 
     if return_radius:
