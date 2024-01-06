@@ -134,8 +134,18 @@ def estimate_nlabeled(x,y,nthresh=10,do_plot=False,secondpass=False,fitmode='abs
         plot_segments(segment_radius,ax=axs[0])
         cir2 = plt.Circle((0, 0), r0, color='r',fill=False)
         axs[0].add_patch(cir2)
+        axs[0].invert_yaxis() # the y axis direction seems inverted WRT PYMEVisualise, so try to make equal
         from matplotlib.patches import Wedge
         phibinedges_deg = np.degrees(phibinedges)
+
+        phibincenters = 0.5*(phibinedges[0:-1]+phibinedges[1:])
+        textradius = segment_radius + 13
+        for i,phic in enumerate(phibincenters):
+            xt,yt = (textradius*np.cos(phic),textradius*np.sin(phic))
+            axs[0].text(xt,yt,str(i+1),horizontalalignment='center', # we number segments from 1 to 8
+                        verticalalignment='center',alpha=0.4)
+        axs[0].set_xlim(-100,100)
+        axs[0].set_ylim(-100,100)
         for i in range(nhist.size):
             if nhist[i] > nthresh:
                 axs[0].add_patch(Wedge(
@@ -146,10 +156,18 @@ def estimate_nlabeled(x,y,nthresh=10,do_plot=False,secondpass=False,fitmode='abs
                     color="r", alpha=0.1))
         axs[0].set_title('NPC Segments = %d, r0 = %.1f nm\nEvent threshold = %d, mode = %s' % (Nlabeled,r0,nthresh,fitmode))
         # second suplot
+        def radtosegno(rad):
+            return (rad + np.pi + 0.5*piover4) / piover4
+
+        def segnotorad(sec):
+            return -np.pi + 0.5*piover4 + sec * piover4
+
         axs[1].hist(phis,bins=phibinedges)
         axs[1].plot([phibinedges[0],phibinedges[-1]],[nthresh,nthresh],'r--')
         axs[1].set_xlabel('Angle range $\phi$, $\pi/4$ per segment (radians -$\pi,\cdots,\pi$)')
         axs[1].set_ylabel('Events in segment')
+        secax = axs[1].secondary_xaxis('top', functions=(radtosegno, segnotorad))
+        secax.set_xlabel('segment number')
         plt.tight_layout()
 
     if return_radius:
