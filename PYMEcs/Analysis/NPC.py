@@ -129,7 +129,7 @@ def estimate_nlabeled(x,y,nthresh=10,do_plot=False,secondpass=False,fitmode='abs
         fig, axs = plt.subplots(2)
         # first subplot
         axs[0].set_aspect('equal')
-        axs[0].scatter(xr,yr,s=5)
+        axs[0].scatter(xr,yr,s=10,alpha=0.4,edgecolors='none')
         axs[0].scatter([0],[0],marker='+')
         plot_segments(segment_radius,ax=axs[0])
         cir2 = plt.Circle((0, 0), r0, color='r',fill=False)

@@ -58,8 +58,9 @@ class NPCcalc():
         xExtent = pipeline['x'].max() - pipeline['x'].min()
         yExtent = pipeline['y'].max() - pipeline['y'].min()
 
-        if (xExtent > 300) or (yExtent > 300):
-            warn('x or y bounding box > 200 nm (%d,%d) - check if single NPC' % (xExtent,yExtent))
+        maxextent_nm = 300
+        if (xExtent > maxextent_nm) or (yExtent > maxextent_nm):
+            warn('x or y bounding box > %d nm (%d,%d) - check if single NPC' % (maxextent_nm,xExtent,yExtent))
             return
 
         estimate_nlabeled(pipeline['x'],pipeline['y'],nthresh=self.NPCsettings.SegmentThreshold,
