@@ -134,7 +134,6 @@ def estimate_nlabeled(x,y,nthresh=10,do_plot=False,secondpass=False,fitmode='abs
         plot_segments(segment_radius,ax=axs[0])
         cir2 = plt.Circle((0, 0), r0, color='r',fill=False)
         axs[0].add_patch(cir2)
-        axs[0].invert_yaxis() # the y axis direction seems inverted WRT PYMEVisualise, so try to make equal
         from matplotlib.patches import Wedge
         phibinedges_deg = np.degrees(phibinedges)
 
@@ -155,6 +154,8 @@ def estimate_nlabeled(x,y,nthresh=10,do_plot=False,secondpass=False,fitmode='abs
                     phibinedges_deg[i+1],  # theta2
                     color="r", alpha=0.1))
         axs[0].set_title('NPC Segments = %d, r0 = %.1f nm\nEvent threshold = %d, mode = %s' % (Nlabeled,r0,nthresh,fitmode))
+        axs[0].invert_yaxis() # the y axis direction seems inverted WRT PYMEVisualise, so try to make equal
+                
         # second suplot
         def radtosegno(rad):
             return (rad + np.pi + 0.5*piover4) / piover4
