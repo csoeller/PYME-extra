@@ -37,7 +37,7 @@ External modules required for full functionality are listed in `requirements.txt
     python-microscopy
     statsmodels
     roifile
-    circle_fit
+    circle-fit
 
 ### Issues ###
 
