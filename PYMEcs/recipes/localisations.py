@@ -1082,7 +1082,7 @@ class OrigamiSiteTrack(ModuleBase):
             zsite[idx] = z[idx]-zc[j]
             xerrnc[idx] = np.std(x[idx])
             yerrnc[idx] = np.std(y[idx])
-            yerrnc[idx] = np.std(z[idx])
+            zerrnc[idx] = np.std(z[idx])
 
         trange = t.max() - t.min()
         delta_ms = self.smoothingBinWidthsSeconds * 1e3 # 200 s 

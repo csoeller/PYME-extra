@@ -291,6 +291,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX', "plot tracking correction (if available)", self.OnTrackPlot)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami site correction", self.OnOrigamiSiteTrackPlot)
         visFr.AddMenuItem('MINFLUX>Origami', "toggle smooth origami curve overplotting", self.OnOrigamiCurveToggle)
+        visFr.AddMenuItem('MINFLUX>Origami', "plot origami error estimates", self.OnOrigamiErrorPlot)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -359,7 +360,7 @@ class MINFLUXanalyser():
         # need to add checks if the required properties are present in the datasource!!
         # also plot post correction!
         t_s = 1e-3*p['t']
-        fig, axs = plt.subplots(2, 2)
+        fig, axs = plt.subplots(2, 2,num='origami site tracks')
         axs[0, 0].scatter(t_s,p['x_site_nc'],s=0.3,c='black',alpha=0.7)
         if self.withOrigamiSmoothingCurves:
             axs[0, 0].plot(t_s,p['x_ori']-p['x'],'r',alpha=0.4)
@@ -384,24 +385,41 @@ class MINFLUXanalyser():
         ax = axs[1,1]
         if self.withOrigamiSmoothingCurves:
             # plot the MBM track
-            ax.plot(t_s,p['x_ori']-p['x_nc'])
-            plt.plot(t_s,p['y_ori']-p['y_nc'])
+            ax.plot(t_s,p['x_ori']-p['x_nc'],alpha=0.5,label='x')
+            plt.plot(t_s,p['y_ori']-p['y_nc'],alpha=0.5,label='y')
             if 'z_nc' in p.keys():
-                ax.plot(t_s,p['z_ori']-p['z_nc'])
+                ax.plot(t_s,p['z_ori']-p['z_nc'],alpha=0.5,label='z')
             ax.set_xlabel('t (s)')
             ax.set_ylabel('MBM corr [nm]')
-            # should really add a legend
+            ax.legend()
         else:
             axs[1, 1].plot(t_s,p['x_ori']-p['x'])
             axs[1, 1].plot(t_s,p['y_ori']-p['y'])
             axs[1, 1].plot(t_s,p['z_ori']-p['z'])
             axs[1, 1].set_xlabel('t [s]')
             axs[1, 1].set_ylabel('orig. corr [nm]')
-            
         plt.tight_layout()
 
     def OnOrigamiCurveToggle(self, event):
         self.withOrigamiSmoothingCurves = not self.withOrigamiSmoothingCurves
+
+    def OnOrigamiErrorPlot(self, event):
+        p = self.visFr.pipeline
+        # need to add checks if the required properties are present in the datasource!!
+
+        def plot_errs(ax,axisname,errkeys):
+            ax.hist(p[errkeys[0]],bins='auto',alpha=0.5,density=True,label='Trace est')
+            ax.hist(p[errkeys[1]],bins='auto',alpha=0.5,density=True,label='Site est')
+            ax.hist(p[errkeys[2]],bins='auto',alpha=0.5,density=True,label='Site est corr')
+            ax.legend()
+            ax.set_xlabel('error %s (nm)' % axisname)
+            ax.set_ylabel('#')
+        
+        fig, axs = plt.subplots(2, 2,num='origami error estimates')
+        plot_errs(axs[0, 0], 'x', ['error_x_ori','error_x_nc','error_x'])
+        plot_errs(axs[0, 1], 'y', ['error_y_ori','error_y_nc','error_y'])
+        plot_errs(axs[1, 0], 'z', ['error_z_ori','error_z_nc','error_z'])
+        plt.tight_layout()
         
 def Plug(visFr):
     # we are trying to monkeypatch pipeline and VisGUIFrame methods to sneak MINFLUX npy IO in;
