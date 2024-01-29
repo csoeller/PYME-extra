@@ -1022,3 +1022,120 @@ class NPCAnalysisByID(ModuleBase):
         namespace[self.outputName] = mapped
 
         
+from scipy.stats import binned_statistic
+from scipy.signal import savgol_filter
+from scipy.interpolate import CubicSpline
+
+# a function that is supposed to return a smoothed site trajectory as a function
+# as input we need site coordinates
+# the choice of savgol_filter for smoothing and CubicSpline for interpolation is a little arbitrary for now
+# and can be in future adjusted as needed
+# the bins need to be chosen in a robust manner - FIX
+def smoothed_site_func(t,coord_site,statistic='mean',bins=75,sgwindow_length=10,sgpolyorder=6):
+    csitem, tbins, binnum = binned_statistic(t,coord_site,statistic=statistic,bins=bins)
+    tmid = 0.5*(tbins[0:-1]+tbins[1:])
+    return CubicSpline(tmid,savgol_filter(csitem,10,6))
+    
+@register_module('OrigamiSiteTrack')
+class OrigamiSiteTrack(ModuleBase):
+    """Recipe module aimed at analysing oregami MINFLUX datasets. More docs to be added.""" ### fix this!!!!
+    inputClusters = Input('siteclusters')
+    inputSites = Input('sites')
+    outputName = Output('corrected_siteclusters')
+    smoothingBinWidthsSeconds = Float(200,label='temporal binning (s)',
+                                      desc="parameter that sets the temporal binning in s when" +
+                                      " estimating a smoothed drift trajectory from the data")
+    savgolWindowLength = Int(10,label='savgol filter window length')
+    savgolPolyorder = Int(6,label='savgol filter polynomial order')
+    binnedStatistic = Enum(['mean','median'],desc="statistic for smoothing when using binned_statistic function on data")
+    
+    def run(self, inputClusters, inputSites):
+        site_id = 'dyeID' # we will change this to 'siteID'
+        idsunique = inputSites[site_id].astype('i')
+        # centroid coordinates
+        xc = inputSites['x']
+        yc = inputSites['y']
+        zc = inputSites['z']
+
+        # actual localisation coordinates
+        x = inputClusters['x']
+        y = inputClusters['y']
+        z = inputClusters['z']
+        t = inputClusters['t']
+
+        ids = inputClusters[site_id]
+
+        xsite = np.zeros_like(x)
+        ysite = np.zeros_like(y)
+        zsite = np.zeros_like(z)
+        xerr = np.zeros_like(x)
+        xerrnc = np.zeros_like(x)
+        yerr = np.zeros_like(x)
+        yerrnc = np.zeros_like(x)
+        zerr = np.zeros_like(x)
+        zerrnc = np.zeros_like(x)
+        
+        for j,id in enumerate(idsunique):
+            idx = ids == id
+            xsite[idx] = x[idx]-xc[j]
+            ysite[idx] = y[idx]-yc[j]
+            zsite[idx] = z[idx]-zc[j]
+            xerrnc[idx] = np.std(x[idx])
+            yerrnc[idx] = np.std(y[idx])
+            yerrnc[idx] = np.std(z[idx])
+
+        trange = t.max() - t.min()
+        delta_ms = self.smoothingBinWidthsSeconds * 1e3 # 200 s 
+        nbins = int(trange/delta_ms)
+
+        # we should check that with this choice of nbins we get no issues! (i.e. too few counts in some bins)
+        c_xsite = smoothed_site_func(t,xsite,bins=nbins,statistic=self.binnedStatistic,
+                                     sgwindow_length=self.savgolWindowLength,sgpolyorder=self.savgolPolyorder)
+        c_ysite = smoothed_site_func(t,ysite,bins=nbins,statistic=self.binnedStatistic,
+                                     sgwindow_length=self.savgolWindowLength,sgpolyorder=self.savgolPolyorder)
+        c_zsite = smoothed_site_func(t,zsite,bins=nbins,statistic=self.binnedStatistic,
+                                     sgwindow_length=self.savgolWindowLength,sgpolyorder=self.savgolPolyorder)
+
+        for j,id in enumerate(idsunique):
+            idx = ids == id
+            xerr[idx] = np.std(x[idx]-c_xsite(t[idx]))
+            yerr[idx] = np.std(y[idx]-c_ysite(t[idx]))
+            zerr[idx] = np.std(z[idx]-c_zsite(t[idx]))
+            
+        # note to self: we shall preserve the site coordinates in the new data source
+        # new properties to create: [xyz]_site, [xyz]_ori, new [xyz]
+
+        mapped_ds = tabular.MappingFilter(inputClusters)
+        mapped_ds.setMapping('x_ori', 'x')
+        mapped_ds.setMapping('y_ori', 'y')
+        mapped_ds.setMapping('z_ori', 'z')
+
+        mapped_ds.setMapping('error_x_ori', 'error_x')
+        mapped_ds.setMapping('error_y_ori', 'error_y')
+        mapped_ds.setMapping('error_z_ori', 'error_z')
+        
+        # mapped_ds.addColumn('x_ori', x)
+        # mapped_ds.addColumn('y_ori', y)
+        # mapped_ds.addColumn('z_ori', z)
+        
+        mapped_ds.addColumn('x_site_nc', xsite)
+        mapped_ds.addColumn('y_site_nc', ysite)
+        mapped_ds.addColumn('z_site_nc', zsite)
+
+        mapped_ds.addColumn('x_site', xsite-c_xsite(t))
+        mapped_ds.addColumn('y_site', ysite-c_ysite(t))
+        mapped_ds.addColumn('z_site', zsite-c_zsite(t))
+
+        mapped_ds.addColumn('error_x_nc', xerrnc)
+        mapped_ds.addColumn('error_y_nc', yerrnc)
+        mapped_ds.addColumn('error_z_nc', zerrnc)
+
+        mapped_ds.addColumn('error_x', xerr)
+        mapped_ds.addColumn('error_y', yerr)
+        mapped_ds.addColumn('error_z', zerr)
+        
+        mapped_ds.addColumn('x', x-c_xsite(t))
+        mapped_ds.addColumn('y', y-c_ysite(t))
+        mapped_ds.addColumn('z', z-c_zsite(t))
+        
+        return mapped_ds

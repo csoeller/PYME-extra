@@ -280,14 +280,18 @@ class MINFLUXanalyser():
     def __init__(self, visFr):
         self.visFr = visFr
         self.minfluxRIDs = {}
-
+        self.withOrigamiSmoothingCurves = True
+        self.defaultDatasource = 'Localizations' # default datasource for acquisition analysis; possibly make user adjustable
+        
         visFr.AddMenuItem('MINFLUX', "Localisation Error analysis", self.OnErrorAnalysis)
         visFr.AddMenuItem('MINFLUX', "Cluster sizes - 3D", self.OnCluster3D)
         visFr.AddMenuItem('MINFLUX', "Cluster sizes - 2D", self.OnCluster2D)
         visFr.AddMenuItem('MINFLUX', "Analyse Localization Rate", self.OnLocalisationRate)
         visFr.AddMenuItem('MINFLUX', "EFO histogram (photon rates)", self.OnEfoAnalysis)
         visFr.AddMenuItem('MINFLUX', "plot tracking correction (if available)", self.OnTrackPlot)
-
+        visFr.AddMenuItem('MINFLUX>Origami', "plot origami site correction", self.OnOrigamiSiteTrackPlot)
+        visFr.AddMenuItem('MINFLUX>Origami', "toggle smooth origami curve overplotting", self.OnOrigamiCurveToggle)
+        
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
         # and are populated from the customrecipes folder in the PYME config directories
@@ -313,10 +317,9 @@ class MINFLUXanalyser():
         plot_cluster_analysis(self.visFr.pipeline, ds='dbscan2D')
 
     def OnLocalisationRate(self, event):
-        datasource = 'Localizations'
         pipeline = self.visFr.pipeline
         curds = pipeline.selectedDataSourceKey
-        pipeline.selectDataSource(datasource)
+        pipeline.selectDataSource(self.defaultDatasource)
         if not 'cfr' in pipeline.keys():
             Error(self.visFr,'no property called "cfr", likely no MINFLUX data - aborting')
             pipeline.selectDataSource(curds)
@@ -327,10 +330,12 @@ class MINFLUXanalyser():
             return
         pipeline.selectDataSource(curds)
 
-        analyse_locrate(pipeline,datasource=datasource,showTimeAverages=True)
+        analyse_locrate(pipeline,datasource=self.defaultDatasource,showTimeAverages=True)
 
     def OnEfoAnalysis(self, event):
         pipeline = self.visFr.pipeline
+        curds = pipeline.selectedDataSourceKey
+        pipeline.selectDataSource(self.defaultDatasource)
         if not 'efo' in pipeline.keys():
             Error(self.visFr,'no property called "efo", likely no MINFLUX data or wrong datasource (CHECK) - aborting')
             return
@@ -340,12 +345,63 @@ class MINFLUXanalyser():
         plt.xlabel('efo (photon rate in kHz)')
         plt.title("EFO stats, using datasource '%s'" % dskey)
 
+        pipeline.selectDataSource(curds)
+
     def OnTrackPlot(self, event):
         p = self.visFr.pipeline
         curds = p.selectedDataSourceKey
         p.selectDataSource('Localizations')
         plot_tracking(p)
         p.selectDataSource(curds)
+
+    def OnOrigamiSiteTrackPlot(self, event):
+        p = self.visFr.pipeline
+        # need to add checks if the required properties are present in the datasource!!
+        # also plot post correction!
+        t_s = 1e-3*p['t']
+        fig, axs = plt.subplots(2, 2)
+        axs[0, 0].scatter(t_s,p['x_site_nc'],s=0.3,c='black',alpha=0.7)
+        if self.withOrigamiSmoothingCurves:
+            axs[0, 0].plot(t_s,p['x_ori']-p['x'],'r',alpha=0.4)
+        axs[0, 0].set_ylim(-15,15)
+        axs[0, 0].set_xlabel('t [s]')
+        axs[0, 0].set_ylabel('x [nm]')
+        
+        axs[0, 1].scatter(t_s,p['y_site_nc'],s=0.3,c='black',alpha=0.7)
+        if self.withOrigamiSmoothingCurves:
+            axs[0, 1].plot(t_s,p['y_ori']-p['y'],'r',alpha=0.4)
+        axs[0, 1].set_ylim(-15,15)
+        axs[0, 1].set_xlabel('t [s]')
+        axs[0, 1].set_ylabel('y [nm]')
+        
+        axs[1, 0].scatter(t_s,p['z_site_nc'],s=0.3,c='black',alpha=0.7)
+        if self.withOrigamiSmoothingCurves:
+            axs[1, 0].plot(t_s,p['z_ori']-p['z'],'r',alpha=0.4)
+        axs[1, 0].set_ylim(-15,15)
+        axs[1, 0].set_xlabel('t [s]')
+        axs[1, 0].set_ylabel('z [nm]')
+
+        ax = axs[1,1]
+        if self.withOrigamiSmoothingCurves:
+            # plot the MBM track
+            ax.plot(t_s,p['x_ori']-p['x_nc'])
+            plt.plot(t_s,p['y_ori']-p['y_nc'])
+            if 'z_nc' in p.keys():
+                ax.plot(t_s,p['z_ori']-p['z_nc'])
+            ax.set_xlabel('t (s)')
+            ax.set_ylabel('MBM corr [nm]')
+            # should really add a legend
+        else:
+            axs[1, 1].plot(t_s,p['x_ori']-p['x'])
+            axs[1, 1].plot(t_s,p['y_ori']-p['y'])
+            axs[1, 1].plot(t_s,p['z_ori']-p['z'])
+            axs[1, 1].set_xlabel('t [s]')
+            axs[1, 1].set_ylabel('orig. corr [nm]')
+            
+        plt.tight_layout()
+
+    def OnOrigamiCurveToggle(self, event):
+        self.withOrigamiSmoothingCurves = not self.withOrigamiSmoothingCurves
         
 def Plug(visFr):
     # we are trying to monkeypatch pipeline and VisGUIFrame methods to sneak MINFLUX npy IO in;
