@@ -1042,15 +1042,16 @@ class OrigamiSiteTrack(ModuleBase):
     inputClusters = Input('siteclusters')
     inputSites = Input('sites')
     outputName = Output('corrected_siteclusters')
+    labelKey = CStr('dyeID') # should really be siteID
     smoothingBinWidthsSeconds = Float(200,label='temporal binning (s)',
-                                      desc="parameter that sets the temporal binning in s when" +
+                                      desc="parameter that sets the temporal binning (in units of s) when" +
                                       " estimating a smoothed drift trajectory from the data")
     savgolWindowLength = Int(10,label='savgol filter window length')
     savgolPolyorder = Int(6,label='savgol filter polynomial order')
     binnedStatistic = Enum(['mean','median'],desc="statistic for smoothing when using binned_statistic function on data")
     
     def run(self, inputClusters, inputSites):
-        site_id = 'dyeID' # we will change this to 'siteID'
+        site_id = self.labelKey
         idsunique = inputSites[site_id].astype('i')
         # centroid coordinates
         xc = inputSites['x']

@@ -275,6 +275,7 @@ def plot_tracking(pipeline):
 
 from PYMEcs.Analysis.MINFLUX import analyse_locrate
 from PYMEcs.misc.guiMsgBoxes import Error
+from PYMEcs.misc.utils import unique_name
 
 class MINFLUXanalyser():
     def __init__(self, visFr):
@@ -282,6 +283,8 @@ class MINFLUXanalyser():
         self.minfluxRIDs = {}
         self.withOrigamiSmoothingCurves = True
         self.defaultDatasource = 'Localizations' # default datasource for acquisition analysis; possibly make user adjustable
+        self.origamiErrorFignum = 0
+        self.origamiTrackFignum = 0
         
         visFr.AddMenuItem('MINFLUX', "Localisation Error analysis", self.OnErrorAnalysis)
         visFr.AddMenuItem('MINFLUX', "Cluster sizes - 3D", self.OnCluster3D)
@@ -289,9 +292,10 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX', "Analyse Localization Rate", self.OnLocalisationRate)
         visFr.AddMenuItem('MINFLUX', "EFO histogram (photon rates)", self.OnEfoAnalysis)
         visFr.AddMenuItem('MINFLUX', "plot tracking correction (if available)", self.OnTrackPlot)
+        visFr.AddMenuItem('MINFLUX>Origami', "group and analyse origami sites", self.OnOrigamiSiteRecipe)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami site correction", self.OnOrigamiSiteTrackPlot)
-        visFr.AddMenuItem('MINFLUX>Origami', "toggle smooth origami curve overplotting", self.OnOrigamiCurveToggle)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami error estimates", self.OnOrigamiErrorPlot)
+        visFr.AddMenuItem('MINFLUX>Origami', "toggle smooth origami curve overplotting", self.OnOrigamiCurveToggle)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -355,12 +359,47 @@ class MINFLUXanalyser():
         plot_tracking(p)
         p.selectDataSource(curds)
 
+    def OnOrigamiSiteRecipe(self, event=None):
+        from PYMEcs.recipes.localisations import OrigamiSiteTrack, DBSCANClustering2
+        from PYME.recipes.localisations import MergeClumps
+        from PYME.recipes.tablefilters import FilterTable
+        
+        pipeline = self.visFr.pipeline
+        recipe = pipeline.recipe
+
+        preFiltered = unique_name('prefiltered',pipeline.dataSources.keys())
+        corrSiteClumps = unique_name('corrected_siteclumps',pipeline.dataSources.keys())
+        siteClumps = unique_name('siteclumps',pipeline.dataSources.keys())
+        dbscanClusteredSites = unique_name('dbscanClusteredSites',pipeline.dataSources.keys())
+        sites = unique_name('sites',pipeline.dataSources.keys())
+        sites_c = unique_name('sites_c',pipeline.dataSources.keys())
+        
+        curds = pipeline.selectedDataSourceKey
+        modules = [FilterTable(recipe,inputName=curds,outputName=preFiltered,
+                               filters={'error_x' : [0,3.3],
+                                        'error_z' : [0,3.3]}),
+                   DBSCANClustering2(recipe,inputName=preFiltered,outputName=dbscanClusteredSites,
+                                     searchRadius = 15.0,
+                                     clumpColumnName = 'siteID',
+                                     sizeColumnName='siteClumpSize'),
+                   FilterTable(recipe,inputName=dbscanClusteredSites,outputName=siteClumps,
+                               filters={'siteClumpSize' : [3,40]}),
+                   MergeClumps(recipe,inputName=siteClumps,outputName=sites,
+                               labelKey='siteID',discardTrivial=True),
+                   OrigamiSiteTrack(recipe,inputClusters=siteClumps,inputSites=sites,outputName=corrSiteClumps,
+                                    labelKey='siteID'),
+                   MergeClumps(recipe,inputName=corrSiteClumps,outputName=sites_c,
+                               labelKey='siteID',discardTrivial=True)]
+        recipe.add_modules_and_execute(modules)
+        
+        pipeline.selectDataSource(corrSiteClumps)
+
     def OnOrigamiSiteTrackPlot(self, event):
         p = self.visFr.pipeline
         # need to add checks if the required properties are present in the datasource!!
         # also plot post correction!
         t_s = 1e-3*p['t']
-        fig, axs = plt.subplots(2, 2,num='origami site tracks')
+        fig, axs = plt.subplots(2, 2,num='origami site tracks %d' % self.origamiTrackFignum)
         axs[0, 0].scatter(t_s,p['x_site_nc'],s=0.3,c='black',alpha=0.7)
         if self.withOrigamiSmoothingCurves:
             axs[0, 0].plot(t_s,p['x_ori']-p['x'],'r',alpha=0.4)
@@ -400,6 +439,8 @@ class MINFLUXanalyser():
             axs[1, 1].set_ylabel('orig. corr [nm]')
         plt.tight_layout()
 
+        self.origamiTrackFignum += 1
+
     def OnOrigamiCurveToggle(self, event):
         self.withOrigamiSmoothingCurves = not self.withOrigamiSmoothingCurves
 
@@ -415,11 +456,12 @@ class MINFLUXanalyser():
             ax.set_xlabel('error %s (nm)' % axisname)
             ax.set_ylabel('#')
         
-        fig, axs = plt.subplots(2, 2,num='origami error estimates')
+        fig, axs = plt.subplots(2, 2,num='origami error estimates %d' % self.origamiErrorFignum)
         plot_errs(axs[0, 0], 'x', ['error_x_ori','error_x_nc','error_x'])
         plot_errs(axs[0, 1], 'y', ['error_y_ori','error_y_nc','error_y'])
         plot_errs(axs[1, 0], 'z', ['error_z_ori','error_z_nc','error_z'])
         plt.tight_layout()
+        self.origamiErrorFignum += 1
         
 def Plug(visFr):
     # we are trying to monkeypatch pipeline and VisGUIFrame methods to sneak MINFLUX npy IO in;

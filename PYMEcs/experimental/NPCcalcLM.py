@@ -5,16 +5,7 @@ import wx
 from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float, Bool
 import numpy as np
 import matplotlib.pyplot as plt
-
-def unique_name(stem,names):
-    if stem not in names:
-        return stem
-    for i in range(1,11):
-        stem2 = "%s%d" % (stem,i)
-        if stem2 not in names:
-            return stem2
-
-    return stem2 # here we just give up and accept a duplicate name
+from PYMEcs.misc.utils import unique_name
 
 def selectWithDialog(choices, message='select image from list', caption='Selection'):
     dlg = wx.SingleChoiceDialog(None, message, caption, list(choices), wx.CHOICEDLG_STYLE)

@@ -25,3 +25,14 @@ def pyme_logging_filter(loglevel=logging.WARN,
         
     logging.basicConfig()
     logging.getLogger().setLevel(loglevel)
+
+# get unique name for recipe output
+def unique_name(stem,names):
+    if stem not in names:
+        return stem
+    for i in range(1,11):
+        stem2 = "%s%d" % (stem,i)
+        if stem2 not in names:
+            return stem2
+
+    return stem2 # here we just give up and accept a duplicate name
