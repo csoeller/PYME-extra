@@ -224,7 +224,7 @@ class FiducialApply(ModuleBase):
 class MergeClumpsTperiod(ModuleBase):
     """
     Create a new mapping object which derives mapped keys from original ones.
-    Also adds the time period of bursts by adding tmin and tmax columns for each clump.
+    Also adds the time period of bursts by adding clumpTmin, clumpTmax amd clumpLength columns.
     """
     inputName = Input('clumped')
     outputName = Output('merged')
@@ -238,6 +238,16 @@ class MergeClumpsTperiod(ModuleBase):
 
         grouped = pyDeClump.mergeClumps(inp, labelKey=self.labelKey)
 
+        # we need this because currently the addColumn method of DictSrc is broken
+        def addColumn(dictsrc,name, values):
+            if not isinstance(values, np.ndarray):
+                raise TypeError('New column "%s" is not a numpy array' % name)
+
+            if not len(values) == len(dictsrc):
+                raise ValueError('Columns are different lengths')
+
+            dictsrc._source[name] = values # this was missing I think
+
         # work out tmin and tmax
         I = np.argsort(inp[self.labelKey])
         sorted_src = {k: inp[k][I] for k in [self.labelKey,'t']}
@@ -245,9 +255,15 @@ class MergeClumpsTperiod(ModuleBase):
         NClumps = int(np.max(sorted_src[self.labelKey]) + 1)
         tmin = deClumpC.aggregateMin(NClumps, sorted_src[self.labelKey].astype('i'), sorted_src['t'].astype('f'))
         tmax = -deClumpC.aggregateMin(NClumps, sorted_src[self.labelKey].astype('i'), -1.0*sorted_src['t'].astype('f'))
-        grouped.addColumn('tmin',tmin)
-        grouped.addColumn('tmax',tmax)
-        
+        if '_source' in dir(grouped): # appears to be a DictSource which currently has a broken addColumn method
+            addColumn(grouped,'clumpTmin',tmin) # use our fixed function to add a column
+            addColumn(grouped,'clumpTmax',tmax)
+            addColumn(grouped,'clumpLength',tmax-tmin+1) # this only works if time is in frame units (otherwise a value different from +1 is needed)
+        else:
+            grouped.addColumn('clumpTmin',tmin)
+            grouped.addColumn('clumpTmax',tmax)
+            grouped.addColumn('clumpLength',tmax-tmin+1)
+            
         try:
             grouped.mdh = inp.mdh
         except AttributeError:
