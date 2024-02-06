@@ -31,7 +31,7 @@ def unique_name(stem,names):
     if stem not in names:
         return stem
     for i in range(1,11):
-        stem2 = "%s%d" % (stem,i)
+        stem2 = "%s_%d" % (stem,i)
         if stem2 not in names:
             return stem2
 
