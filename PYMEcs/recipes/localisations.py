@@ -802,7 +802,8 @@ class DBSCANClustering2(ModuleBase):
                     Item('minClumpSize'),
                     Item('multithreaded'),
                     Item('numberOfJobs'),
-                    Item('clumpColumnName'),]
+                    Item('clumpColumnName'),
+                    Item('sizeColumnName'),]
 
 
 @register_module('SnrCalculation')
