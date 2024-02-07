@@ -277,14 +277,24 @@ from PYMEcs.Analysis.MINFLUX import analyse_locrate
 from PYMEcs.misc.guiMsgBoxes import Error
 from PYMEcs.misc.utils import unique_name
 
+from PYME.recipes.traits import HasTraits, Float, Enum, CStr, Bool, Int, List
+
+class MINFLUXSettings(HasTraits):
+    withOrigamiSmoothingCurves = Bool(True,label='Plot smoothing curves',desc="if overplotting smoothing curves " +
+                                      "in origami site correction analysis")
+    defaultDatasourceForAnalysis = CStr('Localizations',label='default datasource for analysis',
+                                        desc="the datasource key that will be used by default in the MINFLUX " +
+                                        "properties functions (EFO, localisation rate, etc)") # default datasource for acquisition analysis
+    origamiWith_nc = Bool(False,label='add 2nd moduleset (no MBM corr)',
+                          desc="if a full second module set is inserted to also analyse the origami data without any MBM corrections")
+
 class MINFLUXanalyser():
     def __init__(self, visFr):
         self.visFr = visFr
         self.minfluxRIDs = {}
-        self.withOrigamiSmoothingCurves = True
-        self.defaultDatasource = 'Localizations' # default datasource for acquisition analysis; possibly make user adjustable
         self.origamiErrorFignum = 0
         self.origamiTrackFignum = 0
+        self.analysisSettings = MINFLUXSettings()
         
         visFr.AddMenuItem('MINFLUX', "Localisation Error analysis", self.OnErrorAnalysis)
         visFr.AddMenuItem('MINFLUX', "Cluster sizes - 3D", self.OnCluster3D)
@@ -295,7 +305,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Origami', "group and analyse origami sites", self.OnOrigamiSiteRecipe)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami site correction", self.OnOrigamiSiteTrackPlot)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami error estimates", self.OnOrigamiErrorPlot)
-        visFr.AddMenuItem('MINFLUX>Origami', "toggle smooth origami curve overplotting", self.OnOrigamiCurveToggle)
+        visFr.AddMenuItem('MINFLUX', "Analysis settings", self.OnMINFLUXSettings)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -324,7 +334,7 @@ class MINFLUXanalyser():
     def OnLocalisationRate(self, event):
         pipeline = self.visFr.pipeline
         curds = pipeline.selectedDataSourceKey
-        pipeline.selectDataSource(self.defaultDatasource)
+        pipeline.selectDataSource(self.analysisSettings.defaultDatasourceForAnalysis)
         if not 'cfr' in pipeline.keys():
             Error(self.visFr,'no property called "cfr", likely no MINFLUX data - aborting')
             pipeline.selectDataSource(curds)
@@ -335,12 +345,12 @@ class MINFLUXanalyser():
             return
         pipeline.selectDataSource(curds)
 
-        analyse_locrate(pipeline,datasource=self.defaultDatasource,showTimeAverages=True)
+        analyse_locrate(pipeline,datasource=self.analysisSettings.defaultDatasourceForAnalysis,showTimeAverages=True)
 
     def OnEfoAnalysis(self, event):
         pipeline = self.visFr.pipeline
         curds = pipeline.selectedDataSourceKey
-        pipeline.selectDataSource(self.defaultDatasource)
+        pipeline.selectDataSource(self.analysisSettings.defaultDatasourceForAnalysis)
         if not 'efo' in pipeline.keys():
             Error(self.visFr,'no property called "efo", likely no MINFLUX data or wrong datasource (CHECK) - aborting')
             return
@@ -362,7 +372,7 @@ class MINFLUXanalyser():
     def OnOrigamiSiteRecipe(self, event=None):
         from PYMEcs.recipes.localisations import OrigamiSiteTrack, DBSCANClustering2
         from PYME.recipes.localisations import MergeClumps
-        from PYME.recipes.tablefilters import FilterTable
+        from PYME.recipes.tablefilters import FilterTable, Mapping
         
         pipeline = self.visFr.pipeline
         recipe = pipeline.recipe
@@ -391,6 +401,35 @@ class MINFLUXanalyser():
                    MergeClumps(recipe,inputName=corrSiteClumps,outputName=sites_c,
                                labelKey='siteID',discardTrivial=True)]
         recipe.add_modules_and_execute(modules)
+
+        if self.analysisSettings.origamiWith_nc:
+            preFiltered = unique_name('prefiltered_nc',pipeline.dataSources.keys())
+            corrSiteClumps = unique_name('corrected_siteclumps_nc',pipeline.dataSources.keys())
+            siteClumps = unique_name('siteclumps_nc',pipeline.dataSources.keys())
+            dbscanClusteredSites = unique_name('dbscanClusteredSites_nc',pipeline.dataSources.keys())
+            sites = unique_name('sites_nc',pipeline.dataSources.keys())
+            sites_c = unique_name('sites_c_nc',pipeline.dataSources.keys())
+            dbsnc = unique_name('dbs_nc',pipeline.dataSources.keys())
+        
+            modules = [FilterTable(recipe,inputName=curds,outputName=preFiltered,
+                                   filters={'error_x' : [0,3.3],
+                                            'error_z' : [0,3.3]}),
+                       DBSCANClustering2(recipe,inputName=preFiltered,outputName=dbscanClusteredSites,
+                                         searchRadius = 15.0,
+                                         clumpColumnName = 'siteID',
+                                         sizeColumnName='siteClumpSize'),
+                       Mapping(recipe,inputName=dbscanClusteredSites,outputName=dbsnc,
+                               mappings={'x': 'x_nc', 'y': 'y_nc', 'z': 'z_nc'}),
+                       FilterTable(recipe,inputName=dbsnc,outputName=siteClumps,
+                                   filters={'siteClumpSize' : [3,40]}),
+                       MergeClumps(recipe,inputName=siteClumps,outputName=sites,
+                                   labelKey='siteID',discardTrivial=True),
+                       OrigamiSiteTrack(recipe,inputClusters=siteClumps,inputSites=sites,outputName=corrSiteClumps,
+                                        labelKey='siteID'),
+                       MergeClumps(recipe,inputName=corrSiteClumps,outputName=sites_c,
+                                   labelKey='siteID',discardTrivial=True)]
+        
+            recipe.add_modules_and_execute(modules)
         
         pipeline.selectDataSource(corrSiteClumps)
 
@@ -401,28 +440,28 @@ class MINFLUXanalyser():
         t_s = 1e-3*p['t']
         fig, axs = plt.subplots(2, 2,num='origami site tracks %d' % self.origamiTrackFignum)
         axs[0, 0].scatter(t_s,p['x_site_nc'],s=0.3,c='black',alpha=0.7)
-        if self.withOrigamiSmoothingCurves:
+        if self.analysisSettings.withOrigamiSmoothingCurves:
             axs[0, 0].plot(t_s,p['x_ori']-p['x'],'r',alpha=0.4)
         axs[0, 0].set_ylim(-15,15)
         axs[0, 0].set_xlabel('t [s]')
         axs[0, 0].set_ylabel('x [nm]')
         
         axs[0, 1].scatter(t_s,p['y_site_nc'],s=0.3,c='black',alpha=0.7)
-        if self.withOrigamiSmoothingCurves:
+        if self.analysisSettings.withOrigamiSmoothingCurves:
             axs[0, 1].plot(t_s,p['y_ori']-p['y'],'r',alpha=0.4)
         axs[0, 1].set_ylim(-15,15)
         axs[0, 1].set_xlabel('t [s]')
         axs[0, 1].set_ylabel('y [nm]')
         
         axs[1, 0].scatter(t_s,p['z_site_nc'],s=0.3,c='black',alpha=0.7)
-        if self.withOrigamiSmoothingCurves:
+        if self.analysisSettings.withOrigamiSmoothingCurves:
             axs[1, 0].plot(t_s,p['z_ori']-p['z'],'r',alpha=0.4)
         axs[1, 0].set_ylim(-15,15)
         axs[1, 0].set_xlabel('t [s]')
         axs[1, 0].set_ylabel('z [nm]')
 
         ax = axs[1,1]
-        if self.withOrigamiSmoothingCurves:
+        if self.analysisSettings.withOrigamiSmoothingCurves:
             # plot the MBM track
             ax.plot(t_s,p['x_ori']-p['x_nc'],alpha=0.5,label='x')
             plt.plot(t_s,p['y_ori']-p['y_nc'],alpha=0.5,label='y')
@@ -441,8 +480,9 @@ class MINFLUXanalyser():
 
         self.origamiTrackFignum += 1
 
-    def OnOrigamiCurveToggle(self, event):
-        self.withOrigamiSmoothingCurves = not self.withOrigamiSmoothingCurves
+    def OnMINFLUXSettings(self, event):
+        if self.analysisSettings.configure_traits(kind='modal'):
+            pass
 
     def OnOrigamiErrorPlot(self, event):
         p = self.visFr.pipeline
