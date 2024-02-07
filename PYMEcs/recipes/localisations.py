@@ -1054,10 +1054,37 @@ def smoothed_site_func(t,coord_site,statistic='mean',bins=75,sgwindow_length=10,
     
 @register_module('OrigamiSiteTrack')
 class OrigamiSiteTrack(ModuleBase):
-    """Recipe module aimed at analysing oregami MINFLUX datasets. More docs to be added.""" ### fix this!!!!
+    """
+    Recipe module aimed at analysing oregami MINFLUX datasets. More docs to be added.
+
+    Inputs
+    ------
+    inputClusters: name of tabular input containing already
+        "labeled" clusters used for lining up
+    inputSites: name of tabular input containing already
+        coalesced clusters that should match the inputClusters in terms of label etc
+    inputAllPoints: [optional] tabular input that contains typically
+        "all" data to which the calculated drift track should be applied
+
+    Outputs
+    -------
+    outputName: name of tabular output that will contain
+        coordinate corrected
+        version of inputClusters. Also contains a wealth of additional info, such
+        as new error estimates based on site "scatter" and preserves the
+        original and also precorrected versions of those properties.
+    outputAllPoints: [optional] tabular output that contains the
+        coordinate corrected (drift-corrected) version
+        of inputAllPoints. Will only be generated if optional
+        input inputAllPoints was supplied
+    
+    """
     inputClusters = Input('siteclusters')
     inputSites = Input('sites')
+    inputAllPoints = Input('')  # optional input to apply the correction to
     outputName = Output('corrected_siteclusters')
+    outputAllPoints = Output('') # optional output if our inputAllPoints was actually used
+    
     labelKey = CStr('dyeID') # should really be siteID
     smoothingBinWidthsSeconds = Float(200,label='temporal binning (s)',
                                       desc="parameter that sets the temporal binning (in units of s) when" +
@@ -1066,7 +1093,7 @@ class OrigamiSiteTrack(ModuleBase):
     savgolPolyorder = Int(6,label='savgol filter polynomial order')
     binnedStatistic = Enum(['mean','median'],desc="statistic for smoothing when using binned_statistic function on data")
     
-    def run(self, inputClusters, inputSites):
+    def run(self, inputClusters, inputSites,inputAllPoints=None):
         site_id = self.labelKey
         idsunique = inputSites[site_id].astype('i')
         # centroid coordinates
@@ -1154,5 +1181,22 @@ class OrigamiSiteTrack(ModuleBase):
         mapped_ds.addColumn('x', x-c_xsite(t))
         mapped_ds.addColumn('y', y-c_ysite(t))
         mapped_ds.addColumn('z', z-c_zsite(t))
+
+        if inputAllPoints is not None:
+            mapped_ap = tabular.MappingFilter(inputAllPoints)
+            # actual localisation coordinates
+            x = inputAllPoints['x']
+            y = inputAllPoints['y']
+            z = inputAllPoints['z']
+            t = inputAllPoints['t']
+
+            mapped_ap.addColumn('x', x-c_xsite(t))
+            mapped_ap.addColumn('y', y-c_ysite(t))
+            mapped_ap.addColumn('z', z-c_zsite(t))            
+        else:
+            # how to deal with an "optional" output
+            # this would be a dummy assignment in the absence of inputAllPoints
+            # mapped_ap = tabular.MappingFilter(inputClusters)
+            mapped_ap = None # returning none in this case seems better and appears to work
         
-        return mapped_ds
+        return {'outputName': mapped_ds, 'outputAllPoints' : mapped_ap} 
