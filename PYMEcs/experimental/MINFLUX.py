@@ -500,6 +500,16 @@ class MINFLUXanalyser():
         plot_errs(axs[0, 0], 'x', ['error_x_ori','error_x_nc','error_x'])
         plot_errs(axs[0, 1], 'y', ['error_y_ori','error_y_nc','error_y'])
         plot_errs(axs[1, 0], 'z', ['error_z_ori','error_z_nc','error_z'])
+        ax = axs[1,1]
+        # plot the MBM track, this way we know if we are using the _nc data or the MBM corrected data for analysis
+        t_s = 1e-3*p['t']
+        ax.plot(t_s,p['x_ori']-p['x_nc'],alpha=0.5,label='x')
+        plt.plot(t_s,p['y_ori']-p['y_nc'],alpha=0.5,label='y')
+        if 'z_nc' in p.keys():
+            ax.plot(t_s,p['z_ori']-p['z_nc'],alpha=0.5,label='z')
+        ax.set_xlabel('t (s)')
+        ax.set_ylabel('MBM corr [nm]')
+        ax.legend()
         plt.tight_layout()
         self.origamiErrorFignum += 1
         
