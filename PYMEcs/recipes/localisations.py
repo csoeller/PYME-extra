@@ -1205,3 +1205,50 @@ class OrigamiSiteTrack(ModuleBase):
             mapped_ap = None # returning none in this case seems better and appears to work
         
         return {'outputName': mapped_ds, 'outputAllPoints' : mapped_ap} 
+
+
+import numpy as np
+import scipy.special
+
+@register_module('MINFLUXcolours')
+class MINFLUXcolours(ModuleBase):
+
+    inputLocalizations = Input('localizations')
+    output = Output('localizations_mcolour') # localisations with MINFLUX colour info
+
+    dcrisgfrac = Bool(False)
+    
+    def run(self,inputLocalizations):
+    
+        mapped_ds = tabular.MappingFilter(inputLocalizations)
+        mapped_ds.setMapping('A','nPhotons')
+
+        if self.dcrisgfrac:
+            mapped_ds.setMapping('fitResults_Ag','dcr*nPhotons')
+            mapped_ds.setMapping('fitResults_Ar','(1-dcr)*nPhotons')
+        else:
+            mapped_ds.setMapping('fitResults_Ag','nPhotons*dcr/(1+dcr)')
+            mapped_ds.setMapping('fitResults_Ar','nPhotons/(1+dcr)')
+
+
+        mapped_ds.setMapping('fitError_Ag','1*sqrt(fitResults_Ag/1)')
+        mapped_ds.setMapping('fitError_Ar','1*sqrt(fitResults_Ar/1)')
+
+        mapped_ds.setMapping('gFrac', 'fitResults_Ag/(fitResults_Ag + fitResults_Ar)')
+        mapped_ds.setMapping('error_gFrac',
+                      'sqrt((fitError_Ag/fitResults_Ag)**2 + (fitError_Ag**2 + fitError_Ar**2)/(fitResults_Ag + fitResults_Ar)**2)' +
+                      '*fitResults_Ag/(fitResults_Ag + fitResults_Ar)')
+
+        sg = mapped_ds['fitError_Ag']
+        sr = mapped_ds['fitError_Ar']
+        g = mapped_ds['fitResults_Ag']
+        r = mapped_ds['fitResults_Ar']
+        I = mapped_ds['A']
+
+        colNorm = np.sqrt(2 * np.pi) * sg * sr / (2 * np.sqrt(sg ** 2 + sr ** 2) * I) * (
+            scipy.special.erf((sg ** 2 * r + sr ** 2 * (I - g)) / (np.sqrt(2) * sg * sr * np.sqrt(sg ** 2 + sr ** 2)))
+            - scipy.special.erf((sg ** 2 * (r - I) - sr ** 2 * g) / (np.sqrt(2) * sg * sr * np.sqrt(sg ** 2 + sr ** 2))))
+
+        mapped_ds.addColumn('ColourNorm', colNorm)
+
+        return mapped_ds

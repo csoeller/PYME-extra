@@ -306,6 +306,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami site correction", self.OnOrigamiSiteTrackPlot)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami error estimates", self.OnOrigamiErrorPlot)
         visFr.AddMenuItem('MINFLUX', "Analysis settings", self.OnMINFLUXSettings)
+        visFr.AddMenuItem('MINFLUX', "Manually create Colour panel", self.OnMINFLUXColour)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -512,7 +513,21 @@ class MINFLUXanalyser():
         ax.legend()
         plt.tight_layout()
         self.origamiErrorFignum += 1
+
+    def OnMINFLUXColour(self,event):
+        from PYME.LMVis import colourPanel
         
+        mw = self.visFr
+        if mw.colp is None: # no colourPanel yet
+            self.visFr.pipeline.selectDataSource('colour_mapped')
+            mw.adding_panes=True
+            mw.colp = colourPanel.colourPanel(mw, mw.pipeline, mw)
+            mw.AddPage(mw.colp, caption='Colour', select=False, update=False)
+            mw.adding_panes=False
+        else:
+            warn('Colour panel appears to already exist - not creating new colour panel')
+
+
 def Plug(visFr):
     # we are trying to monkeypatch pipeline and VisGUIFrame methods to sneak MINFLUX npy IO in;
     # in future we will ask for a way to get this considered by David B for a proper hook
