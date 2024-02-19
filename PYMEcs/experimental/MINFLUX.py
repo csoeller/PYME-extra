@@ -249,30 +249,72 @@ def fourcornerplot_default(pipeline,sigma=sigmaDefault,backgroundFraction=backgr
 def subunitfit(pipeline):
     return fourcornerplot_default(pipeline,showplot=False)
 
-def plot_tracking(pipeline):
+def plot_tracking(pipeline,is_coalesced=False,lowess_fraction=0.05):
     p = pipeline
-
-    if 'z_nc' in pipeline.keys():
+    has_z = 'z_nc' in pipeline.keys()
+    if has_z:
         nrows = 3
     else:
         nrows = 2
-    
+
+    t_s = 1e-3*p['t']
+    xmbm = p['x']-p['x_nc']
+    ymbm = p['y']-p['y_nc']
+    if has_z:
+        zmbm = p['z']-p['z_nc']
+
+    if is_coalesced:
+        from statsmodels.nonparametric.smoothers_lowess import lowess
+        xmbms = lowess(xmbm, t_s, frac=lowess_fraction, return_sorted=False)
+        ymbms = lowess(ymbm, t_s, frac=lowess_fraction, return_sorted=False)
+        if has_z:
+            zmbms = lowess(zmbm, t_s, frac=lowess_fraction, return_sorted=False)
+
     plt.figure(num='beamline monitoring corrections')
     plt.subplot(nrows,1,1)
-    plt.plot(1e-3*p['t'],p['x']-p['x_nc'])
+    plt.plot(t_s,xmbm)
+    if is_coalesced:
+        plt.plot(t_s,xmbms)
     plt.xlabel('Time (s)')
     plt.ylabel('x-difference (nm)')
     plt.subplot(nrows,1,2)
-    plt.plot(1e-3*p['t'],p['y']-p['y_nc'])
+    plt.plot(t_s,ymbm)
+    if is_coalesced:
+        plt.plot(t_s,ymbms)
     plt.xlabel('Time (s)')
     plt.ylabel('y-difference (nm)')
     if 'z_nc' in pipeline.keys():
         plt.subplot(nrows,1,3)
-        plt.plot(1e-3*p['t'],p['z']-p['z_nc'])
+        plt.plot(t_s,zmbm)
+        if is_coalesced:
+            plt.plot(t_s,zmbms)
         plt.xlabel('Time (s)')
         plt.ylabel('z-difference (nm)')
     plt.tight_layout()
 
+    if not is_coalesced:
+        return # skip HF plot
+    
+    plt.figure(num='MBM corrections HF component')
+    plt.subplot(nrows,1,1)
+    plt.plot(t_s,xmbm-xmbms)
+    plt.xlabel('Time (s)')
+    plt.ylabel('x-difference (nm)')
+    plt.grid(axis='y')
+    plt.subplot(nrows,1,2)
+    plt.plot(t_s,ymbm-ymbms)
+    plt.grid(axis='y')
+    plt.xlabel('Time (s)')
+    plt.ylabel('y-difference (nm)')
+    if 'z_nc' in pipeline.keys():
+        plt.subplot(nrows,1,3)
+        plt.plot(t_s,zmbm-zmbms)
+        plt.grid(axis='y')
+        plt.xlabel('Time (s)')
+        plt.ylabel('z-difference (nm)')
+    plt.tight_layout()
+
+    
 from PYMEcs.Analysis.MINFLUX import analyse_locrate
 from PYMEcs.misc.guiMsgBoxes import Error
 from PYMEcs.misc.utils import unique_name
@@ -285,6 +327,11 @@ class MINFLUXSettings(HasTraits):
     defaultDatasourceForAnalysis = CStr('Localizations',label='default datasource for analysis',
                                         desc="the datasource key that will be used by default in the MINFLUX " +
                                         "properties functions (EFO, localisation rate, etc)") # default datasource for acquisition analysis
+    defaultDatasourceForMBM = CStr('coalesced_nz',label='default datasource for MBM analysis and plotting',
+                                        desc="the datasource key that will be used by default in the MINFLUX " +
+                                        "MBM analysis") # default datasource for MBM analysis
+    MBM_lowess_fraction = Float(0.03,label='lowess fraction for MBM smoothing',
+                                        desc='lowess fraction used for smoothing of coalesced MBM data (default 0.05)')
     origamiWith_nc = Bool(False,label='add 2nd moduleset (no MBM corr)',
                           desc="if a full second module set is inserted to also analyse the origami data without any MBM corrections")
 
@@ -366,8 +413,15 @@ class MINFLUXanalyser():
     def OnTrackPlot(self, event):
         p = self.visFr.pipeline
         curds = p.selectedDataSourceKey
-        p.selectDataSource('Localizations')
-        plot_tracking(p)
+        if self.analysisSettings.defaultDatasourceForMBM in p.dataSources.keys():
+            # should be coalesced datasource
+            p.selectDataSource(self.analysisSettings.defaultDatasourceForMBM)
+            is_coalesced = 'coalesced' in self.analysisSettings.defaultDatasourceForMBM.lower()
+        else:
+            # try instead something that should exist
+            p.selectDataSource(self.analysisSettings.defaultDatasourceForAnalysis)
+            is_coalesced = 'coalesced' in self.analysisSettings.defaultDatasourceForAnalysis.lower()
+        plot_tracking(p,is_coalesced,lowess_fraction=self.analysisSettings.MBM_lowess_fraction)
         p.selectDataSource(curds)
 
     def OnOrigamiSiteRecipe(self, event=None):
