@@ -147,6 +147,23 @@ cm_cbskb2 = mcol.LinearSegmentedColormap('cb_skyblue2',cb_skyblue2_d)
 
 cm.update({cmap.name: cmap for cmap in [cm_ch,cm_cbskb,cm_cbskb2,hot_overflow(overflowcol='cyan',percentage=2.5)]})
 
+
+############################
+### if colorcet is installed
+### register a few cms
+############################
+try:
+    import colorcet as cc
+    has_colorcet = True
+except ImportError:
+    has_colorcet = False
+
+if has_colorcet:
+    cm.update({'cet_fire':cc.m_fire,
+               'cet_coolwarm': cc.m_coolwarm,
+               'cet_bmw': cc.m_bmw,
+               'cet_bmy': cc.m_bmy})
+
 def main():
     import numpy as np
     a=np.outer(np.arange(0,1,0.01),np.ones(10))
