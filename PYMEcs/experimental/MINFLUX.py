@@ -336,6 +336,9 @@ class MINFLUXSettings(HasTraits):
     origamiWith_nc = Bool(False,label='add 2nd moduleset (no MBM corr)',
                           desc="if a full second module set is inserted to also analyse the origami data without any MBM corrections")
 
+class DateString(HasTraits):
+    TimeStampString = CStr('',label="Time stamp",desc='the time stamp string in format yymmdd-HHMMSS')
+
 class MINFLUXanalyser():
     def __init__(self, visFr):
         self.visFr = visFr
@@ -343,6 +346,7 @@ class MINFLUXanalyser():
         self.origamiErrorFignum = 0
         self.origamiTrackFignum = 0
         self.analysisSettings = MINFLUXSettings()
+        self.dstring = DateString()
         
         visFr.AddMenuItem('MINFLUX', "Localisation Error analysis", self.OnErrorAnalysis)
         visFr.AddMenuItem('MINFLUX', "Cluster sizes - 3D", self.OnCluster3D)
@@ -406,7 +410,13 @@ class MINFLUXanalyser():
             return
         t0 = parse_timestamp_from_filename(fname)
         if t0 is None:
-            return
+            if not self.dstring.configure_traits(kind='modal'):
+                return
+            else:
+                t0 = parse_timestamp_from_filename(self.dstring.TimeStampString)
+                if t0 is None:
+                    warn("entered time stamp '%s' does not parse, giving up" % self.dstring.TimeStampString)
+                    return
         set_diff(mtemps,t0)
         p = self.visFr.pipeline
         range = (1e-3*p['t'].min(),1e-3*p['t'].max())
