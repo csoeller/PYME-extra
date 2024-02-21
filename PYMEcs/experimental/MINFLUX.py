@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import wx
 
 from PYME.warnings import warn
 def plot_errors(pipeline):
@@ -354,6 +355,8 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami error estimates", self.OnOrigamiErrorPlot)
         visFr.AddMenuItem('MINFLUX', "Analysis settings", self.OnMINFLUXSettings)
         visFr.AddMenuItem('MINFLUX', "Manually create Colour panel", self.OnMINFLUXColour)
+        visFr.AddMenuItem('MINFLUX>Util', "Plot temperature record matching current data series",self.OnMINFLUXplotTempData)
+        visFr.AddMenuItem('MINFLUX>Util', "Set MINFLUX temperature file location", self.OnMINFLUXsetTempDataFile)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -370,6 +373,53 @@ class MINFLUXanalyser():
     def OnLoadCustom(self, event):
         self.visFr._recipe_manager.LoadRecipe(self.minfluxRIDs[event.GetId()])
         
+    def OnMINFLUXsetTempDataFile(self, event):
+        import PYME.config as config
+        with wx.FileDialog(self.visFr, "Choose Temperature data file", wildcard='CSV (*.csv)|*.csv',
+                           style=wx.FD_OPEN) as dialog:
+            if dialog.ShowModal() == wx.ID_CANCEL:
+                return
+        fname = dialog.GetPath()
+        
+        if config.get('MINFLUX_temperature_file') == fname:
+            warn("config option 'MINFLUX_temperature_file' already set to %s" % fname)
+            return # already set to this value, return
+
+        config.update_config({'MINFLUX_temperature_file': fname},
+                             config='user', create_backup=True)
+
+
+    def OnMINFLUXplotTempData(self, event):
+        import PYME.config as config
+        if config.get('MINFLUX_temperature_file') is None:
+            warn("Need to set Temperature file location first")
+            return
+        from PYMEcs.misc.utils import read_temp_csv, set_diff, parse_timestamp_from_filename
+        mtemps = read_temp_csv(config.get('MINFLUX_temperature_file'))
+        if len(self.visFr.pipeline.dataSources) == 0:
+            warn("no datasources, this is probably an empty pipeline, have you loaded any data?")
+            return
+        try:
+            fname = self.visFr.pipeline.filename
+        except AttributeError:
+            warn("no filename associated with pipeline, returning")
+            return
+        t0 = parse_timestamp_from_filename(fname)
+        if t0 is None:
+            return
+        set_diff(mtemps,t0)
+        p = self.visFr.pipeline
+        range = (1e-3*p['t'].min(),1e-3*p['t'].max())
+        sertemps = mtemps[mtemps['tdiff_s'].between(range[0],range[1])]
+        if sertemps.empty:
+            warn("no records in requested time window, is series time before or after start/end of available temperature records?")
+            return
+        else:
+            sertemps.plot('tdiff_s','Stand',style='.-',
+                          title="temperature record for series starting at %s" % t0)
+            sertemps.plot('tdiff_s','Box',style='.-',
+                          title="temperature record for series starting at %s" % t0)
+
     def OnErrorAnalysis(self, event):
         plot_errors(self.visFr.pipeline)
 

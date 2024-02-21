@@ -36,3 +36,30 @@ def unique_name(stem,names):
             return stem2
 
     return stem2 # here we just give up and accept a duplicate name
+
+import pandas as pd
+
+def read_temp_csv(filename):
+    trec = pd.read_csv(filename,encoding = "ISO-8859-1")
+    trec['datetime'] = pd.to_datetime(trec['Time'],format='%d/%m/%Y %H:%M')
+    return trec.rename(columns={"#0: Rack [°C]": "Rack", "#1: Optik Box [°C]": "Box", "#2: Stativ [°C]":"Stand"})
+
+def set_diff(trec,t0):
+    trec['tdiff'] = trec['datetime'] - t0
+    trec['tdiff_s'] = trec['tdiff'].dt.total_seconds().astype('f')
+
+from PYME.warnings import warn
+def parse_timestamp_from_filename(fname):
+    from pathlib import Path
+    import re
+    
+    basename = Path(fname).name
+    match = re.search(r'2[3-5]\d{4}-\d{6}',basename)
+    if match:
+        timestamp = match.group()
+    else:
+        warn("no timestamp match found in %s" % basename)
+        return None
+    
+    t0 = pd.to_datetime(timestamp,format="%y%m%d-%H%M%S")
+    return t0
