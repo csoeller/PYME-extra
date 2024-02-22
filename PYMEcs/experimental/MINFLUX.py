@@ -425,10 +425,18 @@ class MINFLUXanalyser():
             warn("no records in requested time window, is series time before or after start/end of available temperature records?")
             return
         else:
-            sertemps.plot('tdiff_s','Stand',style='.-',
-                          title="temperature record for series starting at %s" % t0)
-            sertemps.plot('tdiff_s','Box',style='.-',
-                          title="temperature record for series starting at %s" % t0)
+            # for now we make 2 subplots so that we can provide both s units and actual time
+            fig, axes = plt.subplots(nrows=2, ncols=1)
+            sertemps.plot('datetime','Stand',style='.-',
+                                title="temperature record for series starting at %s" % t0, ax=axes[0])
+            sertemps.plot('tdiff_s','Stand',style='.-', ax=axes[1])
+            plt.tight_layout()
+            
+            fig, axes = plt.subplots(nrows=2, ncols=1)
+            sertemps.plot('datetime','Box',style='.-',
+                          title="temperature record for series starting at %s" % t0, ax=axes[0])
+            sertemps.plot('tdiff_s','Box',style='.-', ax=axes[1])
+            plt.tight_layout()
 
     def OnErrorAnalysis(self, event):
         plot_errors(self.visFr.pipeline)
