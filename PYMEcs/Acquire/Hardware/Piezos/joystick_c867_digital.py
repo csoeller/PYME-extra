@@ -17,12 +17,12 @@ class digitalJoystick:
     def init(self,gcspiezo):
         self.gcspiezo = gcspiezo
         # associate controller axis 1 (1st arg) using velocity control mode (2nd arg, value 3)
-        # with HID device_ID 2 (third arg) using its 'Axis_1' (4th arg)
-        self.gcspiezo.pi.gcscommands.HIA(1,3,2,'Axis_1')
+        # with HID device_ID 2 (third arg) using its 1st axis ('Axis_1') (1: 4th arg)
+        self.gcspiezo.pi.HIA(1,3,2,1)
         # equivalent for 2nd axis
-        self.gcspiezo.pi.gcscommands.HIA(2,3,2,'Axis_2')
+        self.gcspiezo.pi.HIA(2,3,2,2)
         # set closed loop velocity to a certain value (e.g. 1 meaning 1 mm/s or what?)
-        self.gcspiezo.pi.gcscommands.VEL(self.gcspiezo.axes,1.0)
+        self.gcspiezo.pi.VEL(self.gcspiezo.axes,[1.5 for axis in self.gcspiezo.axes])
 
         self._initialised = True
         
@@ -41,14 +41,14 @@ class digitalJoystick:
     # GCS commands to enable the joystick
     def enablecommands(self,pidevice): # this method should only be used from the parent gcspiezo object
         # possible we should use self.gcspiezo.axes here, e.g. pidevice.gcscommands.HIN(self.gcspiezo.axes,True)
-        pidevice.gcscommands.HIN(self.gcspiezo.axes,True)
+        pidevice.HIN(self.gcspiezo.axes,[True for axis in self.gcspiezo.axes])
 
     # GCS commands to enable the joystick
     def disablecommands(self,pidevice): # this method should only be used from the parent gcspiezo object
         # possible we should use self.gcspiezo.axes here
-        pidevice.gcscommands.HIN(self.gcspiezo.axes,False)
+        pidevice.HIN(self.gcspiezo.axes,[False for axis in self.gcspiezo.axes])
 
     def check_initialised(self):
         if not self._initialised:
             raise RuntimeError("joystick must have been initialised before using these methods")
-        
+
