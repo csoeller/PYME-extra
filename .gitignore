@@ -139,3 +139,5 @@ dmypy.json
 *~
 
 PYMEcs/misc/adhoc.py
+
+PYMEcs/Acquire/Hardware/Piezos/joystick_c867_digital2.py
