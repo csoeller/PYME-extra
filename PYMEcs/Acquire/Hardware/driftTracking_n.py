@@ -95,6 +95,12 @@ class Correlator(object):
         self._maxTotalCorrection = 20.0 # maximum total correction in um
         self.logShifts = True
 
+        # we report our tracking info in nm by default
+        pixelsize_um = scope.GetPixelSize()
+        self.conversion = {'x': 1e3*pixelsize_um[0], 'y':1e3*pixelsize_um[1], 'z':1e3}
+        # we may or may not want to use the one below
+        # self.trackunits = {'x':'nm', 'y':'nm', 'z':'nm'}
+
         # 'state-tracking' variables
         self.NCalibFrames = 2*self.stackHalfSize + 1 # this gets recalculated in _prepare_calibration anyway
         self.calibCurFrame = 0
@@ -310,27 +316,34 @@ class Correlator(object):
 #            self.WantRecord = False
         
         #return dx, dy, dz + posDelta, Cm, dz, nomPos, posInd, calPos, posDelta
-        return dx, dy, dz, Cm, dz, nomPos, posInd, calPos, posDelta
+        return dx, dy, dz, Cm, nomPos, posInd, calPos, posDelta
         
     def compare_log_and_correct(self,frameData):
-        dx, dy, dz, cCoeff, dzcorr, nomPos, posInd, calPos, posDelta = self.compare(frameData)
+        # compare returns pixel coordinates for dx, dy, um for dz
+        dx, dy, dz, cCoeff, nomPos, posInd, calPos, posDelta = self.compare(frameData)
         self.corrRef = max(self.corrRef, cCoeff) # keep track of historically maximal correlation amplitude
             
         #print dx, dy, dz
-            
+        dx_nm, dy_nm, dz_nm = (self.conversion['x']*dx, self.conversion['y']*dy, self.conversion['z']*dz)
+
+        offset = self.piezo.GetOffset()
+        offset_nm = 1e3*offset
+
+        pos_nm = 1e3*self.piezo.GetPos(0)
+
         #FIXME: logging shouldn't call piezo.GetOffset() etc ... for performance reasons
         #       (is this still true, we keep the values cached in memory??)
         # this is the local logging, not to the actual localisation data acquiring instance of PYMEAcquire
-        self.history.append((time.time(), dx, dy, dz, cCoeff, self.corrRef, self.piezo.GetOffset(), self.piezo.GetPos(0)))
-        eventLog.logEvent('PYME2ShiftMeasure', '%3.4f, %3.4f, %3.4f' % (dx, dy, dz))
+        self.history.append((time.time(), dx_nm, dy_nm, dz_nm, cCoeff, self.corrRef, offset_nm, pos_nm))
+        eventLog.logEvent('PYME2ShiftMeasure', '%3.1f, %3.1f, %3.1f' % (dx_nm, dy_nm, dz_nm))
             
         self.lockActive = self.lockFocus and (cCoeff > .5*self.corrRef) # we release the lock when the correlation becomes too weak
         if self.lockActive:
-            if abs(self.piezo.GetOffset()) > self._maxTotalCorrection:
+            if abs(offset) > self._maxTotalCorrection:
                 self.lockFocus = False
                 logger.info("focus lock released, maximal Offset value exceeded (%.1f um)" % self._maxTotalCorrection)
             if abs(dz) > self.focusTolerance and self.lastAdjustment >= self.minDelay:
-                zcorrect = self.piezo.GetOffset() - dz
+                zcorrect = offset - dz
                 if zcorrect < - self.maxfac*self.focusTolerance:
                     zcorrect = - self.maxfac*self.focusTolerance
                 if zcorrect >  self.maxfac*self.focusTolerance:
@@ -344,14 +357,17 @@ class Correlator(object):
                 # this logs locally to this instance
                 eventLog.logEvent('PYME2UpdateOffset', '%3.4f' % (zcorrect))
                     
-                self.historyCorrections.append((time.time(), dz))
+                self.historyCorrections.append((time.time(), dz_nm))
                 self.lastAdjustment = 0
             else:
                 self.lastAdjustment += 1
             
             if self.logShifts:
                 # this logs to the connected copy of PYMEAcquire via the RESTServer
-                self.piezo.LogShifts(dx, dy, dz, self.lockActive)
+                if hasattr(self.piezo, 'LogShiftsCorrelAmp'):
+                    self.piezo.LogShiftsCorrelAmp(dx_nm, dy_nm, dz_nm, self.lockActive, coramp=cCoeff/self.corrRef)
+                else:
+                    self.piezo.LogShifts(dx_nm, dy_nm, dz_nm, self.lockActive)
 
     def tick(self, frameData = None, **kwargs):
         if frameData is None:
@@ -398,6 +414,8 @@ class Correlator(object):
             
             #reset our history log
             self.history = []
+            self.historyColNames = ['time','dx_nm','dy_nm','dz_nm','corrAmplitude','corrAmpMax','piezoOffset_nm','piezoPos_nm']
+            self.historyStartTime = time.time()
             self.historyCorrections = []
             
             self.state = State.CALIBRATED # now we are fully calibrated

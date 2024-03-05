@@ -38,37 +38,49 @@ class TrackerPlotPanel(PlotPanel):
                     self.subplotz = self.figure.add_subplot( 412 )
                     self.subploto = self.figure.add_subplot( 413 )
                     self.subplotc = self.figure.add_subplot(414)
-    
-            #try:
-            t, dx, dy, dz, corr, corrmax, poffset, pos  = np.array(self.dt.get_history(1000)).T
+                    # hopefully this sets it always for this fig, see
+                    #   https://matplotlib.org/stable/tutorials/intermediate/tight_layout_guide.html
+                    self.figure.set_tight_layout(True)
 
-            self.subplotxy.cla()
-            self.subplotxy.plot(t, dx, 'r')
-            self.subplotxy.plot(t, dy, 'g')
-            self.subplotxy.set_ylabel('dx (r) dy (g) [pixels]')
-            self.subplotxy.set_xlim(t.min(), t.max())
-                        
-            self.subplotz.cla()
-            self.subplotz.plot(t, 1000*dz, 'b')
-            self.subplotz.set_ylabel('dz [nm]')
-            self.subplotz.set_xlim(t.min(), t.max())
-            
-            self.subploto.cla()
-            self.subploto.plot(t, 1e3*poffset, 'm')
-            self.subploto.set_ylabel('offs [nm]')
-            self.subploto.set_xlim(t.min(), t.max())
+            try:
+                t, dx_nm, dy_nm, dz_nm, corr, corrmax, poffset_nm, pos_nm  = np.array(self.dt.get_history(1000)).T
+            except ValueError:
+                do_plot = False
+            else:
+                do_plot = True
 
-            self.subplotc.cla()
-            self.subplotc.plot(t, corr/corrmax, 'r')
-            self.subplotc.set_ylabel('C/C_m')
-            self.subplotc.set_xlim(t.min(), t.max())
-
-    
-            #except:
-            #    pass
-    
-            #self.subplot.set_xlim(0, 512)
-            #self.subplot.set_ylim(0, 256)
+            if do_plot:
+                 # note: we now assume that all history values that are distances are provided in nm
+                # this SHOULD match the conventions in driftTracking.py
+                
+                # a few reused variables
+                tolnm = 1e3*self.dt.get_focus_tolerance()
+                tdelta = t - self.dt.historyStartTime
+                trange = [tdelta.min(), tdelta.max()]
+                
+                self.subplotxy.cla()
+                self.subplotxy.plot(tdelta, dx_nm, 'r')
+                self.subplotxy.plot(tdelta, dy_nm, 'g')
+                self.subplotxy.set_ylabel('dx/dy (r/g) [nm]')
+                self.subplotxy.set_xlim(*trange)
+                
+                self.subplotz.cla()
+                self.subplotz.plot(tdelta, dz_nm, 'b')
+                self.subplotz.plot([tdelta[0],tdelta[-1]],[tolnm,tolnm], 'g--')
+                self.subplotz.plot([tdelta[0],tdelta[-1]],[-tolnm,-tolnm], 'g--')
+                self.subplotz.set_ylabel('dz [nm]')
+                self.subplotz.set_xlim(*trange)
+                
+                self.subploto.cla()
+                self.subploto.plot(tdelta, poffset_nm, 'm')
+                self.subploto.set_ylabel('offs [nm]')
+                self.subploto.set_xlim(*trange)
+                
+                self.subplotc.cla()
+                self.subplotc.plot(tdelta, corr/corrmax, 'r')
+                self.subplotc.set_ylabel('C/C_m')
+                self.subplotc.set_xlim(*trange)
+                self.subplotc.set_xlabel('Time (s)')
     
             self.canvas.draw()
 
@@ -359,15 +371,16 @@ class DriftTrackingControl(wx.Panel):
             Warn(self,"no history")
         else:
             dlg = wx.FileDialog(self, message="Save file as...",  
-                            defaultFile='history.txt', wildcard='txt File (*.txt)|*.txt', style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
+                                defaultFile='history.txt',
+                                wildcard='txt File (*.txt)|*.txt',
+                                style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
 
             if dlg.ShowModal() == wx.ID_OK:
                 historyfn = dlg.GetPath()
-                np.savetxt(historyfn, self.dt.history)
+                np.savetxt(historyfn, self.dt.history, header=' '.join(self.dt.historyColNames))
                 dlg = wx.MessageDialog(parent, "history saved", caption, wx.OK | wx.ICON_INFORMATION)
                 dlg.ShowModal()
                 dlg.Destroy()
-
 
     def OnBSetTolerance(self, event):
         self.dt.set_focus_tolerance(float(self.tTolerance.GetValue())/1e3)
@@ -403,11 +416,11 @@ class DriftTrackingControl(wx.Panel):
             self.stCalibState.SetLabel(calibState.name)
 
             try:
-                t, dx, dy, dz, corr, corrmax,poffset,pos = self.dt.get_history(1)[-1]
-                self.stError.SetLabel(("Error: x = %s nm y = %s nm\n" +
-                                      "z = %s nm noffs = %s nm c/cm = %4.2f") %
-                                      ("{:>+3.2f}".format(dx), "{:>+3.2f}".format(dy),
-                                       "{:>+6.1f}".format(1e3*dz), "{:>+6.1f}".format(1e3*poffset),
+                t, dx_nm, dy_nm, dz_nm, corr, corrmax, poffset_nm, pos_nm = self.dt.get_history(1)[-1]
+                self.stError.SetLabel(("Error: x = %s nm y = %s nm z = %s nm\n" +
+                                       "offs = %s nm c/cm = %4.2f") %
+                                      ("{:>+3.2f}".format(dx_nm), "{:>+3.2f}".format(dy_nm),
+                                       "{:>+3.1f}".format(dz_nm), "{:>+6.1f}".format(poffset_nm),
                                        corr/corrmax))
 
             except IndexError:
