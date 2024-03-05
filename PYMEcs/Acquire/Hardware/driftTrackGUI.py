@@ -300,8 +300,8 @@ class DriftTrackingControl(wx.Panel):
     def refresh(self):
         try:
             calibState, NStates = self.dt.get_calibration_state()
-            self.gCalib.SetRange(NStates + 1)
-            self.gCalib.SetValue(calibState)
+            self.gCalib.SetRange(int(NStates + 1))
+            self.gCalib.SetValue(int(calibState))
 
             try:
                 t, dx, dy, dz, corr, corrmax,poffset,pos = self.dt.get_history(1)[-1]
