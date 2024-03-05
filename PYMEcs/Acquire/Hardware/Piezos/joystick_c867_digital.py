@@ -12,6 +12,8 @@ class DigitalJoystick(JoystickBase):
 
         # configure joystick axes and velocity
         #
+        # first disable joystick if still active
+        self.gcspiezo.pi.HIN(self.gcspiezo.axes,[False for axis in self.gcspiezo.axes])
         # associate controller axis 1 (1st arg) using velocity control mode (2nd arg, value 3)
         # with HID device_ID 2 (third arg) using its 1st axis ('Axis_1') (1: 4th arg)
         # NOTE: only the HID axis number (e.g. 1) is accepted as argument,
