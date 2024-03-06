@@ -329,12 +329,12 @@ class Correlator(object):
         offset = self.piezo.GetOffset()
         offset_nm = 1e3*offset
 
-        pos_nm = 1e3*self.piezo.GetPos(0)
+        pos_um = self.piezo.GetPos(0)
 
         #FIXME: logging shouldn't call piezo.GetOffset() etc ... for performance reasons
         #       (is this still true, we keep the values cached in memory??)
         # this is the local logging, not to the actual localisation data acquiring instance of PYMEAcquire
-        self.history.append((time.time(), dx_nm, dy_nm, dz_nm, cCoeff, self.corrRef, offset_nm, pos_nm))
+        self.history.append((time.time(), dx_nm, dy_nm, dz_nm, cCoeff, self.corrRef, offset_nm, pos_um))
         eventLog.logEvent('PYME2ShiftMeasure', '%3.1f, %3.1f, %3.1f' % (dx_nm, dy_nm, dz_nm))
             
         self.lockActive = self.lockFocus and (cCoeff > .5*self.corrRef) # we release the lock when the correlation becomes too weak
@@ -414,7 +414,7 @@ class Correlator(object):
             
             #reset our history log
             self.history = []
-            self.historyColNames = ['time','dx_nm','dy_nm','dz_nm','corrAmplitude','corrAmpMax','piezoOffset_nm','piezoPos_nm']
+            self.historyColNames = ['time','dx_nm','dy_nm','dz_nm','corrAmplitude','corrAmpMax','piezoOffset_nm','piezoPos_um']
             self.historyStartTime = time.time()
             self.historyCorrections = []
             

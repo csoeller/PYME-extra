@@ -43,7 +43,7 @@ class TrackerPlotPanel(PlotPanel):
                     self.figure.set_tight_layout(True)
 
             try:
-                t, dx_nm, dy_nm, dz_nm, corr, corrmax, poffset_nm, pos_nm  = np.array(self.dt.get_history(1000)).T
+                t, dx_nm, dy_nm, dz_nm, corr, corrmax, poffset_nm, pos_um  = np.array(self.dt.get_history(1000)).T
             except ValueError:
                 do_plot = False
             else:
@@ -416,7 +416,7 @@ class DriftTrackingControl(wx.Panel):
             self.stCalibState.SetLabel(calibState.name)
 
             try:
-                t, dx_nm, dy_nm, dz_nm, corr, corrmax, poffset_nm, pos_nm = self.dt.get_history(1)[-1]
+                t, dx_nm, dy_nm, dz_nm, corr, corrmax, poffset_nm, pos_um = self.dt.get_history(1)[-1]
                 self.stError.SetLabel(("Error: x = %s nm y = %s nm z = %s nm\n" +
                                        "offs = %s nm c/cm = %4.2f") %
                                       ("{:>+3.2f}".format(dx_nm), "{:>+3.2f}".format(dy_nm),
