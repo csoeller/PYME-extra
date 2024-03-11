@@ -51,13 +51,20 @@ def npy_is_minflux_data(filename, warning=False, return_msg=False):
 
 # here we check for size either 5 (2D) or 10 (3D); any other size raises an error
 def minflux_npy_detect_3D(data):
-    if data['itr'].shape[1] == 10:
+    if data['itr'].shape[1] == 10 or data['itr'].shape[1] == 11:
         return True # 3D
-    elif data['itr'].shape[1] == 5:
+    elif data['itr'].shape[1] == 5 or data['itr'].shape[1] == 6:
         return False # 2D
     else:
         raise RuntimeError('unknown size of itr array, neither 5 (2D) nor 10 (3D), is actually: %d' %
                             (data['itr'].shape[1]))
+
+
+def minflux_npy_has_extra_iter(data):
+    if data['itr'].shape[1] == 6 or data['itr'].shape[1] == 11:
+        return True # has a spare empty starting position
+    else:
+        return False
 
 # this one should be able to deal both with 2d and 3D
 def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,with_cfr_std=False):
@@ -73,6 +80,19 @@ def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,wit
         iterno_loc = 4
         iterno_other = 4
         iterno_cfr = 4
+
+    # NOTE CS 3/2024: latest data with MBM active seems to generate an "empty" iteration (at position 0)
+    # that has NaNs or zeros in the relevant properties
+    # we seem to be able to deal with this by just moving our pointers into the iteration just one position up
+    # this is subject to confirmation
+    if minflux_npy_has_extra_iter(data):
+        has_extra_iter = True
+        iterno_loc += 1
+        iterno_other += 1
+        iterno_cfr += 1
+    else:
+        has_extra_iter = False
+
 
     posnm = 1e9*data['itr']['loc'][:,iterno_loc] # we keep all distances in units of nm
     if 'lnc' in data['itr'].dtype.fields:
@@ -127,6 +147,8 @@ def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,wit
                     # we assume for now the offset counts can be used to sum up
                     # and get the total photons harvested
                     # check with abberior
+                    # NOTE CS 3/2024: there seems to be an extra iteration in the newer files with MBM
+                    #  in some properties these are NAN, for eco this seems 0, so ok to still use sum along whole axis
                     'nPhotons' : data['itr']['eco'].sum(axis=1),
                     'tim': data['tim'], # we also keep the original float time index, units are [s]                  
                     })
@@ -193,7 +215,11 @@ def monkeypatch_npy_io(visFr):
             logger.info('.npy file, trying to load as MINFLUX npy ...')
             from PYMEcs.IO.tabular import MinfluxNpySource
             ds = MinfluxNpySource(filename)
+            
             ds.mdh = MetaDataHandler.NestedClassMDHandler()
+            data = np.load(filename)
+            ds.mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D(data)
+            ds.mdh['MINFLUX.ExtraIteration'] = minflux_npy_has_extra_iter(data)
             return ds
         else:
             return self._ds_from_file_original(filename, **kwargs)
@@ -249,6 +275,9 @@ class Pipeline(pipeline.Pipeline):
             from PYMEcs.IO.tabular import MinfluxNpySource
             ds = MinfluxNpySource(filename)
             ds.mdh = MetaDataHandler.NestedClassMDHandler()
+            data = np.load(filename)
+            ds.mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D(data)
+            ds.mdh['MINFLUX.ExtraIteration'] = minflux_npy_has_extra_iter(data)
             return ds
         else:
             return super()._ds_from_file(filename, **kwargs)
