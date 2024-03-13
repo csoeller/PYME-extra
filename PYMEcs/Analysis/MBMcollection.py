@@ -5,6 +5,34 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+def interp_bead(tnew, bead):
+    ibead = {}
+    for i,axis in enumerate(['x','y','z']):
+        ibead[axis] = np.interp(tnew, bead['tim'], 1e9*bead['pos'][:,i]) # everything in nm
+    ibead['t'] = tnew
+    return ibead
+
+def interp_beads(beads):
+    mint = 1e6
+    for bead in beads:
+        mincur = beads[bead]['tim'].min()
+        if mincur < mint:
+            mint = mincur
+
+    maxt = 0
+    for bead in beads:
+        maxcur = beads[bead]['tim'].max()
+        if maxcur > maxt:
+            maxt = maxcur
+
+    tnew = np.arange(np.round(mint),np.round(maxt)+1)
+    ibeads = {}
+
+    for bead in beads:
+        ibeads[bead] = interp_bead(tnew,beads[bead])
+
+    return ibeads
+
 def get_mbm(ds):
     mbm = {}
     mbm['t'] = 1e-3*ds['t']
@@ -36,8 +64,7 @@ def hashdict(dict):
     return hashkey
     
 class mbmcollection(object):
-    def __init__(self,name):
-        self.name = name
+    def __init__(self,name=None,filename=None):
         self.mbms = {}
         self.beadisgood = {}
         self.offsets = {}
@@ -48,6 +75,14 @@ class mbmcollection(object):
         self.t = None
         self.tperiod = None
         self._trange= (None,None)
+        if filename is not None:
+            # this is a MBM bead file with raw bead tracks
+            self.name=filename
+            self._raw_beads = np.load(filename)
+            ibeads = interp_beads(self._raw_beads)
+            self.add_beads(ibeads)
+        else:
+            self.name = name
 
     @property    
     def beads(self):
@@ -99,6 +134,10 @@ class mbmcollection(object):
         self.markasgood(bead)
         self._mean = None # invalidate cache
         self._offsets_valid = False
+
+    def add_beads(self,beads):
+        for bead in beads:
+            self.add_bead(bead,beads[bead])
 
     def align_beads(self,tmin=None,tmax=None):
         if tmin is None:
