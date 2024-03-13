@@ -63,7 +63,7 @@ def hashdict(dict):
     hashkey = hashlib.sha1(json.dumps(dict, sort_keys=True).encode()).hexdigest()
     return hashkey
     
-class mbmcollection(object):
+class MBMCollection(object):
     def __init__(self,name=None,filename=None):
         self.mbms = {}
         self.beadisgood = {}
