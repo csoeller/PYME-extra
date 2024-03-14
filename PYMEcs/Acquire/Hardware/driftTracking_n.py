@@ -75,7 +75,7 @@ from enum import Enum
 State = Enum('State', ['UNCALIBRATED', 'CALIBRATING', 'FINISHING_CALIBRATION', 'CALIBRATED'])
 
 class Correlator(object):
-    def __init__(self, scope, piezo=None, frame_source=None, focusTolerance=.05, deltaZ=0.2, stackHalfSize=35):
+    def __init__(self, scope, piezo=None, frame_source=None, sub_roi=None, focusTolerance=.05, deltaZ=0.2, stackHalfSize=35):
         self.piezo = piezo
 
         if frame_source is None:
@@ -110,6 +110,26 @@ class Correlator(object):
         self.lockFocus = False
         self._last_target_z = -1
   
+    def set_subroi(self, bounds):
+        """ Set the position of the roi to crop
+
+        Parameters
+        ----------
+
+        position : tuple
+            The pixel position (x0, x1, y0, y1) in int
+        """
+
+        self.sub_roi = bounds
+        self.reCalibrate()
+
+    def _crop_frame(self, frame_data):
+        if self.sub_roi is None:
+            return frame_data.squeeze()   # we may as well do the squeeze here to avoid lots of squeezes elsewhere
+        else:
+            x0, x1, y0, y1 = self.sub_roi
+            return frame_data.squeeze()[x0:x1, y0:y1]
+
     def set_focus_tolerance(self, tolerance):
         """ Set the tolerance for locking position
 
@@ -372,6 +392,8 @@ class Correlator(object):
     def tick(self, frameData = None, **kwargs):
         if frameData is None:
             raise ValueError('frameData must be specified')
+        else:
+            frameData = self._crop_frame(frameData)
         
         targetZ = self.piezo.GetTargetPos(0)
         

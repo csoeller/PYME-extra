@@ -4,15 +4,38 @@
 ###############################################
 import numpy as np
 import matplotlib.pyplot as plt
-
-def interp_bead(tnew, bead):
+import pandas as pd
+def interp_bead(tnew, bead, customdict=None):
     ibead = {}
-    for i,axis in enumerate(['x','y','z']):
-        ibead[axis] = np.interp(tnew, bead['tim'], 1e9*bead['pos'][:,i]) # everything in nm
+    if customdict is None:
+        for i,axis in enumerate(['x','y','z']):
+            ibead[axis] = np.interp(tnew, bead['tim'], 1e9*bead['pos'][:,i]) # everything in nm
+    else:
+        for key,value in customdict.items():
+            ibead[key] = np.interp(tnew, bead['tim'], bead[value])
+
     ibead['t'] = tnew
     return ibead
 
-def interp_beads(beads):
+def stdev_bead(bead,samplewindow=9):
+    sbead = {}
+    for i,axis in enumerate(['x','y','z']):
+        sbead["std_%s" % axis] = pd.Series(1e9*bead['pos'][:,i]).rolling(window=samplewindow).std() # everything in nm
+    sbead['std'] = np.sqrt(sbead['std_x']**2 + sbead['std_y']**2 + sbead['std_z']**2)
+    sbead['tim'] = bead['tim']
+    return sbead
+
+def stdev_beads(beads,samplewindow=9):
+    sbeads = {}
+    for bead in beads:
+        sbeads[bead] = stdev_bead(beads[bead],samplewindow=samplewindow)
+    return sbeads
+
+def interp_sbeads(sbeads):
+    return interp_beads(sbeads,customdict=dict(std='std',std_x='std_x',
+                                               std_y='std_y',std_z='std_z'))
+
+def interp_beads(beads,customdict=None):
     mint = 1e6
     for bead in beads:
         mincur = beads[bead]['tim'].min()
@@ -25,11 +48,14 @@ def interp_beads(beads):
         if maxcur > maxt:
             maxt = maxcur
 
+    # here we may need some checks if some bead tracks are a lot shorter than others (does this occur)?
+    # this could lead to issues with interpolation unless these go to zero
+    # so watch out for cases like that and consider code tweaks if needed
     tnew = np.arange(np.round(mint),np.round(maxt)+1)
     ibeads = {}
 
     for bead in beads:
-        ibeads[bead] = interp_bead(tnew,beads[bead])
+        ibeads[bead] = interp_bead(tnew,beads[bead],customdict=customdict)
 
     return ibeads
 
@@ -64,7 +90,7 @@ def hashdict(dict):
     return hashkey
     
 class MBMCollection(object):
-    def __init__(self,name=None,filename=None):
+    def __init__(self,name=None,filename=None,variance_window = 9):
         self.mbms = {}
         self.beadisgood = {}
         self.offsets = {}
@@ -75,6 +101,8 @@ class MBMCollection(object):
         self.t = None
         self.tperiod = None
         self._trange= (None,None)
+        self.variance_window = variance_window # by default use last 9 localisations for variance/std calculation
+        
         if filename is not None:
             # this is a MBM bead file with raw bead tracks
             self.name=filename
