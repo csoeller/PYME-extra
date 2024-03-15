@@ -93,6 +93,7 @@ class Correlator(object):
         #       to allow resetting the offset during the day as it tends to accumulate;
         #       this has already led to the lock giving up on occasion
         self._maxTotalCorrection = 20.0 # maximum total correction in um
+        self.Zfactor = 1.0
         self.logShifts = True
 
         # we report our tracking info in nm by default
@@ -318,7 +319,7 @@ class Correlator(object):
         self.ds_A = (ds - refA)
         
         #calculate z offset between actual position and calibration position
-        dz = self.deltaZ*np.dot(self.ds_A.ravel(), ddz)*dzn
+        dz = self.Zfactor*self.deltaZ*np.dot(self.ds_A.ravel(), ddz)*dzn
         
         #posInd += np.round(dz / self.deltaZ)
         #posInd = int(np.clip(posInd, 0, self.NCalibStates))
