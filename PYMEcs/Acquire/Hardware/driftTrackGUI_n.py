@@ -221,6 +221,20 @@ class DriftROIOverlay(overlays.Overlay):
             dc.SetBackground(wx.TRANSPARENT_BRUSH)
             dc.Clear()
 
+from PYME.recipes.traits import HasTraits, Float, Enum, CStr, Bool, Int, List
+class DriftTrackConfig(HasTraits):
+    zfocusTolerance_nm = Float(50.0,label='ZFocus tolerance in nm',
+                               desc="when moving outside of the focus tolerance the z piezo will counteract")
+    deltaZ_nm = Float(200,desc='spacing between the planes during recording of the calibration stack in nm',
+                      label='Z plane spacing in nm')
+    stackHalfSize = Int(35,label='Stack Half Size',
+                        desc='number of planes either side of the focal plane that are recorded for calibration')
+    minDelay = Int(10,label='minimum delay in frames',
+                   desc='minimum delay time in frames between corrections')
+    zFactor = Float(1.0,label='z correction factor',
+                    desc='z correction factor to match physical movement to sensed z movement')
+    plotInterval = Int(10,label='plot interval in frames',
+                       desc='interval at which the plots are updated, in units of frames')
 
 from PYMEcs.Acquire.Hardware.driftTracking_n import State
 class DriftTrackingControl(wx.Panel):
@@ -230,10 +244,16 @@ class DriftTrackingControl(wx.Panel):
         It should be initialised with a reference to the PYMEAcquire main frame, which will stand in as a parent while other GUI items are
         created. Note that the actual parent will be reassigned once the GUI tool panel is created using a Reparent() call.
         '''
-        # begin wxGlade: MyFrame1.__init__
-        #kwds["style"] = wx.DEFAULT_FRAME_STYLE
         wx.Panel.__init__(self, main_frame, winid)
+
+        main_frame.AddMenuItem('DriftTracking', "Change config parameters", self.OnDriftTrackConfig)
+        main_frame.AddMenuItem('DriftTracking', "Save history", self.OnBSaveHist)
+        main_frame.AddMenuItem('DriftTracking', "Save calibration stack", self.OnBSaveCalib)
+        
         self.dt = driftTracker
+        self.dtconfig = DriftTrackConfig(zfocusTolerance_nm=1e3*self.dt.focusTolerance,
+                                         deltaZ_nm=1e3*self.dt.deltaZ,
+                                         stackHalfSize=self.dt.stackHalfSize)
         self.plotInterval = 10
         self.showPlots = showPlots
 
@@ -251,9 +271,6 @@ class DriftTrackingControl(wx.Panel):
         self.cbLock = wx.CheckBox(self, -1, 'Lock')
         self.cbLock.Bind(wx.EVT_CHECKBOX, self.OnCBLock)
         hsizer.Add(self.cbLock, 0, wx.ALL, 2)
-        #self.bSaveHist = wx.Button(self, -1, 'Save Hist')
-        #hsizer.Add(self.bSaveHist, 0, wx.ALL, 2)
-        #self.bSaveHist.Bind(wx.EVT_BUTTON, self.OnBSaveHist)
         self.cbLockActive = wx.CheckBox(self, -1, 'Lock Active')
         self.cbLockActive.Enable(False)
         hsizer.Add(self.cbLockActive, 0, wx.ALL, 2)        
@@ -263,9 +280,6 @@ class DriftTrackingControl(wx.Panel):
         self.bSetPostion = wx.Button(self, -1, 'Set focus to current')
         hsizer.Add(self.bSetPostion, 0, wx.ALL, 2) 
         self.bSetPostion.Bind(wx.EVT_BUTTON, self.OnBSetPostion)
-        #self.bSaveCalib = wx.Button(self, -1, 'Save Cal')
-        #hsizer.Add(self.bSaveCalib, 0, wx.ALL, 2)
-        #self.bSaveCalib.Bind(wx.EVT_BUTTON, self.OnBSaveCalib)
         sizer_1.Add(hsizer, 0, wx.EXPAND, 0)
         
         hsizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -320,26 +334,7 @@ class DriftTrackingControl(wx.Panel):
         # hsizer.Add(self.bCalcZfactor, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
         # self.bCalcZfactor.Bind(wx.EVT_BUTTON, self.OnBCalculateZfactor)
         # sizer_1.Add(hsizer,0, wx.EXPAND, 0)
-        
-        # hsizer = wx.BoxSizer(wx.HORIZONTAL)
-        # hsizer.Add(wx.StaticText(self, -1, "feedback delay [frames]:"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
-        # self.tMinDelay = wx.TextCtrl(self, -1, '%d' % (self.dt.minDelay), size=[30,-1])
-        # hsizer.Add(self.tMinDelay, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
-        # self.bSetMinDelay = wx.Button(self, -1, 'Set', style=wx.BU_EXACTFIT)
-        # hsizer.Add(self.bSetMinDelay, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
-        # self.bSetMinDelay.Bind(wx.EVT_BUTTON, self.OnBSetMinDelay)
-        # sizer_1.Add(hsizer,0, wx.EXPAND, 0)
-        #
-        # hsizer = wx.BoxSizer(wx.HORIZONTAL)
-        # hsizer.Add(wx.StaticText(self, -1, "Plot Interval [frames]:"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
-        # self.tPlotInterval = wx.TextCtrl(self, -1, '%d' % (self.plotInterval), size=[30,-1])
-        # hsizer.Add(self.tPlotInterval, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
-        # self.bSetPlotInterval = wx.Button(self, -1, 'Set', style=wx.BU_EXACTFIT)
-        # hsizer.Add(self.bSetPlotInterval, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
-        # self.bSetPlotInterval.Bind(wx.EVT_BUTTON, self.OnBSetPlotInterval)
-        # sizer_1.Add(hsizer,0, wx.EXPAND, 0)
-        #
-        
+                
         hsizer = wx.BoxSizer(wx.HORIZONTAL)
         self.stError = wx.StaticText(self, -1, 'Error:\n\n', size=[200,-1])
         cfont = self.stError.GetFont()
@@ -430,6 +425,11 @@ class DriftTrackingControl(wx.Panel):
                 dlg = wx.MessageDialog(self._main_frame, "history saved", caption, wx.OK | wx.ICON_INFORMATION)
                 dlg.ShowModal()
                 dlg.Destroy()
+
+
+    def OnDriftTrackConfig(self, event):
+        if self.dtconfig.configure_traits(kind='modal'):
+            pass
 
     def OnBSetTolerance(self, event):
         self.dt.set_focus_tolerance(float(self.tTolerance.GetValue())/1e3)

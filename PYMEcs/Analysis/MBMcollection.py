@@ -109,6 +109,15 @@ class MBMCollection(object):
             self._raw_beads = np.load(filename)
             ibeads = interp_beads(self._raw_beads)
             self.add_beads(ibeads)
+            # now add info on std deviation
+            sbeads = stdev_beads(self._raw_beads)
+            sibeads = interp_sbeads(sbeads)
+            for bead in sibeads:
+                if not np.allclose(self.t,sibeads[bead]['t'],1e-3):
+                    raise RuntimeError("time vector for new bead variance differs by more than 0.1 %")
+                for property in sibeads[bead].keys():
+                    if property != 't':
+                        self.mbms[bead][property] = sibeads[bead][property]
         else:
             self.name = name
 
@@ -118,9 +127,9 @@ class MBMCollection(object):
 
     def _validaxis(self,axis):
         if self.is3D:
-            axes = ['x','y','z']
+            axes = ['x','y','z','std_x','std_y','std_z','std']
         else:
-            axes = ['x','y']
+            axes = ['x','y','std_x','std_y','std']
         return axis in axes
     
     def beadtrack(self,bead,axis,unaligned=False):
@@ -208,6 +217,11 @@ class MBMCollection(object):
             tmax=self._trange[1]
         if tmin != self._trange[0] or tmax != self._trange[1]:
             self._offsets_valid = False
+
+        if axis.startswith('std'):
+            unaligned = True # not sensible to align the std devs
+            plot_mean = False # the mean also does not make much sense
+            
         # we may need to check the alignment logic below
         if not unaligned:
             if not self._offsets_valid:
@@ -224,6 +238,8 @@ class MBMCollection(object):
             plt.xlim(self._trange[0],self._trange[1])
         
     def plot_deviation_from_mean(self,axis,align=True,legend=True):
+        if axis.startswith('std'):
+            raise RuntimeError("this method is not suitable for standard deviation trajectories")
         if align and not self._offsets_valid:
             self.align_beads()
         for bead in self.beads:
