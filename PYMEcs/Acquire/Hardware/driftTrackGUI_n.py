@@ -297,44 +297,17 @@ class DriftTrackingControl(wx.Panel):
         sizer_1.Add(hsizer, 0, wx.EXPAND, 0)
         
         hsizer = wx.BoxSizer(wx.HORIZONTAL)
-        hsizer.Add(wx.StaticText(self, -1, "Tolerance [nm]:"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
-        self.tTolerance = wx.TextCtrl(self, -1, '%3.0f'% (1e3*self.dt.get_focus_tolerance()), size=[30,-1])
-        hsizer.Add(self.tTolerance, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
-        self.bSetTolerance = wx.Button(self, -1, 'Set', style=wx.BU_EXACTFIT)
-        hsizer.Add(self.bSetTolerance, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2) 
-        self.bSetTolerance.Bind(wx.EVT_BUTTON, self.OnBSetTolerance)
+        self.stConfig = wx.StaticText(self, -1,
+                                      'tol: %d nm, delZ: %.0f nm, stHsz: %d' %
+                                      (self.dtconfig.zfocusTolerance_nm,
+                                       self.dtconfig.deltaZ_nm,
+                                       self.dtconfig.stackHalfSize), size=[400,-1])
+        cfont = self.stConfig.GetFont()
+        font = wx.Font(cfont.GetPointSize(), wx.TELETYPE, wx.NORMAL, wx.NORMAL)
+        self.stConfig.SetFont(font)
+        hsizer.Add(self.stConfig, 0, wx.ALL, 2)        
         sizer_1.Add(hsizer,0, wx.EXPAND, 0)
 
-        hsizer = wx.BoxSizer(wx.HORIZONTAL)
-        hsizer.Add(wx.StaticText(self, -1, "Z increment [nm]:"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
-        self.tdeltaZ = wx.TextCtrl(self, -1, '%3.0f'% (1e3*self.dt.get_delta_Z()), size=[30,-1])
-        hsizer.Add(self.tdeltaZ, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
-        self.bSetdeltaZ = wx.Button(self, -1, 'Set', style=wx.BU_EXACTFIT)
-        hsizer.Add(self.bSetdeltaZ, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2) 
-        self.bSetdeltaZ.Bind(wx.EVT_BUTTON, self.OnBSetdeltaZ)
-        sizer_1.Add(hsizer,0, wx.EXPAND, 0)
-
-        hsizer = wx.BoxSizer(wx.HORIZONTAL)
-        hsizer.Add(wx.StaticText(self, -1, "Stack halfsize:"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
-        self.tHalfsize = wx.TextCtrl(self, -1, '%3.0f'% (self.dt.get_stack_halfsize()), size=[30,-1])
-        hsizer.Add(self.tHalfsize, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
-        self.bSetHalfsize = wx.Button(self, -1, 'Set', style=wx.BU_EXACTFIT)
-        hsizer.Add(self.bSetHalfsize, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2) 
-        self.bSetHalfsize.Bind(wx.EVT_BUTTON, self.OnBSetHalfsize)
-        sizer_1.Add(hsizer,0, wx.EXPAND, 0)
-
-        # hsizer = wx.BoxSizer(wx.HORIZONTAL)
-        # hsizer.Add(wx.StaticText(self, -1, "Z-factor:"), 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
-        # self.tZfactor = wx.TextCtrl(self, -1, '%3.1f'% self.dt.Zfactor, size=[30,-1])
-        # hsizer.Add(self.tZfactor, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
-        # self.bSetZfactor = wx.Button(self, -1, 'Set', style=wx.BU_EXACTFIT)
-        # hsizer.Add(self.bSetZfactor, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
-        # self.bSetZfactor.Bind(wx.EVT_BUTTON, self.OnBSetZfactor)
-        # self.bCalcZfactor = wx.Button(self, -1, 'Calculate Z-factor', style=wx.BU_EXACTFIT)
-        # hsizer.Add(self.bCalcZfactor, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2)
-        # self.bCalcZfactor.Bind(wx.EVT_BUTTON, self.OnBCalculateZfactor)
-        # sizer_1.Add(hsizer,0, wx.EXPAND, 0)
-                
         hsizer = wx.BoxSizer(wx.HORIZONTAL)
         self.stError = wx.StaticText(self, -1, 'Error:\n\n', size=[200,-1])
         cfont = self.stError.GetFont()
@@ -412,7 +385,7 @@ class DriftTrackingControl(wx.Panel):
         
     def OnBSaveHist(self, event):
         if not hasattr(self.dt, 'history') or (len(self.dt.history) <= 0):
-            Warn(self,"no history")
+            warn("no history that could be saved")
         else:
             dlg = wx.FileDialog(self, message="Save file as...",  
                                 defaultFile='history.txt',
@@ -428,9 +401,21 @@ class DriftTrackingControl(wx.Panel):
 
 
     def OnDriftTrackConfig(self, event):
-        if self.dtconfig.configure_traits(kind='modal'):
-            pass
+        if not self.dtconfig.configure_traits(kind='modal'):
+            return
+        dtc = self.dtconfig
+        self.dt.set_focus_tolerance(1e-3*dtc.zfocusTolerance_nm)
+        self.dt.set_delta_Z(1e-3*dtc.deltaZ_nm)
+        self.dt.set_stack_halfsize(dtc.stackHalfSize)
+        self.dt.minDelay = dtc.minDelay
+        self.dt.Zfactor = dtc.zFactor
+        self.plotInterval = dtc.plotInterval
 
+        self.stConfig.SetLabel('tol: %d nm, delZ: %.0f nm, stHsz: %d' %
+                                      (dtc.zfocusTolerance_nm,
+                                       dtc.deltaZ_nm,
+                                       dtc.stackHalfSize))
+        
     def OnBSetTolerance(self, event):
         self.dt.set_focus_tolerance(float(self.tTolerance.GetValue())/1e3)
 
