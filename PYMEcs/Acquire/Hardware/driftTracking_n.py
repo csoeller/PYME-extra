@@ -273,7 +273,7 @@ class Correlator(object):
         
         #where is the piezo suppposed to be
         #nomPos = self.piezo.GetPos(0)
-        nomPos = self.piezo.GetTargetPos(0)
+        nomPos = self.piezo.GetTargetPos(0) # main piezo z
         
         #find closest calibration position
         posInd = np.argmin(np.abs(nomPos - self.calPositions))
@@ -327,10 +327,10 @@ class Correlator(object):
         #print dx, dy, dz
         dx_nm, dy_nm, dz_nm = (self.conversion['x']*dx, self.conversion['y']*dy, self.conversion['z']*dz)
 
-        offset = self.piezo.GetOffset()
+        offset = self.piezo.GetOffset() # z correction piezo
         offset_nm = 1e3*offset
 
-        pos_um = self.piezo.GetPos(0)
+        pos_um = self.piezo.GetPos(0) # main piezo z
 
         #FIXME: logging shouldn't call piezo.GetOffset() etc ... for performance reasons
         #       (is this still true, we keep the values cached in memory??)
@@ -345,17 +345,17 @@ class Correlator(object):
                 logger.info("focus lock released, maximal Offset value exceeded (%.1f um)" % self._maxTotalCorrection)
             if abs(dz) > self.focusTolerance and self.lastAdjustment >= self.minDelay:
                 # this sets the correction on the connected piezo
-                self.piezo.SetOffset(offset - dz)                    
+                self.piezo.SetOffset(offset - dz) # z correction piezo                   
                 self.lastAdjustment = 0
             else:
                 self.lastAdjustment += 1
             
             if self.logShifts:
                 # this logs to the connected copy of PYMEAcquire via the RESTServer
-                if hasattr(self.piezo, 'LogShiftsCorrelAmp'):
-                    self.piezo.LogShiftsCorrelAmp(dx_nm, dy_nm, dz_nm, self.lockActive, coramp=cCoeff/self.corrRef)
+                if hasattr(self.remoteLogger, 'LogShiftsCorrelAmp'):
+                    self.remoteLogger.LogShiftsCorrelAmp(dx_nm, dy_nm, dz_nm, self.lockActive, coramp=cCoeff/self.corrRef)
                 else:
-                    self.piezo.LogShifts(dx_nm, dy_nm, dz_nm, self.lockActive)
+                    self.remoteLogger.LogShifts(dx_nm, dy_nm, dz_nm, self.lockActive)
 
     def tick(self, frameData = None, **kwargs):
         if frameData is None:
@@ -363,7 +363,7 @@ class Correlator(object):
         else:
             frameData = self._crop_frame(frameData)
         
-        targetZ = self.piezo.GetTargetPos(0)
+        targetZ = self.piezo.GetTargetPos(0) # main piezo z 
         
         if not 'mask' in dir(self) or not self.frame_source.shape[:2] == self.mask.shape[:2]:
             # this just sets the UNCALIBRATED state and leaves the rest to the _prepare_calibration call
@@ -374,12 +374,12 @@ class Correlator(object):
             #print "cal init"
 
             #redefine our positions for the calibration
-            self.homePos = self.piezo.GetPos(0)
+            self.homePos = self.piezo.GetPos(0) # main piezo z
             self._prepare_calibration(frameData)
             self.calibCurFrame = 0
             self.skipcounter = self.skipframes
             # move to our first position in the calib stack
-            self.piezo.MoveTo(0, self.calPositions[0])
+            self.piezo.MoveTo(0, self.calPositions[0]) # main piezo z
             
             # preps done, now switch state to calibrating
             self.state = State.CALIBRATING
@@ -395,12 +395,12 @@ class Correlator(object):
                 else: # not done yet
                     self.skipcounter = self.skipframes # reset skip counter
                     self.calibCurFrame += 1            # and go to next frame position
-                    self.piezo.MoveTo(0, self.calPositions[int(self.calibCurFrame)])                
+                    self.piezo.MoveTo(0, self.calPositions[int(self.calibCurFrame)]) # main piezo z               
                 
         elif self.state == State.FINISHING_CALIBRATION:
             # print "cal finishing"
             self._finish_calibration()
-            self.piezo.MoveTo(0, self.homePos) # move back to where we started
+            self.piezo.MoveTo(0, self.homePos) # move back to where we started # main piezo z
             
             #reset our history log
             self.history = []
