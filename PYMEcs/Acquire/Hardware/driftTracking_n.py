@@ -88,7 +88,6 @@ class Correlator(object):
         # other configuration parameters - not currently accessible via keyword args
         self.skipframes = 1 # number of frames to skip after changing position to let piezo settle
         self.minDelay = 10
-        self.maxfac = 1.5e3        
         # NOTE: maxTotalCorrection parameter below - we may want to have a reset offset method
         #       to allow resetting the offset during the day as it tends to accumulate;
         #       this has already led to the lock giving up on occasion
@@ -258,11 +257,7 @@ class Correlator(object):
         self.lockFocus = False
         self.lockActive = False
         self.logShifts = True
-        self.lastAdjustment = 5     
-
-        # self.history = [] # FIXME: this should only be done in the tick loop, not here
-        
-        # self.historyCorrections = [] # FIXME: this should only be done in the tick loop, not here
+        self.lastAdjustment = 5        
 
     def _finish_calibration(self):
         if self.state != State.FINISHING_CALIBRATION:
@@ -282,11 +277,6 @@ class Correlator(object):
         
         #find closest calibration position
         posInd = np.argmin(np.abs(nomPos - self.calPositions))
-        
-        #dz = float('inf')
-        #count = 0
-        #while np.abs(dz) > 0.5*self.deltaZ and count < 1:
-        #    count += 1
         
         #retrieve calibration information at this location        
         calPos = self.calPositions[posInd]
@@ -324,19 +314,9 @@ class Correlator(object):
         #posInd += np.round(dz / self.deltaZ)
         #posInd = int(np.clip(posInd, 0, self.NCalibStates))
             
-#            print count, dz
-        
         #add the offset back to determine how far we are from the target position
         dz = dz - posDelta
         
-#        if 1000*np.abs((dz + posDelta))>200 and self.WantRecord:
-            #dz = np.median(self.buffer)
-#            tif.imsave('C:\\Users\\Lab-test\\Desktop\\peakimage.tif', d)
-            # np.savetxt('C:\\Users\\Lab-test\\Desktop\\parameter.txt', self.buffer[-1])
-            #np.savetxt('C:\\Users\\Lab-test\\Desktop\\posDelta.txt', posDelta)
-#            self.WantRecord = False
-        
-        #return dx, dy, dz + posDelta, Cm, dz, nomPos, posInd, calPos, posDelta
         return dx, dy, dz, Cm, nomPos, posInd, calPos, posDelta
         
     def compare_log_and_correct(self,frameData):
@@ -364,21 +344,8 @@ class Correlator(object):
                 self.lockFocus = False
                 logger.info("focus lock released, maximal Offset value exceeded (%.1f um)" % self._maxTotalCorrection)
             if abs(dz) > self.focusTolerance and self.lastAdjustment >= self.minDelay:
-                zcorrect = offset - dz
-                if zcorrect < - self.maxfac*self.focusTolerance:
-                    zcorrect = - self.maxfac*self.focusTolerance
-                if zcorrect >  self.maxfac*self.focusTolerance:
-                    zcorrect = self.maxfac*self.focusTolerance
                 # this sets the correction on the connected piezo
-                self.piezo.SetOffset(zcorrect)
-                    
-                #FIXME: this shouldn't be needed as it is logged during LogShifts anyway
-                # this logs to the connected copy of PYMEAcquire via the RESTServer
-                self.piezo.LogFocusCorrection(zcorrect) #inject offset changing into 'Events'
-                # this logs locally to this instance
-                eventLog.logEvent('PYME2UpdateOffset', '%3.4f' % (zcorrect))
-                    
-                self.historyCorrections.append((time.time(), dz_nm))
+                self.piezo.SetOffset(offset - dz)                    
                 self.lastAdjustment = 0
             else:
                 self.lastAdjustment += 1
@@ -439,7 +406,6 @@ class Correlator(object):
             self.history = []
             self.historyColNames = ['time','dx_nm','dy_nm','dz_nm','corrAmplitude','corrAmpMax','piezoOffset_nm','piezoPos_um']
             self.historyStartTime = time.time()
-            self.historyCorrections = []
             
             self.state = State.CALIBRATED # now we are fully calibrated
             
