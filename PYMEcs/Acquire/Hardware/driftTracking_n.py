@@ -74,9 +74,65 @@ class OIDICFrameSource(StandardFrameSource):
 from enum import Enum
 State = Enum('State', ['UNCALIBRATED', 'CALIBRATING', 'FINISHING_CALIBRATION', 'CALIBRATED'])
 
+class CorrectionPiezo(object):
+    def __init__(self, inputPiezo, multiplier=1.0, axis=0, resetPosition_um = 30e-3):
+        self._resetPosition_um = resetPosition_um
+        self._multiplier = multiplier
+        self._axis = axis
+        self.piezo = inputPiezo # this should be a possibly multiaxis piezo derived from the basePiezo class
+
+    def reset(self):
+        self.piezo.MoveTo(self._axis, self._resetPosition_um)
+
+    def _GetPos(self):
+        return self.piezo.GetPos(self._axis) - self._resetPosition_um
+
+    def _GetTargetPos(self):
+        return self.piezo.GetTargetPos(self._axis) - self._resetPosition_um
+
+    def _MoveTo(self, fPos, bTimeOut=True):
+        self.piezo.MoveTo(self._axis,fpos+self._resetPosition_um , bTimeOut)
+
+    def _MoveRel(self, incr, bTimeOut=True):
+        self.piezo.MoveRel(self._axis, incr, bTimeOut)
+
+    def correctRel(self, incr, bTimeOut=True):
+        self.piezo.MoveRel(self._axis, incr*self._multiplier, bTimeOut)
+
+    def correction(self):
+        return self._multiplier * self._GetPos()
+
+
+class CorrectionPiezoOP(object): # CorrectionPiezo from OffsetPiezo
+    def __init__(self, offsetPiezo):
+        self.offsetPiezo = offsetPiezo
+
+    def reset(self):
+        self.offsetPiezo.SetOffset(0)
+
+    def correctRel(self, incr, bTimeOut=True):
+        offset = self.offsetPiezo.GetOffset()
+        self.offsetPiezo.SetOffset(offset + incr)
+
+    def correction(self):
+        return self.offsetPiezo.GetOffset()
+
+    
 class Correlator(object):
-    def __init__(self, scope, piezo=None, frame_source=None, sub_roi=None, focusTolerance=.05, deltaZ=0.2, stackHalfSize=35):
-        self.piezo = piezo
+    def __init__(self, scope, main_zpiezo=None, remote_logger=None, frame_source=None, sub_roi=None,
+                 corr_zpiezo=None, corr_xpiezo=None, corr_ypiezo=None,
+                 focusTolerance=.05, deltaZ=0.2, stackHalfSize=35):
+        self.main_zpiezo = main_zpiezo
+        
+        self.correcting_z = corr_zpiezo != None
+        self.correcting_x = corr_xpiezo != None
+        self.correcting_y = corr_ypiezo != None
+        
+        self.corr_zpiezo = corr_zpiezo
+        self.corr_xpiezo = corr_xpiezo
+        self.corr_ypiezo = corr_ypiezo
+        
+        self.remote_logger = remote_logger
 
         if frame_source is None:
             self.frame_source = StandardFrameSource(scope.frameWrangler)
@@ -257,7 +313,7 @@ class Correlator(object):
         self.lockFocus = False
         self.lockActive = False
         self.logShifts = True
-        self.lastAdjustment = 5        
+        self.lastAdjustment_z = 5        
 
     def _finish_calibration(self):
         if self.state != State.FINISHING_CALIBRATION:
@@ -266,14 +322,17 @@ class Correlator(object):
         # calculate the gradient info (needed in compare calls) from a valid calImages stack
         self.dz = np.gradient(self.calImages)[2].reshape(-1, self.NCalibFrames)
         self.dzn = np.hstack([1./np.dot(self.dz[:,i], self.dz[:,i]) for i in range(self.NCalibFrames)])
-        
+
+    # Note: the way compare works we can change self.main_zpiezo.GetTargetPos(0) and compare will tell us the difference to that targetpos
+    # this allows changing focus while locked!
+    # check that our code changes still allow this
     def compare(self, frame_data):
         d = 1.0*frame_data.squeeze()
         dm = d/d.mean() - 1
         
         #where is the piezo suppposed to be
-        #nomPos = self.piezo.GetPos(0)
-        nomPos = self.piezo.GetTargetPos(0) # main piezo z
+        #nomPos = self.main_zpiezo.GetPos(0)
+        nomPos = self.main_zpiezo.GetTargetPos(0) # main piezo z; self.mainZPiezo.GetTargetPos(0)
         
         #find closest calibration position
         posInd = np.argmin(np.abs(nomPos - self.calPositions))
@@ -327,35 +386,36 @@ class Correlator(object):
         #print dx, dy, dz
         dx_nm, dy_nm, dz_nm = (self.conversion['x']*dx, self.conversion['y']*dy, self.conversion['z']*dz)
 
-        offset = self.piezo.GetOffset() # z correction piezo
-        offset_nm = 1e3*offset
+        zcorrection = self.corr_zpiezo.correction()
+        zcorrection_nm = 1e3*zcorrection
 
-        pos_um = self.piezo.GetPos(0) # main piezo z
+        pos_um = self.main_zpiezo.GetPos(0) # main piezo z; self.mainZPiezo.GetPos(0)
 
         #FIXME: logging shouldn't call piezo.GetOffset() etc ... for performance reasons
         #       (is this still true, we keep the values cached in memory??)
         # this is the local logging, not to the actual localisation data acquiring instance of PYMEAcquire
-        self.history.append((time.time(), dx_nm, dy_nm, dz_nm, cCoeff, self.corrRef, offset_nm, pos_um))
+        self.history.append((time.time(), dx_nm, dy_nm, dz_nm, cCoeff, self.corrRef, zcorrection_nm, pos_um))
         eventLog.logEvent('PYME2ShiftMeasure', '%3.1f, %3.1f, %3.1f' % (dx_nm, dy_nm, dz_nm))
             
         self.lockActive = self.lockFocus and (cCoeff > .5*self.corrRef) # we release the lock when the correlation becomes too weak
         if self.lockActive:
-            if abs(offset) > self._maxTotalCorrection:
-                self.lockFocus = False
-                logger.info("focus lock released, maximal Offset value exceeded (%.1f um)" % self._maxTotalCorrection)
-            if abs(dz) > self.focusTolerance and self.lastAdjustment >= self.minDelay:
-                # this sets the correction on the connected piezo
-                self.piezo.SetOffset(offset - dz) # z correction piezo                   
-                self.lastAdjustment = 0
-            else:
-                self.lastAdjustment += 1
+            if self.correcting_z:
+                if abs(zcorrection) > self._maxTotalCorrection:
+                    self.lockFocus = False
+                    logger.info("focus lock released, maximal z correction value exceeded (%.1f um)" % self._maxTotalCorrection)
+                    if abs(dz) > self.focusTolerance and self.lastAdjustment_z >= self.minDelay:
+                        # this sets the correction on the connected piezo
+                        self.corr_zpiezo.correctRel(-dz) # z correction piezo; self.corrPiezo['z'].MoveRel(-dz); our corrPiezos should have a multiplier they use to get the direction right; also they should have a zero point that can be set (and reset to)                   
+                        self.lastAdjustment_z = 0
+                else:
+                    self.lastAdjustment_z += 1
             
             if self.logShifts:
                 # this logs to the connected copy of PYMEAcquire via the RESTServer
-                if hasattr(self.remoteLogger, 'LogShiftsCorrelAmp'):
-                    self.remoteLogger.LogShiftsCorrelAmp(dx_nm, dy_nm, dz_nm, self.lockActive, coramp=cCoeff/self.corrRef)
+                if hasattr(self.remote_logger, 'LogShiftsCorrelAmp'):
+                    self.remote_logger.LogShiftsCorrelAmp(dx_nm, dy_nm, dz_nm, self.lockActive, coramp=cCoeff/self.corrRef)
                 else:
-                    self.remoteLogger.LogShifts(dx_nm, dy_nm, dz_nm, self.lockActive)
+                    self.remote_logger.LogShifts(dx_nm, dy_nm, dz_nm, self.lockActive)
 
     def tick(self, frameData = None, **kwargs):
         if frameData is None:
@@ -363,7 +423,7 @@ class Correlator(object):
         else:
             frameData = self._crop_frame(frameData)
         
-        targetZ = self.piezo.GetTargetPos(0) # main piezo z 
+        targetZ = self.main_zpiezo.GetTargetPos(0) # main piezo z; self.mainZPiezo.GetTargetPos(0)
         
         if not 'mask' in dir(self) or not self.frame_source.shape[:2] == self.mask.shape[:2]:
             # this just sets the UNCALIBRATED state and leaves the rest to the _prepare_calibration call
@@ -374,12 +434,12 @@ class Correlator(object):
             #print "cal init"
 
             #redefine our positions for the calibration
-            self.homePos = self.piezo.GetPos(0) # main piezo z
+            self.homePos = self.main_zpiezo.GetPos(0) # main piezo z; self.mainZPiezo.GetPos(0)
             self._prepare_calibration(frameData)
             self.calibCurFrame = 0
             self.skipcounter = self.skipframes
             # move to our first position in the calib stack
-            self.piezo.MoveTo(0, self.calPositions[0]) # main piezo z
+            self.main_zpiezo.MoveTo(0, self.calPositions[0]) # main piezo z; self.mainZPiezo.MoveTo(0, self.calPositions[0])
             
             # preps done, now switch state to calibrating
             self.state = State.CALIBRATING
@@ -395,16 +455,16 @@ class Correlator(object):
                 else: # not done yet
                     self.skipcounter = self.skipframes # reset skip counter
                     self.calibCurFrame += 1            # and go to next frame position
-                    self.piezo.MoveTo(0, self.calPositions[int(self.calibCurFrame)]) # main piezo z               
+                    self.main_zpiezo.MoveTo(0, self.calPositions[int(self.calibCurFrame)]) # main piezo z; self.mainZPiezo.MoveTo(0, self.calPositions[int(self.calibCurFrame)])
                 
         elif self.state == State.FINISHING_CALIBRATION:
             # print "cal finishing"
             self._finish_calibration()
-            self.piezo.MoveTo(0, self.homePos) # move back to where we started # main piezo z
+            self.main_zpiezo.MoveTo(0, self.homePos) # move back to where we started # main piezo z; self.mainZPiezo.MoveTo(0, self.homePos)
             
             #reset our history log
             self.history = []
-            self.historyColNames = ['time','dx_nm','dy_nm','dz_nm','corrAmplitude','corrAmpMax','piezoOffset_nm','piezoPos_um']
+            self.historyColNames = ['time','dx_nm','dy_nm','dz_nm','corrAmplitude','corrAmpMax','piezo_zcorrection_nm','piezoPos_um']
             self.historyStartTime = time.time()
             
             self.state = State.CALIBRATED # now we are fully calibrated
