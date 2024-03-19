@@ -383,19 +383,12 @@ class Correlator(object):
         dx, dy, dz, cCoeff, nomPos, posInd, calPos, posDelta = self.compare(frameData)
         self.corrRef = max(self.corrRef, cCoeff) # keep track of historically maximal correlation amplitude
             
-        #print dx, dy, dz
         dx_nm, dy_nm, dz_nm = (self.conversion['x']*dx, self.conversion['y']*dy, self.conversion['z']*dz)
 
-        zcorrection = self.corr_zpiezo.correction()
-        zcorrection_nm = 1e3*zcorrection
-
         pos_um = self.main_zpiezo.GetPos(0) # main piezo z; self.mainZPiezo.GetPos(0)
-
-        #FIXME: logging shouldn't call piezo.GetOffset() etc ... for performance reasons
-        #       (is this still true, we keep the values cached in memory??)
-        # this is the local logging, not to the actual localisation data acquiring instance of PYMEAcquire
-        self.history.append((time.time(), dx_nm, dy_nm, dz_nm, cCoeff, self.corrRef, zcorrection_nm, pos_um))
-        eventLog.logEvent('PYME2ShiftMeasure', '%3.1f, %3.1f, %3.1f' % (dx_nm, dy_nm, dz_nm))
+        zcorrection = self.corr_zpiezo.correction() if self.correcting_z else 0
+        xcorrection = self.corr_xpiezo.correction() if self.correcting_x else 0
+        ycorrection = self.corr_ypiezo.correction() if self.correcting_y else 0
             
         self.lockActive = self.lockFocus and (cCoeff > .5*self.corrRef) # we release the lock when the correlation becomes too weak
         if self.lockActive:
@@ -403,10 +396,12 @@ class Correlator(object):
                 if abs(zcorrection) > self._maxTotalCorrection:
                     self.lockFocus = False
                     logger.info("focus lock released, maximal z correction value exceeded (%.1f um)" % self._maxTotalCorrection)
-                    if abs(dz) > self.focusTolerance and self.lastAdjustment_z >= self.minDelay:
-                        # this sets the correction on the connected piezo
-                        self.corr_zpiezo.correctRel(-dz) # z correction piezo; self.corrPiezo['z'].MoveRel(-dz); our corrPiezos should have a multiplier they use to get the direction right; also they should have a zero point that can be set (and reset to)                   
-                        self.lastAdjustment_z = 0
+                if abs(dz) > self.focusTolerance and self.lastAdjustment_z >= self.minDelay:
+                    # this sets the correction on the connected piezo
+                    # our corrPiezos should have a multiplier they use to get the direction right
+                    # also they should have a zero point that can be set (and reset to)                   
+                    self.corr_zpiezo.correctRel(-dz)
+                    self.lastAdjustment_z = 0
                 else:
                     self.lastAdjustment_z += 1
             
@@ -416,6 +411,12 @@ class Correlator(object):
                     self.remote_logger.LogShiftsCorrelAmp(dx_nm, dy_nm, dz_nm, self.lockActive, coramp=cCoeff/self.corrRef)
                 else:
                     self.remote_logger.LogShifts(dx_nm, dy_nm, dz_nm, self.lockActive)
+
+        #FIXME: logging shouldn't call piezo.GetOffset() etc ... for performance reasons
+        #       (is this still true, we keep the values cached in memory??)
+        # this is the local logging, not to the actual localisation data acquiring instance of PYMEAcquire
+        self.history.append((time.time(), dx_nm, dy_nm, dz_nm, cCoeff, self.corrRef, 1e3*zcorrection, pos_um))
+        eventLog.logEvent('PYME2ShiftMeasure', '%3.1f, %3.1f, %3.1f' % (dx_nm, dy_nm, dz_nm))
 
     def tick(self, frameData = None, **kwargs):
         if frameData is None:
