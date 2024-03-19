@@ -249,6 +249,7 @@ class DriftTrackingControl(wx.Panel):
         main_frame.AddMenuItem('DriftTracking', "Change config parameters", self.OnDriftTrackConfig)
         main_frame.AddMenuItem('DriftTracking', "Save history", self.OnBSaveHist)
         main_frame.AddMenuItem('DriftTracking', "Save calibration stack", self.OnBSaveCalib)
+        main_frame.AddMenuItem('DriftTracking', "Calculate z factor", self.OnBCalculateZfactor)
         
         self.dt = driftTracker
         self.dtconfig = DriftTrackConfig(zfocusTolerance_nm=1e3*self.dt.focusTolerance,
@@ -395,7 +396,7 @@ class DriftTrackingControl(wx.Panel):
             if dlg.ShowModal() == wx.ID_OK:
                 historyfn = dlg.GetPath()
                 np.savetxt(historyfn, self.dt.history, header=' '.join(self.dt.historyColNames))
-                dlg = wx.MessageDialog(self._main_frame, "history saved", caption, wx.OK | wx.ICON_INFORMATION)
+                dlg = wx.MessageDialog(self._main_frame, "history saved", "Info", wx.OK | wx.ICON_INFORMATION)
                 dlg.ShowModal()
                 dlg.Destroy()
 
