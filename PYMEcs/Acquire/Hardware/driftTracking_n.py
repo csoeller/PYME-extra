@@ -332,7 +332,7 @@ class Correlator(object):
         
         #where is the piezo suppposed to be
         #nomPos = self.main_zpiezo.GetPos(0)
-        nomPos = self.main_zpiezo.GetTargetPos(0) # main piezo z; self.mainZPiezo.GetTargetPos(0)
+        nomPos = self.main_zpiezo.GetTargetPos(0) # main piezo z
         
         #find closest calibration position
         posInd = np.argmin(np.abs(nomPos - self.calPositions))
@@ -385,7 +385,7 @@ class Correlator(object):
             
         dx_nm, dy_nm, dz_nm = (self.conversion['x']*dx, self.conversion['y']*dy, self.conversion['z']*dz)
 
-        pos_um = self.main_zpiezo.GetPos(0) # main piezo z; self.mainZPiezo.GetPos(0)
+        pos_um = self.main_zpiezo.GetPos(0) # main piezo z
         zcorrection = self.corr_zpiezo.correction() if self.correcting_z else 0
         xcorrection = self.corr_xpiezo.correction() if self.correcting_x else 0
         ycorrection = self.corr_ypiezo.correction() if self.correcting_y else 0
@@ -424,7 +424,7 @@ class Correlator(object):
         else:
             frameData = self._crop_frame(frameData)
         
-        targetZ = self.main_zpiezo.GetTargetPos(0) # main piezo z; self.mainZPiezo.GetTargetPos(0)
+        targetZ = self.main_zpiezo.GetTargetPos(0) # main piezo z
         
         if not 'mask' in dir(self) or not self.frame_source.shape[:2] == self.mask.shape[:2]:
             # this just sets the UNCALIBRATED state and leaves the rest to the _prepare_calibration call
@@ -435,12 +435,12 @@ class Correlator(object):
             #print "cal init"
 
             #redefine our positions for the calibration
-            self.homePos = self.main_zpiezo.GetPos(0) # main piezo z; self.mainZPiezo.GetPos(0)
+            self.homePos = self.main_zpiezo.GetPos(0) # main piezo z
             self._prepare_calibration(frameData)
             self.calibCurFrame = 0
             self.skipcounter = self.skipframes
             # move to our first position in the calib stack
-            self.main_zpiezo.MoveTo(0, self.calPositions[0]) # main piezo z; self.mainZPiezo.MoveTo(0, self.calPositions[0])
+            self.main_zpiezo.MoveTo(0, self.calPositions[0]) # main piezo z
             
             # preps done, now switch state to calibrating
             self.state = State.CALIBRATING
@@ -456,16 +456,16 @@ class Correlator(object):
                 else: # not done yet
                     self.skipcounter = self.skipframes # reset skip counter
                     self.calibCurFrame += 1            # and go to next frame position
-                    self.main_zpiezo.MoveTo(0, self.calPositions[int(self.calibCurFrame)]) # main piezo z; self.mainZPiezo.MoveTo(0, self.calPositions[int(self.calibCurFrame)])
+                    self.main_zpiezo.MoveTo(0, self.calPositions[int(self.calibCurFrame)]) # main piezo z
                 
         elif self.state == State.FINISHING_CALIBRATION:
             # print "cal finishing"
             self._finish_calibration()
-            self.main_zpiezo.MoveTo(0, self.homePos) # move back to where we started # main piezo z; self.mainZPiezo.MoveTo(0, self.homePos)
+            self.main_zpiezo.MoveTo(0, self.homePos) # move back to where we started
             
             #reset our history log
             self.history = []
-            self.historyColNames = ['time','dx_nm','dy_nm','dz_nm','corrAmplitude','corrAmpMax','piezo_zcorrection_nm','piezoPos_um']
+            self.historyColNames = ['time','dx_nm','dy_nm','dz_nm','corrAmplitude','corrAmpMax','zcorrection_nm','piezoPos_um']
             self.historyStartTime = time.time()
             
             self.state = State.CALIBRATED # now we are fully calibrated
