@@ -43,7 +43,7 @@ class TrackerPlotPanel(PlotPanel):
                     self.figure.set_tight_layout(True)
 
             try:
-                t, dx_nm, dy_nm, dz_nm, corr, corrmax, poffset_nm, pos_um  = np.array(self.dt.get_history(1000)).T
+                t, dx_nm, dy_nm, dz_nm, corr, corrmax, zcorrection_nm, pos_um  = np.array(self.dt.get_history(1000)).T
             except ValueError:
                 do_plot = False
             else:
@@ -72,8 +72,8 @@ class TrackerPlotPanel(PlotPanel):
                 self.subplotz.set_xlim(*trange)
                 
                 self.subploto.cla()
-                self.subploto.plot(tdelta, poffset_nm, 'm')
-                self.subploto.set_ylabel('offs [nm]')
+                self.subploto.plot(tdelta, zcorrection_nm, 'm')
+                self.subploto.set_ylabel('zcorr [nm]')
                 self.subploto.set_xlim(*trange)
                 
                 self.subplotc.cla()
@@ -450,11 +450,11 @@ class DriftTrackingControl(wx.Panel):
             self.stCalibState.SetLabel(calibState.name)
 
             try:
-                t, dx_nm, dy_nm, dz_nm, corr, corrmax, poffset_nm, pos_um = self.dt.get_history(1)[-1]
+                t, dx_nm, dy_nm, dz_nm, corr, corrmax, zcorrection_nm, pos_um = self.dt.get_history(1)[-1]
                 self.stError.SetLabel(("Error: x = %s nm y = %s nm z = %s nm\n" +
-                                       "offs = %s nm c/cm = %4.2f") %
+                                       "zcorr = %s nm c/cm = %4.2f") %
                                       ("{:>+3.2f}".format(dx_nm), "{:>+3.2f}".format(dy_nm),
-                                       "{:>+3.1f}".format(dz_nm), "{:>+6.1f}".format(poffset_nm),
+                                       "{:>+3.1f}".format(dz_nm), "{:>+6.1f}".format(zcorrection_nm),
                                        corr/corrmax))
 
             except IndexError:
