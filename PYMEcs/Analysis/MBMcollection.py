@@ -5,14 +5,24 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-def interp_bead(tnew, bead, customdict=None):
+from warnings import warn
+
+def interp_bead(tnew, bead, customdict=None, extrapisnan=False):
     ibead = {}
     if customdict is None:
         for i,axis in enumerate(['x','y','z']):
-            ibead[axis] = np.interp(tnew, bead['tim'], 1e9*bead['pos'][:,i]) # everything in nm
+            if extrapisnan:
+                ibead[axis] = np.interp(tnew, bead['tim'], 1e9*bead['pos'][:,i], right=np.nan) # everything in nm
+            else:
+                ibead[axis] = np.interp(tnew, bead['tim'], 1e9*bead['pos'][:,i]) # everything in nm
+            #ibead[axis][tnew>bead['tim'].max()] = 0
     else:
         for key,value in customdict.items():
-            ibead[key] = np.interp(tnew, bead['tim'], bead[value])
+            if extrapisnan:
+                ibead[key] = np.interp(tnew, bead['tim'], bead[value], right=np.nan)
+            else:
+                ibead[key] = np.interp(tnew, bead['tim'], bead[value])
+            #ibead[key][tnew>bead['tim'].max()] = 0
 
     ibead['t'] = tnew
     return ibead
@@ -31,11 +41,12 @@ def stdev_beads(beads,samplewindow=9):
         sbeads[bead] = stdev_bead(beads[bead],samplewindow=samplewindow)
     return sbeads
 
-def interp_sbeads(sbeads):
+def interp_sbeads(sbeads,extrapisnan=False):
     return interp_beads(sbeads,customdict=dict(std='std',std_x='std_x',
-                                               std_y='std_y',std_z='std_z'))
+                                               std_y='std_y',std_z='std_z'),
+                        extrapisnan=extrapisnan)
 
-def interp_beads(beads,customdict=None):
+def interp_beads(beads,customdict=None,extrapisnan=False):
     mint = 1e6
     for bead in beads:
         mincur = beads[bead]['tim'].min()
@@ -55,9 +66,35 @@ def interp_beads(beads,customdict=None):
     ibeads = {}
 
     for bead in beads:
-        ibeads[bead] = interp_bead(tnew,beads[bead],customdict=customdict)
+        ibeads[bead] = interp_bead(tnew,beads[bead],customdict=customdict,extrapisnan=extrapisnan)
 
     return ibeads
+
+import pandas as pd
+def df_from_interp_beads(beads,customdict=None):
+    ibeads = interp_beads(beads,customdict=customdict,extrapisnan=True)
+    dictbeads = {}
+    for axis in ['x','y','z','std_x','std_y','std_z','std']:
+        dictbeads[axis] = {}
+        
+    for bead in ibeads:
+        for axis in ['x','y','z']:
+            dictbeads[axis][bead] = ibeads[bead][axis]
+        t = ibeads[bead]['t'] # this is actually always the same t
+
+    dfbeads = {}
+    for axis in ['x','y','z']:
+        dfbeads[axis] = pd.DataFrame(dictbeads[axis],index=t)
+
+    sbeads = stdev_beads(beads)
+    sibeads = interp_sbeads(sbeads,extrapisnan=True)
+    for bead in sibeads:
+        for axis in ['std_x','std_y','std_z','std']:
+            dictbeads[axis][bead] = sibeads[bead][axis]
+    for axis in ['std_x','std_y','std_z','std']:
+        dfbeads[axis] = pd.DataFrame(dictbeads[axis],index=t)
+    
+    return dfbeads
 
 def get_mbm(ds):
     mbm = {}
@@ -247,3 +284,79 @@ class MBMCollection(object):
                 plt.plot(self.t,self.beadtrack(bead,axis)-self.mean()[axis],label=bead)        
         if legend:
             plt.legend()
+
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+except ImportError:
+    warn("can't import plotly modules, new style bead plotting using MBMCollectionDF will not work")
+    
+class MBMCollectionDF(object): # collection based on dataframe objects
+    def __init__(self,name=None,filename=None,variance_window = 9):
+        self.mbms = {}
+        self.beadisgood = {}
+        self.offsets = {}
+        self._mean = None
+        self._hashkey = ''
+        self._offsets_valid = False
+        self.t = None
+        self.tperiod = None
+        self._trange= (None,None)
+        self.variance_window = variance_window # by default use last 9 localisations for variance/std calculation
+        
+        if filename is not None:
+            self.populate_df_from_npz(filename)
+        else:
+            self.name = name
+
+    def populate_df_from_npz(self,filename):
+        # this is a MBM bead file with raw bead tracks
+        self.name=filename
+        self._raw_beads = np.load(filename)
+        self.beads = df_from_interp_beads(self._raw_beads)
+        self.t = self.beads['x'].index
+        
+        for bead in self.beads['x']:
+            self.beadisgood[bead] = True
+
+    def markasbad(self,*beads): # mark a bead as bad
+        for bead in beads:
+            if bead in self.beads['x']:
+                self.beadisgood[bead] = False
+
+    def markasgood(self,*beads): # if currently bad, mark as good
+        for bead in beads:
+            if bead in self.beads['x']:
+                self.beadisgood[bead] = True
+
+    def plot_tracks(self,axis,unaligned=False,tmin=None,tmax=None):
+        if tmin is None:
+            tmin=self._trange[0]
+        if tmax is None:
+            tmax=self._trange[1]
+
+        if tmin is None:
+            tmin = self.t.min()
+        if tmax is None:
+            tmax = self.t.max()
+
+        if axis.startswith('std'):
+            unaligned = True # not sensible to align the std devs
+
+        if not unaligned:
+            dfplot = self.beads[axis]-self.beads[axis].loc[tmin:tmax].mean(axis=0)
+            dfplotg = dfplot[[bead for bead in self.beadisgood if self.beadisgood[bead]]]
+            emptybeads = dfplotg.columns[dfplotg.isnull().all(axis=0)]
+            if len(emptybeads)>0:
+                warn('removing beads with no valid info after alignment %s...' % emptybeads)
+                dfplotg = dfplotg[dfplotg.columns[~dfplotg.isnull().all(axis=0)]]
+                
+            fig = px.line(dfplotg)
+            fig.add_trace(go.Scatter(x=self.t, y=dfplotg.mean(axis=1), name='Mean',
+                                     line=dict(color='firebrick', dash='dash')))
+        else:
+            dfplot = self.beads[axis]
+            fig = px.line(dfplot[[bead for bead in self.beadisgood if self.beadisgood[bead]]])
+        
+        fig.show()
+        
