@@ -288,6 +288,7 @@ class MBMCollection(object):
 try:
     import plotly.express as px
     import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
 except ImportError:
     warn("can't import plotly modules, new style bead plotting using MBMCollectionDF will not work")
     
@@ -351,12 +352,36 @@ class MBMCollectionDF(object): # collection based on dataframe objects
                 warn('removing beads with no valid info after alignment %s...' % emptybeads)
                 dfplotg = dfplotg[dfplotg.columns[~dfplotg.isnull().all(axis=0)]]
                 
-            fig = px.line(dfplotg)
-            fig.add_trace(go.Scatter(x=self.t, y=dfplotg.mean(axis=1), name='Mean',
+            fig1 = px.line(dfplotg)
+            fig1.add_trace(go.Scatter(x=self.t, y=dfplotg.mean(axis=1), name='Mean',
                                      line=dict(color='firebrick', dash='dash')))
+            fig2 = px.line(dfplotg.sub(dfplotg.mean(axis=1),axis=0))
+
+            fig = make_subplots(rows=2, cols=1)
+
+            for d in fig1.data:
+                fig.add_trace((go.Scatter(x=d['x'], y=d['y'], name = d['name'])), row=1, col=1)
+            for d in fig2.data:
+                fig.add_trace((go.Scatter(x=d['x'], y=d['y'],  name = d['name'])), row=2, col=1)
+
+            fig.update_layout(autosize=False, width=1000, height=700,title_text="aligned MBM tracks along %s" % axis)
+            # Update axes properties
+            fig.update_xaxes(title_text="time (s)", row=1, col=1)
+            fig.update_xaxes(title_text="time (s)", row=2, col=1)
+            fig.update_yaxes(title_text="drift (nm)", row=1, col=1)
+            fig.update_yaxes(title_text="deviation (nm)", row=2, col=1)
+            
+            fig.show()
+
         else:
+            if axis.startswith('std'):
+                yaxis_title = "std dev (nm)"
+                title = 'MBM localisation precisions (%s)' % axis
+            else:
+                title = 'tracks along %s, not aligned' % axis
+                yaxis_title = "distance (nm)"
             dfplot = self.beads[axis]
             fig = px.line(dfplot[[bead for bead in self.beadisgood if self.beadisgood[bead]]])
-        
-        fig.show()
+            fig.update_layout(xaxis_title="time (s)", yaxis_title=yaxis_title, title_text=title)
+            fig.show()
         
