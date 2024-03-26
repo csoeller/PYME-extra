@@ -75,7 +75,7 @@ from enum import Enum
 State = Enum('State', ['UNCALIBRATED', 'CALIBRATING', 'FINISHING_CALIBRATION', 'CALIBRATED'])
 
 class CorrectionPiezo(object):
-    def __init__(self, inputPiezo, multiplier=1.0, axis=0, resetPosition_um = 30e-3):
+    def __init__(self, inputPiezo, multiplier=1.0, axis=0, resetPosition_um = 30):
         self._resetPosition_um = resetPosition_um
         self._multiplier = multiplier
         self._axis = axis
@@ -100,7 +100,7 @@ class CorrectionPiezo(object):
         self.piezo.MoveRel(self._axis, incr*self._multiplier, bTimeOut)
 
     def correction(self):
-        return self._multiplier * self._GetPos()
+        return self._multiplier * self._GetTargetPos()
 
 
 class CorrectionPiezoOP(object): # CorrectionPiezo from OffsetPiezo
@@ -136,6 +136,7 @@ class Correlator(object):
 
         if frame_source is None:
             self.frame_source = StandardFrameSource(scope.frameWrangler)
+        self.sub_roi = None
         
         # configuration parameters, accessible via keyword args
         self.focusTolerance = focusTolerance # (in um) how far focus can drift before we correct
