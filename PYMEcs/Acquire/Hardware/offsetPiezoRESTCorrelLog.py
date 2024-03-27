@@ -15,6 +15,10 @@ logger = logging.getLogger(__name__)
 
 class OffsetPiezoCorrelLog(offsetPiezoREST.OffsetPiezo):
 
+    # also have the method in the server
+    def LogShiftsCorrelAmp(self, dx, dy, dz, active=True, coramp=-1.0):
+        self.LogShiftsCA(dx, dy, dz, active, coramp)
+
     @webframework.register_endpoint('/LogShiftsCA', output_is_json=False)
     def LogShiftsCA(self, dx, dy, dz, active=True, coramp=-1.0):
         import wx

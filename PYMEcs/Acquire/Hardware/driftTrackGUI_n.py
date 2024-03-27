@@ -63,8 +63,8 @@ class TrackerPlotPanel(PlotPanel):
                 self.subplotxy.cla()
                 self.subplotxy.plot(tdelta, dx_nm, 'c')
                 self.subplotxy.plot(tdelta, dy_nm, 'y')
-                self.subplotz.plot([tdelta[0],tdelta[-1]],[xytolnm,xytolnm], 'g--')
-                self.subplotz.plot([tdelta[0],tdelta[-1]],[-xytolnm,-xytolnm], 'g--')
+                self.subplotxy.plot([tdelta[0],tdelta[-1]],[xytolnm,xytolnm], 'g--')
+                self.subplotxy.plot([tdelta[0],tdelta[-1]],[-xytolnm,-xytolnm], 'g--')
                 self.subplotxy.set_ylabel('dx/dy (c/y) [nm]')
                 self.subplotxy.set_xlim(*trange)
                 
@@ -318,7 +318,7 @@ class DriftTrackingControl(wx.Panel):
                                        (self.dtconfig.minDelay,
                                        self.dtconfig.deltaZ_nm,
                                         self.dtconfig.stackHalfSize), size=[400,-1])
-        cfont = self.stConfig.GetFont()
+        cfont = self.stConfig1.GetFont()
         font = wx.Font(cfont.GetPointSize(), wx.TELETYPE, wx.NORMAL, wx.NORMAL)
         self.stConfig1.SetFont(font)
         self.stConfig2.SetFont(font)

@@ -420,8 +420,8 @@ class Correlator(object):
                 if abs(xcorrection) > self._maxTotalCorrection:
                     self.lockFocus = False
                     logger.info("focus lock released, maximal x correction value exceeded (%.1f um)" % self._maxTotalCorrection)
-                if abs(dx) > self.xyTolerance and self.lastAdjustment_x >= self.minDelay:
-                    self.corr_xpiezo.correctRel(-dx)
+                if abs(1e-3*dx_nm) > self.xyTolerance and self.lastAdjustment_x >= self.minDelay:
+                    self.corr_xpiezo.correctRel(-1e-3*dx_nm)
                     self.lastAdjustment_x = 0
                 else:
                     self.lastAdjustment_x += 1
@@ -430,8 +430,8 @@ class Correlator(object):
                 if abs(ycorrection) > self._maxTotalCorrection:
                     self.lockFocus = False
                     logger.info("focus lock released, maximal y correction value exceeded (%.1f um)" % self._maxTotalCorrection)
-                if abs(dy) > self.xyTolerance and self.lastAdjustment_y >= self.minDelay:
-                    self.corr_ypiezo.correctRel(-dy)
+                if abs(1e-3*dy_nm) > self.xyTolerance and self.lastAdjustment_y >= self.minDelay:
+                    self.corr_ypiezo.correctRel(-1e-3*dy_nm)
                     self.lastAdjustment_y = 0
                 else:
                     self.lastAdjustment_y += 1
