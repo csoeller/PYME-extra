@@ -100,7 +100,7 @@ class CorrectionPiezo(object):
         self.piezo.MoveRel(self._axis, incr*self._multiplier, bTimeOut)
 
     def correction(self):
-        return self._multiplier * self._GetTargetPos()
+        return self._multiplier * self._GetTargetPos() # we use getTargetPos to avoid the "noise"
 
 
 class CorrectionPiezoOP(object): # CorrectionPiezo from OffsetPiezo
@@ -121,7 +121,7 @@ class CorrectionPiezoOP(object): # CorrectionPiezo from OffsetPiezo
 class Correlator(object):
     def __init__(self, scope, main_zpiezo=None, remote_logger=None, frame_source=None, sub_roi=None,
                  corr_zpiezo=None, corr_xpiezo=None, corr_ypiezo=None,
-                 focusTolerance=.05, deltaZ=0.2, stackHalfSize=35):
+                 focusTolerance=.05, xyTolerance=0.02, deltaZ=0.2, stackHalfSize=35):
         self.main_zpiezo = main_zpiezo
         
         self.correcting_z = corr_zpiezo != None
@@ -129,8 +129,14 @@ class Correlator(object):
         self.correcting_y = corr_ypiezo != None
         
         self.corr_zpiezo = corr_zpiezo
+        if corr_zpiezo is not None:
+            corr_zpiezo.reset()
         self.corr_xpiezo = corr_xpiezo
+        if corr_xpiezo is not None:
+            corr_xpiezo.reset()
         self.corr_ypiezo = corr_ypiezo
+        if corr_ypiezo is not None:
+            corr_ypiezo.reset()
         
         self.remote_logger = remote_logger
 
@@ -140,6 +146,8 @@ class Correlator(object):
         
         # configuration parameters, accessible via keyword args
         self.focusTolerance = focusTolerance # (in um) how far focus can drift before we correct
+        self.xyTolerance = xyTolerance
+        
         self.deltaZ = deltaZ #z increment (in um) used for calibration
         self.stackHalfSize = stackHalfSize
         # other configuration parameters - not currently accessible via keyword args
@@ -314,7 +322,9 @@ class Correlator(object):
         self.lockFocus = False
         self.lockActive = False
         self.logShifts = True
-        self.lastAdjustment_z = 5        
+        self.lastAdjustment_z = 5
+        self.lastAdjustment_x = 5
+        self.lastAdjustment_y = 5
 
     def _finish_calibration(self):
         if self.state != State.FINISHING_CALIBRATION:
@@ -405,7 +415,27 @@ class Correlator(object):
                     self.lastAdjustment_z = 0
                 else:
                     self.lastAdjustment_z += 1
-            
+
+            if self.correcting_x:
+                if abs(xcorrection) > self._maxTotalCorrection:
+                    self.lockFocus = False
+                    logger.info("focus lock released, maximal x correction value exceeded (%.1f um)" % self._maxTotalCorrection)
+                if abs(dx) > self.xyTolerance and self.lastAdjustment_x >= self.minDelay:
+                    self.corr_xpiezo.correctRel(-dx)
+                    self.lastAdjustment_x = 0
+                else:
+                    self.lastAdjustment_x += 1
+
+            if self.correcting_y:
+                if abs(ycorrection) > self._maxTotalCorrection:
+                    self.lockFocus = False
+                    logger.info("focus lock released, maximal y correction value exceeded (%.1f um)" % self._maxTotalCorrection)
+                if abs(dy) > self.xyTolerance and self.lastAdjustment_y >= self.minDelay:
+                    self.corr_ypiezo.correctRel(-dy)
+                    self.lastAdjustment_y = 0
+                else:
+                    self.lastAdjustment_y += 1
+
             if self.logShifts:
                 # this logs to the connected copy of PYMEAcquire via the RESTServer
                 if hasattr(self.remote_logger, 'LogShiftsCorrelAmp'):
@@ -416,7 +446,8 @@ class Correlator(object):
         #FIXME: logging shouldn't call piezo.GetOffset() etc ... for performance reasons
         #       (is this still true, we keep the values cached in memory??)
         # this is the local logging, not to the actual localisation data acquiring instance of PYMEAcquire
-        self.history.append((time.time(), dx_nm, dy_nm, dz_nm, cCoeff, self.corrRef, 1e3*zcorrection, pos_um))
+        self.history.append((time.time(), dx_nm, dy_nm, dz_nm, cCoeff, self.corrRef, 1e3*zcorrection, pos_um,
+                             1e3*xcorrection, 1e3*ycorrection))
         eventLog.logEvent('PYME2ShiftMeasure', '%3.1f, %3.1f, %3.1f' % (dx_nm, dy_nm, dz_nm))
 
     def tick(self, frameData = None, **kwargs):
@@ -466,7 +497,8 @@ class Correlator(object):
             
             #reset our history log
             self.history = []
-            self.historyColNames = ['time','dx_nm','dy_nm','dz_nm','corrAmplitude','corrAmpMax','zcorrection_nm','piezoPos_um']
+            self.historyColNames = ['time','dx_nm','dy_nm','dz_nm','corrAmplitude','corrAmpMax','zcorrection_nm','piezoPos_um',
+                                    'xcorrection_nm','ycorrection_nm']
             self.historyStartTime = time.time()
             
             self.state = State.CALIBRATED # now we are fully calibrated

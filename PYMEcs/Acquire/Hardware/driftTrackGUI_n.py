@@ -43,25 +43,29 @@ class TrackerPlotPanel(PlotPanel):
                     self.figure.set_tight_layout(True)
 
             try:
-                t, dx_nm, dy_nm, dz_nm, corr, corrmax, zcorrection_nm, pos_um  = np.array(self.dt.get_history(1000)).T
+                t, dx_nm, dy_nm, dz_nm, corr, corrmax, zcorrection_nm, pos_um, \
+                    xcorrection_nm, ycorrection_nm = np.array(self.dt.get_history(1000)).T
             except ValueError:
                 do_plot = False
             else:
                 do_plot = True
 
             if do_plot:
-                 # note: we now assume that all history values that are distances are provided in nm
-                # this SHOULD match the conventions in driftTracking.py
+                # note: we now assume that all history values that are distances are provided in nm
+                # this SHOULD match the conventions in driftTracking_n.py
                 
                 # a few reused variables
                 tolnm = 1e3*self.dt.get_focus_tolerance()
+                xytolnm = 1e3*self.dt.xyTolerance
                 tdelta = t - self.dt.historyStartTime
                 trange = [tdelta.min(), tdelta.max()]
                 
                 self.subplotxy.cla()
-                self.subplotxy.plot(tdelta, dx_nm, 'r')
-                self.subplotxy.plot(tdelta, dy_nm, 'g')
-                self.subplotxy.set_ylabel('dx/dy (r/g) [nm]')
+                self.subplotxy.plot(tdelta, dx_nm, 'c')
+                self.subplotxy.plot(tdelta, dy_nm, 'y')
+                self.subplotz.plot([tdelta[0],tdelta[-1]],[xytolnm,xytolnm], 'g--')
+                self.subplotz.plot([tdelta[0],tdelta[-1]],[-xytolnm,-xytolnm], 'g--')
+                self.subplotxy.set_ylabel('dx/dy (c/y) [nm]')
                 self.subplotxy.set_xlim(*trange)
                 
                 self.subplotz.cla()
@@ -73,7 +77,9 @@ class TrackerPlotPanel(PlotPanel):
                 
                 self.subploto.cla()
                 self.subploto.plot(tdelta, zcorrection_nm, 'm')
-                self.subploto.set_ylabel('zcorr [nm]')
+                self.subploto.plot(tdelta, xcorrection_nm, 'c')
+                self.subploto.plot(tdelta, ycorrection_nm, 'y')
+                self.subploto.set_ylabel('x/y/z corr c/y/m [nm]')
                 self.subploto.set_xlim(*trange)
                 
                 self.subplotc.cla()
@@ -223,9 +229,11 @@ class DriftROIOverlay(overlays.Overlay):
 
 from PYME.recipes.traits import HasTraits, Float, Enum, CStr, Bool, Int, List
 class DriftTrackConfig(HasTraits):
-    zfocusTolerance_nm = Float(50.0,label='ZFocus tolerance in nm',
-                               desc="when moving outside of the focus tolerance the z piezo will counteract")
-    deltaZ_nm = Float(200,desc='spacing between the planes during recording of the calibration stack in nm',
+    focusTolerance_nm = Float(50.0,label='Focus tolerance in nm',
+                               desc="when moving outside of the focus tolerance, so that the z correction piezo will compensate")
+    xyTolerance_nm = Float(15.0,label='X/Y tolerance in nm',
+                               desc="when moving outside of the x/y tolerance, so that the x/y correction piezos will compensate")
+    deltaZ_nm = Float(200,desc='spacing between the planes in nm during recording of the calibration stack',
                       label='Z plane spacing in nm')
     stackHalfSize = Int(35,label='Stack Half Size',
                         desc='number of planes either side of the focal plane that are recorded for calibration')
@@ -252,7 +260,8 @@ class DriftTrackingControl(wx.Panel):
         main_frame.AddMenuItem('DriftTracking', "Calculate z factor", self.OnBCalculateZfactor)
         
         self.dt = driftTracker
-        self.dtconfig = DriftTrackConfig(zfocusTolerance_nm=1e3*self.dt.focusTolerance,
+        self.dtconfig = DriftTrackConfig(focusTolerance_nm=1e3*self.dt.focusTolerance,
+                                         xyTolerance_nm=1e3*self.dt.xyTolerance,
                                          deltaZ_nm=1e3*self.dt.deltaZ,
                                          stackHalfSize=self.dt.stackHalfSize)
         self.plotInterval = 10
@@ -297,18 +306,27 @@ class DriftTrackingControl(wx.Panel):
         hsizer.Add(self.stCalibState, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 2) # second arg 0 or 1?
         sizer_1.Add(hsizer, 0, wx.EXPAND, 0)
         
-        hsizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.stConfig = wx.StaticText(self, -1,
-                                      'tol: %d nm, delZ: %.0f nm, stHsz: %d' %
-                                      (self.dtconfig.zfocusTolerance_nm,
+        hsizer1 = wx.BoxSizer(wx.HORIZONTAL)
+        self.stConfig1 = wx.StaticText(self, -1,
+                                      'ztol: %d nm, xytol: %d nm, zfac: %.1f' %
+                                      (self.dtconfig.focusTolerance_nm,
+                                       self.dtconfig.xyTolerance_nm,
+                                       self.dtconfig.zFactor), size=[400,-1])
+        hsizer2 = wx.BoxSizer(wx.HORIZONTAL)
+        self.stConfig2 = wx.StaticText(self, -1,
+                                       'minDel: %d, delZ: %.0f nm, stHsz: %d' %
+                                       (self.dtconfig.minDelay,
                                        self.dtconfig.deltaZ_nm,
-                                       self.dtconfig.stackHalfSize), size=[400,-1])
+                                        self.dtconfig.stackHalfSize), size=[400,-1])
         cfont = self.stConfig.GetFont()
         font = wx.Font(cfont.GetPointSize(), wx.TELETYPE, wx.NORMAL, wx.NORMAL)
-        self.stConfig.SetFont(font)
-        hsizer.Add(self.stConfig, 0, wx.ALL, 2)        
-        sizer_1.Add(hsizer,0, wx.EXPAND, 0)
-
+        self.stConfig1.SetFont(font)
+        self.stConfig2.SetFont(font)
+        hsizer1.Add(self.stConfig1, 0, wx.ALL, 2)
+        hsizer2.Add(self.stConfig2, 0, wx.ALL, 2)
+        sizer_1.Add(hsizer1,0, wx.EXPAND, 0)
+        sizer_1.Add(hsizer2,0, wx.EXPAND, 0)
+        
         hsizer = wx.BoxSizer(wx.HORIZONTAL)
         self.stError = wx.StaticText(self, -1, 'Error:\n\n', size=[200,-1])
         cfont = self.stError.GetFont()
@@ -405,17 +423,22 @@ class DriftTrackingControl(wx.Panel):
         if not self.dtconfig.configure_traits(kind='modal'):
             return
         dtc = self.dtconfig
-        self.dt.set_focus_tolerance(1e-3*dtc.zfocusTolerance_nm)
+        self.dt.set_focus_tolerance(1e-3*dtc.focusTolerance_nm)
+        self.dt.xyTolerance = 1e-3*dtc.xyTolerance_nm
         self.dt.set_delta_Z(1e-3*dtc.deltaZ_nm)
         self.dt.set_stack_halfsize(dtc.stackHalfSize)
         self.dt.minDelay = dtc.minDelay
         self.dt.Zfactor = dtc.zFactor
         self.plotInterval = dtc.plotInterval
 
-        self.stConfig.SetLabel('tol: %d nm, delZ: %.0f nm, stHsz: %d' %
-                                      (dtc.zfocusTolerance_nm,
-                                       dtc.deltaZ_nm,
-                                       dtc.stackHalfSize))
+        self.stConfig1.SetLabel('ztol: %d nm, xytol: %d nm, zfac: %.1f' %
+                                (dtc.focusTolerance_nm,
+                                 dtc.xyTolerance_nm,
+                                 dtc.zFactor))
+        self.stConfig2.SetLabel('minDel: %d, delZ: %.0f nm, stHsz: %d' %
+                               (dtc.minDelay,
+                                dtc.deltaZ_nm,
+                                dtc.stackHalfSize))
         
     def OnBSetTolerance(self, event):
         self.dt.set_focus_tolerance(float(self.tTolerance.GetValue())/1e3)
@@ -451,7 +474,8 @@ class DriftTrackingControl(wx.Panel):
             self.stCalibState.SetLabel(calibState.name)
 
             try:
-                t, dx_nm, dy_nm, dz_nm, corr, corrmax, zcorrection_nm, pos_um = self.dt.get_history(1)[-1]
+                t, dx_nm, dy_nm, dz_nm, corr, corrmax, zcorrection_nm, pos_um, \
+                    xcorrection_nm, ycorrection_nm = self.dt.get_history(1)[-1]
                 self.stError.SetLabel(("Error: x = %s nm y = %s nm z = %s nm\n" +
                                        "zcorr = %s nm c/cm = %4.2f") %
                                       ("{:>+3.2f}".format(dx_nm), "{:>+3.2f}".format(dy_nm),
