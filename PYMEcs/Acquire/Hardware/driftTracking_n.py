@@ -395,7 +395,8 @@ class Correlator(object):
         self.corrRef = max(self.corrRef, cCoeff) # keep track of historically maximal correlation amplitude
             
         dx_nm, dy_nm, dz_nm = (self.conversion['x']*dx, self.conversion['y']*dy, self.conversion['z']*dz)
-
+        dx_um, dy_um = (1e-3*dx_nm, 1e-3*dy_nm)
+        
         pos_um = self.main_zpiezo.GetPos(0) # main piezo z
         zcorrection = self.corr_zpiezo.correction() if self.correcting_z else 0
         xcorrection = self.corr_xpiezo.correction() if self.correcting_x else 0
@@ -420,8 +421,8 @@ class Correlator(object):
                 if abs(xcorrection) > self._maxTotalCorrection:
                     self.lockFocus = False
                     logger.info("focus lock released, maximal x correction value exceeded (%.1f um)" % self._maxTotalCorrection)
-                if abs(1e-3*dx_nm) > self.xyTolerance and self.lastAdjustment_x >= self.minDelay:
-                    self.corr_xpiezo.correctRel(-1e-3*dx_nm)
+                if abs(dx_um) > self.xyTolerance and self.lastAdjustment_x >= self.minDelay:
+                    self.corr_xpiezo.correctRel(dx_um)
                     self.lastAdjustment_x = 0
                 else:
                     self.lastAdjustment_x += 1
@@ -430,8 +431,8 @@ class Correlator(object):
                 if abs(ycorrection) > self._maxTotalCorrection:
                     self.lockFocus = False
                     logger.info("focus lock released, maximal y correction value exceeded (%.1f um)" % self._maxTotalCorrection)
-                if abs(1e-3*dy_nm) > self.xyTolerance and self.lastAdjustment_y >= self.minDelay:
-                    self.corr_ypiezo.correctRel(-1e-3*dy_nm)
+                if abs(dy_um) > self.xyTolerance and self.lastAdjustment_y >= self.minDelay:
+                    self.corr_ypiezo.correctRel(dy_um)
                     self.lastAdjustment_y = 0
                 else:
                     self.lastAdjustment_y += 1
