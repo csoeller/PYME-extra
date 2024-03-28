@@ -461,7 +461,7 @@ class Correlator(object):
         
         targetZ = self.main_zpiezo.GetTargetPos(0) # main piezo z
         
-        if not 'mask' in dir(self) or not self.frame_source.shape[:2] == self.mask.shape[:2]:
+        if not 'mask' in dir(self) or not frameData.shape[:2] == self.mask.shape[:2]:
             # this just sets the UNCALIBRATED state and leaves the rest to the _prepare_calibration call
             self.state = State.UNCALIBRATED
             
