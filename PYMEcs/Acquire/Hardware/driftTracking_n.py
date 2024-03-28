@@ -142,7 +142,7 @@ class Correlator(object):
 
         if frame_source is None:
             self.frame_source = StandardFrameSource(scope.frameWrangler)
-        self.sub_roi = None
+        self.sub_roi = sub_roi
         
         # configuration parameters, accessible via keyword args
         self.focusTolerance = focusTolerance # (in um) how far focus can drift before we correct
@@ -422,7 +422,7 @@ class Correlator(object):
                     self.lockFocus = False
                     logger.info("focus lock released, maximal x correction value exceeded (%.1f um)" % self._maxTotalCorrection)
                 if abs(dx_um) > self.xyTolerance and self.lastAdjustment_x >= self.minDelay:
-                    self.corr_xpiezo.correctRel(dx_um)
+                    self.corr_xpiezo.correctRel(-dx_um)
                     self.lastAdjustment_x = 0
                 else:
                     self.lastAdjustment_x += 1
@@ -432,7 +432,7 @@ class Correlator(object):
                     self.lockFocus = False
                     logger.info("focus lock released, maximal y correction value exceeded (%.1f um)" % self._maxTotalCorrection)
                 if abs(dy_um) > self.xyTolerance and self.lastAdjustment_y >= self.minDelay:
-                    self.corr_ypiezo.correctRel(dy_um)
+                    self.corr_ypiezo.correctRel(-dy_um)
                     self.lastAdjustment_y = 0
                 else:
                     self.lastAdjustment_y += 1

@@ -414,9 +414,9 @@ class DriftTrackingControl(wx.Panel):
             if dlg.ShowModal() == wx.ID_OK:
                 historyfn = dlg.GetPath()
                 np.savetxt(historyfn, self.dt.history, header=' '.join(self.dt.historyColNames))
-                dlg = wx.MessageDialog(self._main_frame, "history saved", "Info", wx.OK | wx.ICON_INFORMATION)
-                dlg.ShowModal()
-                dlg.Destroy()
+                #dlg = wx.MessageDialog(self, "history saved", "Info", wx.OK | wx.ICON_INFORMATION)
+                #dlg.ShowModal()
+                #dlg.Destroy()
 
 
     def OnDriftTrackConfig(self, event):
