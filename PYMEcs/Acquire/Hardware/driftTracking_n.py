@@ -440,7 +440,9 @@ class Correlator(object):
             if self.logShifts:
                 # this logs to the connected copy of PYMEAcquire via the RESTServer
                 if hasattr(self.remote_logger, 'LogShiftsCorrelAmp'):
-                    self.remote_logger.LogShiftsCorrelAmp(dx_nm, dy_nm, dz_nm, self.lockActive, coramp=cCoeff/self.corrRef)
+                    self.remote_logger.LogShiftsCorrelAmp(dx_nm, dy_nm, dz_nm,
+                                                          xcorrection, ycorrection, zcorrection,
+                                                          self.lockActive, coramp=cCoeff/self.corrRef)
                 else:
                     self.remote_logger.LogShifts(dx_nm, dy_nm, dz_nm, self.lockActive)
 

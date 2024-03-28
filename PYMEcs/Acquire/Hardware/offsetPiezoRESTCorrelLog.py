@@ -16,22 +16,23 @@ logger = logging.getLogger(__name__)
 class OffsetPiezoCorrelLog(offsetPiezoREST.OffsetPiezo):
 
     # also have the method in the server
-    def LogShiftsCorrelAmp(self, dx, dy, dz, active=True, coramp=-1.0):
-        self.LogShiftsCA(dx, dy, dz, active, coramp)
+    def LogShiftsCorrelAmp(self, dx, dy, dz, cx, cy, cz, active=True, coramp=-1.0):
+        self.LogShiftsCA(dx, dy, dz, cx, cy, cz, active, coramp)
 
     @webframework.register_endpoint('/LogShiftsCA', output_is_json=False)
-    def LogShiftsCA(self, dx, dy, dz, active=True, coramp=-1.0):
+    def LogShiftsCA(self, dx, dy, dz, cx, cy, cz, active=True, coramp=-1.0):
         import wx
         #eventLog.logEvent('ShiftMeasure', '%3.4f, %3.4f, %3.4f' % (dx, dy, dz))
         wx.CallAfter(eventLog.logEvent, 'ShiftMeasure', '%3.4f, %3.4f, %3.4f' % (float(dx), float(dy), float(dz)), time.time())
-        wx.CallAfter(eventLog.logEvent, 'PiezoOffset', '%3.4f, %d' % (self.GetOffset(), int(active)), time.time())
+        wx.CallAfter(eventLog.logEvent, 'PiezoCorrection', '%3.4f, %3.4f, %3.4f, %d' % (float(cx), float(cy), float(cz), int(active)), time.time())
         wx.CallAfter(eventLog.logEvent, 'CorrelationAmplitude', '%3.4f' % (float(coramp)), time.time())
 
 class OffsetPiezoCorrelLogClient(offsetPiezoREST.OffsetPiezoClient):
 
-    def LogShiftsCorrelAmp(self, dx, dy, dz, active=True, coramp=-1.0):
+    def LogShiftsCorrelAmp(self, dx, dy, dz, cx, cy, cz, active=True, coramp=-1.0):
         res = self._session.get(self.urlbase +
-                                '/LogShiftsCA?dx=%3.3f&dy=%3.3f&dz=%3.3f&active=%d&coramp=%3.3f' % (dx, dy, dz, active,coramp))
+                                '/LogShiftsCA?dx=%3.3f&dy=%3.3f&dz=%3.3f&cx=%3.3f&cy=%3.3f&cz=%3.3f&active=%d&coramp=%3.3f' %
+                                (dx, dy, dz, cx, cy, cz, active,coramp))
 
 
 def getClient():
