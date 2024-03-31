@@ -291,19 +291,21 @@ try:
     from plotly.subplots import make_subplots
 except ImportError:
     warn("can't import plotly modules, new style bead plotting using MBMCollectionDF will not work")
-    
+
+# we use this function to generate a unique hash from a dataframe
+# need to check if this is necessary or if it is ok to make the the filter settimngs into a unique hash for caching
+def hashdf(df):
+    return hashlib.sha1(pd.util.hash_pandas_object(df).values).hexdigest()
+
 class MBMCollectionDF(object): # collection based on dataframe objects
     def __init__(self,name=None,filename=None,variance_window = 9):
         self.mbms = {}
         self.beadisgood = {}
-        self.offsets = {}
-        self._mean = None
-        self._hashkey = ''
-        self._offsets_valid = False
         self.t = None
         self.tperiod = None
         self._trange= (None,None)
         self.variance_window = variance_window # by default use last 9 localisations for variance/std calculation
+        self.median_window = 0 # 0 means not active
         
         if filename is not None:
             self.populate_df_from_npz(filename)
@@ -344,8 +346,12 @@ class MBMCollectionDF(object): # collection based on dataframe objects
         if axis.startswith('std'):
             unaligned = True # not sensible to align the std devs
 
+        if self.median_window > 0:
+            startdf = self.beads[axis].rolling(self.median_window).median()
+        else:
+            startdf = self.beads[axis]
         if not unaligned:
-            dfplot = self.beads[axis]-self.beads[axis].loc[tmin:tmax].mean(axis=0)
+            dfplot = startdf-startdf.loc[tmin:tmax].mean(axis=0)
             dfplotg = dfplot[[bead for bead in self.beadisgood if self.beadisgood[bead]]]
             emptybeads = dfplotg.columns[dfplotg.isnull().all(axis=0)]
             if len(emptybeads)>0:
@@ -368,8 +374,8 @@ class MBMCollectionDF(object): # collection based on dataframe objects
             # Update axes properties
             fig.update_xaxes(title_text="time (s)", row=1, col=1)
             fig.update_xaxes(title_text="time (s)", row=2, col=1)
-            fig.update_yaxes(title_text="drift (nm)", row=1, col=1)
-            fig.update_yaxes(title_text="deviation (nm)", row=2, col=1)
+            fig.update_yaxes(title_text="drift (nm)", range=[np.min([-15.0,dfplotg.min().min()]),np.max([15.0,dfplotg.max().max()])], row=1, col=1)
+            fig.update_yaxes(title_text="deviation (nm)", range=[-10,10], row=2, col=1)
             
             fig.show()
 
@@ -380,8 +386,11 @@ class MBMCollectionDF(object): # collection based on dataframe objects
             else:
                 title = 'tracks along %s, not aligned' % axis
                 yaxis_title = "distance (nm)"
-            dfplot = self.beads[axis]
-            fig = px.line(dfplot[[bead for bead in self.beadisgood if self.beadisgood[bead]]])
+            dfplot = startdf
+            dfplotg = dfplot[[bead for bead in self.beadisgood if self.beadisgood[bead]]]
+            fig = px.line(dfplotg)
             fig.update_layout(xaxis_title="time (s)", yaxis_title=yaxis_title, title_text=title)
+            if axis.startswith('std'):
+                fig.update_yaxes(range = (0,np.max([10.0,dfplotg.max().max()])))
             fig.show()
         
