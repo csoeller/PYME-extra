@@ -244,7 +244,8 @@ class DriftTrackConfig(HasTraits):
     plotInterval = Int(10,label='plot interval in frames',
                        desc='interval at which the plots are updated, in units of frames')
 
-from PYMEcs.Acquire.Hardware.driftTracking_n import State
+ 
+from PYMEcs.Acquire.Hardware.driftTracking_n import State, CorrectionPiezoTest
 class DriftTrackingControl(wx.Panel):
     def __init__(self, main_frame, driftTracker, winid=-1, showPlots=True):
         ''' This class provides a GUI for controlling the drift tracking system. 
@@ -258,6 +259,7 @@ class DriftTrackingControl(wx.Panel):
         main_frame.AddMenuItem('DriftTracking', "Save history", self.OnBSaveHist)
         main_frame.AddMenuItem('DriftTracking', "Save calibration stack", self.OnBSaveCalib)
         main_frame.AddMenuItem('DriftTracking', "Calculate z factor", self.OnBCalculateZfactor)
+        main_frame.AddMenuItem('DriftTracking', "Reset Correction Piezos", self.OnResetCorrPiezos)
         
         self.dt = driftTracker
         self.dtconfig = DriftTrackConfig(focusTolerance_nm=1e3*self.dt.focusTolerance,
@@ -466,6 +468,18 @@ class DriftTrackingControl(wx.Panel):
     def OnCBLock(self, event):
         self.dt.set_focus_lock(self.cbLock.GetValue())
 
+    def OnResetCorrPiezos(self, event):
+        if self.cbTrack.GetValue():
+            warn("correction piezos should not be reset during tracking, stop tracking first")
+            return
+        warn("Resetting correction piezos, you made need to refocus/reposition")
+        if self.dt.corr_zpiezo is not None:
+            self.dt.corr_zpiezo.reset()
+        if self.dt.corr_xpiezo is not None:
+            self.dt.corr_xpiezo.reset()
+        if self.dt.corr_ypiezo is not None:
+            self.dt.corr_ypiezo.reset()
+        
     def refresh(self):
         try:
             calibState, NCalibFrames, calibCurFrame = self.dt.get_calibration_progress()

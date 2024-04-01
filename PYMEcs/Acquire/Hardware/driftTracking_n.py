@@ -74,6 +74,8 @@ class OIDICFrameSource(StandardFrameSource):
 from enum import Enum
 State = Enum('State', ['UNCALIBRATED', 'CALIBRATING', 'FINISHING_CALIBRATION', 'CALIBRATED'])
 
+
+
 class CorrectionPiezo(object):
     def __init__(self, inputPiezo, multiplier=1.0, axis=0, resetPosition_um = 30):
         self._resetPosition_um = resetPosition_um
@@ -117,11 +119,13 @@ class CorrectionPiezoOP(object): # CorrectionPiezo from OffsetPiezo
     def correction(self):
         return self.offsetPiezo.GetOffset()
 
-    
+
+MAX_TESTSTEPS = 50 # no tests longer than 50 tick steps (i.e. 50 frames)    
 class Correlator(object):
     def __init__(self, scope, main_zpiezo=None, remote_logger=None, frame_source=None, sub_roi=None,
                  corr_zpiezo=None, corr_xpiezo=None, corr_ypiezo=None,
-                 focusTolerance=.05, xyTolerance=0.02, deltaZ=0.2, stackHalfSize=35):
+                 focusTolerance=.05, xyTolerance=0.02, deltaZ=0.2, stackHalfSize=35,
+                 logLocal=True):
         self.main_zpiezo = main_zpiezo
         
         self.correcting_z = corr_zpiezo != None
@@ -159,6 +163,7 @@ class Correlator(object):
         self._maxTotalCorrection = 20.0 # maximum total correction in um
         self.Zfactor = 1.0
         self.logShifts = True
+        self.logLocal = logLocal
 
         # we report our tracking info in nm by default
         pixelsize_um = scope.GetPixelSize()
@@ -174,7 +179,9 @@ class Correlator(object):
         self.lockActive = False
         self.lockFocus = False
         self._last_target_z = -1
-  
+        self.calibration_testing = False
+        self.calibrationTest = None
+        
     def set_subroi(self, bounds):
         """ Set the position of the roi to crop
 
@@ -451,7 +458,8 @@ class Correlator(object):
         # this is the local logging, not to the actual localisation data acquiring instance of PYMEAcquire
         self.history.append((time.time(), dx_nm, dy_nm, dz_nm, cCoeff, self.corrRef, 1e3*zcorrection, pos_um,
                              1e3*xcorrection, 1e3*ycorrection))
-        eventLog.logEvent('PYME2ShiftMeasure', '%3.1f, %3.1f, %3.1f' % (dx_nm, dy_nm, dz_nm))
+        if self.logLocal:
+            eventLog.logEvent('PYME2ShiftMeasure', '%3.1f, %3.1f, %3.1f' % (dx_nm, dy_nm, dz_nm))
 
     def tick(self, frameData = None, **kwargs):
         if frameData is None:
@@ -510,7 +518,8 @@ class Correlator(object):
             # print "fully calibrated"
             if np.allclose(self._last_target_z, targetZ): # check we are on target in z
                 self.compare_log_and_correct(frameData)
-
+                if self.calibration_testing: # should also check that we are not locked at any time during testing
+                    self.tickCalibrationTest() # advance calibration test by one tick
         else:
             raise RuntimeError("unknown calibration state %s, giving up" % self.state)
         
@@ -528,3 +537,85 @@ class Correlator(object):
     def deregister(self):
         self.frame_source.disconnect(self.tick)
         self.tracking = False
+
+    def advanceCalibrationTest(self):
+        return self.calibrationTest.advanceCPTest()
+
+    def calibrationTestCompleted(self):
+        return self.calibrationTest.completed() 
+
+    def setupCalibrationTest(self,cptest): # again needs to check we are not locked but tracking
+        self.calibrationTest = cptest
+        self.calibrationTest.initialize()
+
+    def startCalibrationTest(self): # again needs to check we are not locked but tracking
+        pass
+    
+    def removeCalibrationTest(self):
+        self.calibrationTest = None
+        self.calibration_testing = False
+
+    def tickCalibrationTest(self): 
+        if self.lockFocus:
+            logger.error("calibration testing attempted while locked - stopping test")
+            self.calibration_testing = False
+            self.removeCalibrationTest()
+        else:
+            steps_completed = self.advanceCalibrationTest()
+            if self.calibrationTestCompleted() or steps_completed >= MAX_TESTSTEPS:
+                logger.info("terminating calibration test")
+                self.calibration_testing = False
+                self.removeCalibrationTest()
+
+from PYME.warnings import warn
+from PYME.recipes.traits import HasTraits, Float, Enum, CStr, Bool, Int, List
+class CorrectionPiezoTest(HasTraits):
+    Axis = Enum('x','y','z')
+    NSteps = Int(2)
+    NWaitSteps = Int(5)
+    Movement_nm = Float(20)
+
+    current_step = 0
+    total_steps = MAX_TESTSTEPS
+    initialized = False
+    movements = None
+    corr_piezo = None
+    
+    def initialize(self,corr_piezo): # need to think about how to consider axis selection
+        total_moves = 2*self.NSteps
+        total_steps = total_moves + (total_moves -1)*self.NWaitSteps
+        movements = np.zeros((total_steps))
+        cpmoves = 1e-3*self.Movement_nm*np.ones((total_moves))
+        cpmoves[self.NSteps:total_moves] *= -1
+        movements[::self.NWaitSteps + 1] = cpmoves
+
+        self.total_steps = total_steps
+        self.movements = movements
+        self.current_step = 0
+        self.test_completed = False
+        if corr_piezo is None:
+            warn("corr piezo is None, cannot conduct corr piezo test")
+            return
+        else:
+            self.corr_piezo = corr_piezo
+
+        self.initialized = True
+
+    def advanceCPTest(self):
+        if not self.initialized:
+            raise RuntimeError("trying to advance Correction Piezo Test that has not yet been initialized; initialize first!")
+        cstep = self.current_step
+        if cstep >= self.total_steps:
+            raise RuntimeError("trying to advance already completed test")
+        cmove = self.movements[cstep]
+        if np.abs(cmove) > 0:
+            self.corr_piezo.correctRel(cmove)
+        self.current_step += 1
+        if self.current_step >= self.total_steps:
+            self.test_completed = True
+
+        return self.current_step
+
+    def completed(self):
+        return self.test_completed
+        
