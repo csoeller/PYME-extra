@@ -306,6 +306,7 @@ class MBMCollectionDF(object): # collection based on dataframe objects
         self._trange= (None,None)
         self.variance_window = variance_window # by default use last 9 localisations for variance/std calculation
         self.median_window = 0 # 0 means not active
+        self.plotbad = False
         
         if filename is not None:
             self.populate_df_from_npz(filename)
@@ -351,8 +352,12 @@ class MBMCollectionDF(object): # collection based on dataframe objects
         else:
             startdf = self.beads[axis]
         if not unaligned:
-            dfplot = startdf-startdf.loc[tmin:tmax].mean(axis=0)
-            dfplotg = dfplot[[bead for bead in self.beadisgood if self.beadisgood[bead]]]
+            startdfg = startdf[[bead for bead in self.beadisgood if self.beadisgood[bead]]]
+            dfplotg = startdfg-startdfg.loc[tmin:tmax].mean(axis=0)
+            has_bads = not np.all(list(self.beadisgood.values())) # we have at least a single bad bead
+            if has_bads:
+                dfplotb = startdf[[bead for bead in self.beadisgood if not self.beadisgood[bead]]]
+                dfplotb = dfplotb - dfplotb.loc[tmin:tmax].mean(axis=0)
             emptybeads = dfplotg.columns[dfplotg.isnull().all(axis=0)]
             if len(emptybeads)>0:
                 warn('removing beads with no valid info after alignment %s...' % emptybeads)
@@ -365,10 +370,33 @@ class MBMCollectionDF(object): # collection based on dataframe objects
 
             fig = make_subplots(rows=2, cols=1)
 
+            # we use explicit trace coloring and legend ranking to "survive" the trace reordering below when 'bad' beads are plotted as well
+            col_dict = px.colors.qualitative.Plotly
+            dict_len = len(col_dict)
+            tracenum = 0
+            
             for d in fig1.data:
-                fig.add_trace((go.Scatter(x=d['x'], y=d['y'], name = d['name'])), row=1, col=1)
+                fig.add_trace((go.Scatter(x=d['x'], y=d['y'], name = d['name'], line=dict(color=col_dict[tracenum % dict_len]),
+                                          legendrank=tracenum+1)), row=1, col=1)
+                tracenum += 1               
+            
+            if self.plotbad and has_bads:
+                fig.data = fig.data[::-1] # here we initially reverse the plotting sequence of the fig1 traces, but see below
+                for column in dfplotb:
+                    # print("adding bad trace %s" % column)
+                    fig.add_trace((go.Scatter(x=self.t, y=dfplotb[column], name="%s - bad" % column, opacity=0.2,
+                                              line=dict(color=col_dict[tracenum % dict_len]),
+                                              legendrank=tracenum+1)), row=1, col=1)
+                    tracenum += 1
+                fig.data = fig.data[::-1] # now we reverse again so that the 'bad traces' are plotted first (and thus at bottom)
+                # the original reversal at the top of this block (fig 1 traces) is now reversed so that the mean is plotted last
+
+            colnum = 0 # we start colors again at position 0 for the second subplot                    
             for d in fig2.data:
-                fig.add_trace((go.Scatter(x=d['x'], y=d['y'],  name = d['name'])), row=2, col=1)
+                fig.add_trace((go.Scatter(x=d['x'], y=d['y'],  name = d['name'], line=dict(color=col_dict[colnum % dict_len]),
+                                          legendrank=tracenum+1)), row=2, col=1)
+                tracenum += 1
+                colnum += 1
 
             fig.update_layout(autosize=False, width=1000, height=700,title_text="aligned MBM tracks along %s" % axis)
             # Update axes properties
