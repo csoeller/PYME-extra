@@ -260,6 +260,7 @@ class DriftTrackingControl(wx.Panel):
         main_frame.AddMenuItem('DriftTracking', "Save calibration stack", self.OnBSaveCalib)
         main_frame.AddMenuItem('DriftTracking', "Calculate z factor", self.OnBCalculateZfactor)
         main_frame.AddMenuItem('DriftTracking', "Reset Correction Piezos", self.OnResetCorrPiezos)
+        main_frame.AddMenuItem('DriftTracking', "Run Calibration test", self.OnCalibrationTest)
         
         self.dt = driftTracker
         self.dtconfig = DriftTrackConfig(focusTolerance_nm=1e3*self.dt.focusTolerance,
@@ -466,6 +467,9 @@ class DriftTrackingControl(wx.Panel):
         self.plotInterval = int(self.tPlotInterval.GetValue())
     
     def OnCBLock(self, event):
+        if self.dt.calibration_testing and self.cbLock.GetValue():
+            warn("calibration testing active; cannot enable lock during calibration testing, wait for completion")
+            return # we may need a way to disable the lock button during calibration testing
         self.dt.set_focus_lock(self.cbLock.GetValue())
 
     def OnResetCorrPiezos(self, event):
@@ -479,13 +483,31 @@ class DriftTrackingControl(wx.Panel):
             self.dt.corr_xpiezo.reset()
         if self.dt.corr_ypiezo is not None:
             self.dt.corr_ypiezo.reset()
-        
+
+    def OnCalibrationTest(self, event):
+        # needs to check we are in proper state first
+        # needs to be: self.tracking, not locked, calibrated
+        if not self.dt.tracking:
+            warn("not tracking - to start calibration test must be in tracking mode. Aborting.")
+            return
+        if self.dt.lockFocus:
+            warn("tracking locked - to start calibration test must not be locked. Aborting.")
+            return
+        cTest = CorrectionPiezoTest()
+        if not cTest.configure_traits(kind='modal'):
+            return
+        self.dt.setupCalibrationTest(cTest)
+        self.dt.startCalibrationTest()
+
     def refresh(self):
         try:
             calibState, NCalibFrames, calibCurFrame = self.dt.get_calibration_progress()
             self.gCalib.SetRange(int(NCalibFrames)) # needs to be int?
             self.gCalib.SetValue(int(calibCurFrame)) # needs to be int?
-            self.stCalibState.SetLabel(calibState.name)
+            cState = calibState.name
+            if self.dt.calibration_testing:
+                cState += " - testing" # also reflect calibration testing
+            self.stCalibState.SetLabel(cState)
 
             try:
                 t, dx_nm, dy_nm, dz_nm, corr, corrmax, zcorrection_nm, pos_um, \

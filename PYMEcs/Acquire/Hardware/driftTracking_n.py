@@ -546,10 +546,25 @@ class Correlator(object):
 
     def setupCalibrationTest(self,cptest): # again needs to check we are not locked but tracking
         self.calibrationTest = cptest
-        self.calibrationTest.initialize()
+        self.calibrationTest.initialize(self)
 
     def startCalibrationTest(self): # again needs to check we are not locked but tracking
-        pass
+        if not self.tracking:
+            warn("not tracking - to start calibration test must be already tracking - aborting")
+            return
+        if self.lockFocus:
+            warn("tracking locked - to start calibration test must not be locked - aborting")
+            return
+        # possible check for calibration test set and initialized to add
+        if self.calibrationTest is None:
+            warn("no calibration test is set up - aborting")
+            return
+        if self.calibration_testing:
+            warn("already in testing mode, check if another test is already running - aborting")
+            return
+        if not self.calibrationTest.initialized:
+            warn("calibration test is not yet initialised - aborting")
+        self.calibration_testing = True
     
     def removeCalibrationTest(self):
         self.calibrationTest = None
@@ -564,11 +579,11 @@ class Correlator(object):
             steps_completed = self.advanceCalibrationTest()
             if self.calibrationTestCompleted() or steps_completed >= MAX_TESTSTEPS:
                 logger.info("terminating calibration test")
-                self.calibration_testing = False
-                self.removeCalibrationTest()
+                self.removeCalibrationTest() # this also unsets the calibration_testing flag
 
 from PYME.warnings import warn
 from PYME.recipes.traits import HasTraits, Float, Enum, CStr, Bool, Int, List
+# very simple test that just ratches the chosen correction piezo up and down again
 class CorrectionPiezoTest(HasTraits):
     Axis = Enum('x','y','z')
     NSteps = Int(2)
@@ -580,8 +595,10 @@ class CorrectionPiezoTest(HasTraits):
     initialized = False
     movements = None
     corr_piezo = None
-    
-    def initialize(self,corr_piezo): # need to think about how to consider axis selection
+
+    # need to think about how to consider axis selection
+    # possibly pass in driftTracker and select piezo based on axis
+    def initialize(self,dtrack):
         total_moves = 2*self.NSteps
         total_steps = total_moves + (total_moves -1)*self.NWaitSteps
         movements = np.zeros((total_steps))
@@ -593,6 +610,14 @@ class CorrectionPiezoTest(HasTraits):
         self.movements = movements
         self.current_step = 0
         self.test_completed = False
+
+        if self.Axis == 'x':
+            corr_piezo = dtrack.corr_xpiezo
+        elif self.Axis == 'y':
+            corr_piezo = dtrack.corr_ypiezo
+        elif self.Axis == 'z':
+            corr_piezo = dtrack.corr_zpiezo
+            
         if corr_piezo is None:
             warn("corr piezo is None, cannot conduct corr piezo test")
             return
