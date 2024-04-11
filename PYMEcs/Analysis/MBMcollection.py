@@ -309,8 +309,12 @@ class MBMCollectionDF(object): # collection based on dataframe objects
         self.plotbad = False
         
         if filename is not None:
+            self.filename = filename
             self.populate_df_from_npz(filename)
-        else:
+            if name is None:
+                from pathlib import Path
+                name = Path(filename).stem # should really be just the basename; also may want to protect against filename being a file IO object
+
             self.name = name
 
     def populate_df_from_npz(self,filename):
@@ -332,6 +336,37 @@ class MBMCollectionDF(object): # collection based on dataframe objects
         for bead in beads:
             if bead in self.beads['x']:
                 self.beadisgood[bead] = True
+
+    def mean(self,axis,tmin=None,tmax=None):
+        if tmin is None:
+            tmin=self._trange[0]
+        if tmax is None:
+            tmax=self._trange[1]
+
+        if tmin is None:
+            tmin = self.t.min()
+        if tmax is None:
+            tmax = self.t.max()
+
+        if axis.startswith('std'):
+            raise RuntimeError("mean not defined for axis %s" % axis) # not sensible to align the std devs
+
+        if self.median_window > 0:
+            startdf = self.beads[axis].rolling(self.median_window).median()
+        else:
+            startdf = self.beads[axis]
+        startdfg = startdf[[bead for bead in self.beadisgood if self.beadisgood[bead]]]
+        dfplotg = startdfg-startdfg.loc[tmin:tmax].mean(axis=0)
+        has_bads = not np.all(list(self.beadisgood.values())) # we have at least a single bad bead
+        if has_bads:
+            dfplotb = startdf[[bead for bead in self.beadisgood if not self.beadisgood[bead]]]
+            dfplotb = dfplotb - dfplotb.loc[tmin:tmax].mean(axis=0)
+        emptybeads = dfplotg.columns[dfplotg.isnull().all(axis=0)]
+        if len(emptybeads)>0:
+            warn('removing beads with no valid info after alignment %s...' % emptybeads)
+            dfplotg = dfplotg[dfplotg.columns[~dfplotg.isnull().all(axis=0)]]
+                
+        return dfplotg.mean(axis=1)
 
     def plot_tracks(self,axis,unaligned=False,tmin=None,tmax=None):
         if tmin is None:

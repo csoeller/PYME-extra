@@ -361,6 +361,8 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX', "Manually create Colour panel", self.OnMINFLUXColour)
         visFr.AddMenuItem('MINFLUX>Util', "Plot temperature record matching current data series",self.OnMINFLUXplotTempData)
         visFr.AddMenuItem('MINFLUX>Util', "Set MINFLUX temperature file location", self.OnMINFLUXsetTempDataFile)
+        visFr.AddMenuItem('MINFLUX>MBM', "Load MBM data in npz format", self.OnMBMLoadnpz)
+        visFr.AddMenuItem('MINFLUX>MBM', "Load JSON MBM bead data config", self.OnMBMLoadJSONbeads)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -377,6 +379,49 @@ class MINFLUXanalyser():
     def OnLoadCustom(self, event):
         self.visFr._recipe_manager.LoadRecipe(self.minfluxRIDs[event.GetId()])
         
+    def OnMBMLoadnpz(self,event):
+        with wx.FileDialog(self.visFr, "Select MBM data npz file", wildcard='NPZ (*.npz)|*.npz',
+                           style=wx.FD_OPEN) as dialog:
+            if dialog.ShowModal() == wx.ID_CANCEL:
+                return
+        fname = dialog.GetPath()
+        from pathlib import Path
+        fp = Path(fname)
+        from PYMEcs.Analysis.MBMcollection import MBMCollectionDF
+        mbm = MBMCollectionDF(name=fp.stem,filename=fp)
+
+        pfp = Path(self.visFr.pipeline.filename)
+        if pfp.suffix != '.npy':
+            warn("likely not a MINFLUX npy dataset, extension is %s; aborting..." % pfp.suffix)
+            return
+        MINFLUXstem = pfp.stem
+        if MINFLUXstem not in fp.stem:
+            warn("different name stems in MINFLUX and MBM dataset; do they match? %s vs %s" %
+                 (MINFLUXstem,fp.stem))
+        self.visFr.pipeline.mbm = mbm
+
+    def OnMBMLoadJSONbeads(self,event):
+        if not 'mbm' in dir(self.visFr.pipeline):
+            warn("no MBM data attached to pipeline, aborting...")
+            return
+        
+        with wx.FileDialog(self.visFr, "Select MBM bead selection JSON file", wildcard='JSON (*.json)|*.json',
+                           style=wx.FD_OPEN) as dialog:
+            if dialog.ShowModal() == wx.ID_CANCEL:
+                return
+        fname = dialog.GetPath()
+        from pathlib import Path
+        fp = Path(fname)
+        if not self.visFr.pipeline.mbm.name in fp.stem:
+            warn("JSON file name and mbm names do not match; are you sure? Will try to load anyway but results may vary...")
+        import json
+        with open(fname) as f:
+            mbmsettings = json.load(f)
+
+        for bead in mbmsettings['beads']:
+            self.visFr.pipeline.mbm.beadisgood[bead] =  mbmsettings['beads'][bead]
+        self.visFr.pipeline.mbm.median_window = mbmsettings['Median_window']
+
     def OnMINFLUXsetTempDataFile(self, event):
         import PYME.config as config
         with wx.FileDialog(self.visFr, "Choose Temperature data file", wildcard='CSV (*.csv)|*.csv',

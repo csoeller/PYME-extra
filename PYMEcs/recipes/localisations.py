@@ -1187,6 +1187,15 @@ class OrigamiSiteTrack(ModuleBase):
         mapped_ds.addColumn('y', y-c_ysite(t))
         mapped_ds.addColumn('z', z-c_zsite(t))
 
+        if 'driftx' in inputClusters.keys():
+            mapped_ds.setMapping('driftx_ori', 'driftx')
+            mapped_ds.setMapping('drifty_ori', 'drifty')
+            mapped_ds.setMapping('driftz_ori', 'driftz')
+
+        mapped_ds.addColumn('driftx', c_xsite(t))
+        mapped_ds.addColumn('drifty', c_ysite(t))
+        mapped_ds.addColumn('driftz', c_zsite(t))
+
         if inputAllPoints is not None:
             mapped_ap = tabular.MappingFilter(inputAllPoints)
             # actual localisation coordinates
@@ -1197,15 +1206,80 @@ class OrigamiSiteTrack(ModuleBase):
 
             mapped_ap.addColumn('x', x-c_xsite(t))
             mapped_ap.addColumn('y', y-c_ysite(t))
-            mapped_ap.addColumn('z', z-c_zsite(t))            
+            mapped_ap.addColumn('z', z-c_zsite(t))
+
+            mapped_ap.addColumn('driftx', c_xsite(t))
+            mapped_ap.addColumn('drifty', c_ysite(t))
+            mapped_ap.addColumn('driftz', c_zsite(t))
         else:
             # how to deal with an "optional" output
             # this would be a dummy assignment in the absence of inputAllPoints
             # mapped_ap = tabular.MappingFilter(inputClusters)
             mapped_ap = None # returning none in this case seems better and appears to work
-        
-        return {'outputName': mapped_ds, 'outputAllPoints' : mapped_ap} 
 
+        if False:
+            from PYME.IO import MetaDataHandler
+
+            mdh = MetaDataHandler.DictMDHandler()
+            mdhin = inputClusters.mdh
+        
+            def checkmdh(item,mdh):
+                if item in mdh:
+                    return "%s_1" % item
+                else:
+                    return item
+            
+            mdh[checkmdh('Processing.DriftFuncs.X',mdhin)] = c_xsite
+            mdh[checkmdh('Processing.DriftFuncs.Y',mdhin)] = c_ysite
+            mdh[checkmdh('Processing.DriftFuncs.Z',mdhin)] = c_zsite
+            mdh[checkmdh('Processing.DriftFuncs.TRange',mdhin)] = [t.min(),t.max()]
+        
+        return ({'outputName': mapped_ds, 'outputAllPoints' : mapped_ap}, None) # pass mdh instead of None if metadata editing needed
+
+    # NOTE: we override 'run' AND 'execute' methods here because we want to meddle with the metadata; a bit of a hack but mainly used
+    #       for experimentation in this case; we may solve this differently in future if really needed
+    def execute(self, namespace):
+        """
+        takes a namespace (a dictionary like object) from which it reads its inputs and
+        into which it writes outputs
+
+        NOTE: This was previously the function to define / override to make a module work. To support automatic metadata propagation
+        and reduce the ammount of boiler plate, new modules should override the `run()` method instead.
+        """
+        from PYME.IO import MetaDataHandler
+        inputs = {k: namespace[v] for k, v in self._input_traits.items()}
+
+        ret, mdhret = self.run(**inputs)
+
+        # convert output to a dictionary if needed
+        if isinstance(ret, dict):
+            out = {k : ret[v] for v, k in self._output_traits.items()}
+        elif isinstance(ret, List):
+            out = {k : v  for k, v in zip(self.outputs, ret)} #TODO - is this safe (is ordering consistent)
+        else:
+            # single output
+            if len(self.outputs) > 1:
+                raise RuntimeError('Module has multiple outputs, but .run() returns a single value')
+
+            out = {list(self.outputs)[0] : ret}
+
+        # complete metadata (injecting as appropriate)
+        mdhin = MetaDataHandler.DictMDHandler(getattr(list(inputs.values())[0], 'mdh', None))
+        
+        mdh = MetaDataHandler.DictMDHandler()
+        self._params_to_metadata(mdh)
+
+        for v in out.values():
+            if getattr(v, 'mdh', None) is None:
+                v.mdh = MetaDataHandler.DictMDHandler()
+
+            v.mdh.mergeEntriesFrom(mdhin) #merge, to allow e.g. voxel size overrides due to downsampling
+            #print(v.mdh, mdh)
+            v.mdh.copyEntriesFrom(mdh) # copy / overwrite with module processing parameters
+            if mdhret is not None:
+                v.mdh.copyEntriesFrom(mdhret)
+
+        namespace.update(out)
 
 import numpy as np
 import scipy.special
