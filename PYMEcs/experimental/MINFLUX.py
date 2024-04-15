@@ -259,10 +259,10 @@ def plot_tracking(pipeline,is_coalesced=False,lowess_fraction=0.05):
         nrows = 2
 
     t_s = 1e-3*p['t']
-    xmbm = p['x']-p['x_nc']
-    ymbm = p['y']-p['y_nc']
+    xmbm = -(p['x']-p['x_nc']) # we flip the sign from now on
+    ymbm = -(p['y']-p['y_nc'])
     if has_z:
-        zmbm = p['z']-p['z_nc']
+        zmbm = -(p['z']-p['z_nc'])
 
     if is_coalesced:
         from statsmodels.nonparametric.smoothers_lowess import lowess
@@ -363,6 +363,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Util', "Set MINFLUX temperature file location", self.OnMINFLUXsetTempDataFile)
         visFr.AddMenuItem('MINFLUX>MBM', "Load MBM data in npz format", self.OnMBMLoadnpz)
         visFr.AddMenuItem('MINFLUX>MBM', "Load JSON MBM bead data config", self.OnMBMLoadJSONbeads)
+        visFr.AddMenuItem('MINFLUX>MBM', "Plot MBM info", self.OnMBMplot)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -421,6 +422,34 @@ class MINFLUXanalyser():
         for bead in mbmsettings['beads']:
             self.visFr.pipeline.mbm.beadisgood[bead] =  mbmsettings['beads'][bead]
         self.visFr.pipeline.mbm.median_window = mbmsettings['Median_window']
+
+    def OnMBMplot(self,event):
+        p = self.visFr.pipeline
+        has_drift = 'driftx' in p.keys()
+        has_drift_ori = 'driftx_ori' in p.keys()
+        has_mbm = 'mbm' in dir(p)
+        if not has_drift and not has_mbm:
+            warn("pipeline has neither drift info nor MBM info, aborting...")
+        t_s = 1e-3*p['t']
+        fig, axs = plt.subplots(nrows=3)
+        for caxis, ax in zip(['x','y','z'],axs):
+            if has_drift:
+                if has_drift_ori:
+                    ax.plot(t_s,p['drift%s' % caxis]+p['drift%s_ori' % caxis], label='origami 2nd pass')
+                    ax.plot(t_s,p['drift%s_ori' % caxis],'--', label='origami 1st pass')
+                else:
+                    ax.plot(t_s,p['drift%s' % caxis], label='origami 1st pass')
+            if has_mbm:
+                caxis_mean = p.mbm.mean(caxis)
+                ax.plot(p.mbm.t,caxis_mean,':',label='MBM mean')
+                from statsmodels.nonparametric.smoothers_lowess import lowess
+                caxis_mean_sm = lowess(caxis_mean, p.mbm.t, frac=self.analysisSettings.MBM_lowess_fraction,
+                                       return_sorted=False)
+                ax.plot(p.mbm.t,caxis_mean_sm,'-.',label='MBM lowess smoothed')
+            ax.set_xlabel('time (s)')
+            ax.set_ylabel('drift in %s (nm)' % caxis)
+            ax.legend(loc="upper right")
+        fig.tight_layout()
 
     def OnMINFLUXsetTempDataFile(self, event):
         import PYME.config as config

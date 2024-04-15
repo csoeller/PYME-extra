@@ -1217,6 +1217,7 @@ class OrigamiSiteTrack(ModuleBase):
             # mapped_ap = tabular.MappingFilter(inputClusters)
             mapped_ap = None # returning none in this case seems better and appears to work
 
+        # for now we disable this way of passing the correction function via metadata
         if False:
             from PYME.IO import MetaDataHandler
 
@@ -1324,5 +1325,53 @@ class MINFLUXcolours(ModuleBase):
             - scipy.special.erf((sg ** 2 * (r - I) - sr ** 2 * g) / (np.sqrt(2) * sg * sr * np.sqrt(sg ** 2 + sr ** 2))))
 
         mapped_ds.addColumn('ColourNorm', colNorm)
+
+        return mapped_ds
+
+@register_module('MBMcorrection')
+class MBMcorrection(ModuleBase):
+    inputLocalizations = Input('localizations')
+    output = Output('mbm_corrected')
+
+    mbmfile = FileOrURI('')
+    mbmsettings = FileOrURI('')
+
+    Median_window = Int(5)
+    MBM_lowess_fraction = Float(0.1,label='lowess fraction for MBM smoothing',
+                                desc='lowess fraction used for smoothing of mean MBM trajectories (default 0.1)')
+    
+    def run(self,inputLocalizations):
+        import json
+        from PYME.IO import unifiedIO
+        from pathlib import Path
+        from PYMEcs.Analysis.MBMcollection import MBMCollectionDF
+        from statsmodels.nonparametric.smoothers_lowess import lowess
+
+        fp = Path(self.mbmfile)
+        mbm = MBMCollectionDF(name=fp.stem,filename=fp)
+        
+        s = unifiedIO.read(self.mbmsettings)
+        mbmconf = json.loads(s)
+
+        for bead in mbmconf['beads']:
+            mbm.beadisgood[bead] =  mbmconf['beads'][bead]
+        mbm.median_window = self.Median_window
+
+        tnew = 1e-3*inputLocalizations['t']
+        mbmcorr = {}
+        for axis in ['x','y','z']:
+            axismean = mbm.mean(axis)
+            axismean_g = axismean[~np.isnan(axismean)]
+            t_g = mbm.t[~np.isnan(axismean)]
+            axismean_sm = lowess(axismean_g, t_g, frac=self.MBM_lowess_fraction,
+                                 return_sorted=False)
+            axis_interp_msm = np.interp(tnew,t_g,axismean_sm)            
+            mbmcorr[axis] = axis_interp_msm
+
+        mapped_ds = tabular.MappingFilter(inputLocalizations)
+        for axis in ['x','y','z']:
+            mapped_ds.addColumn('mbm%s' % axis, mbmcorr[axis])
+            mapped_ds.addColumn(axis,inputLocalizations["%s_nc" % axis] - mbmcorr[axis])
+        mapped_ds.mbm = mbm # attach mbm object to the output
 
         return mapped_ds
