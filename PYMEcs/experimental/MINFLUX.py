@@ -431,6 +431,8 @@ class MINFLUXanalyser():
         if not has_drift and not has_mbm:
             warn("pipeline has neither drift info nor MBM info, aborting...")
         t_s = 1e-3*p['t']
+        mbm_mean = {} # for caching
+        mbm_meansm = {} # for caching
         fig, axs = plt.subplots(nrows=3)
         for caxis, ax in zip(['x','y','z'],axs):
             if has_drift:
@@ -440,16 +442,32 @@ class MINFLUXanalyser():
                 else:
                     ax.plot(t_s,p['drift%s' % caxis], label='origami 1st pass')
             if has_mbm:
-                caxis_mean = p.mbm.mean(caxis)
-                ax.plot(p.mbm.t,caxis_mean,':',label='MBM mean')
+                mbm_mean[caxis] = p.mbm.mean(caxis)
+                ax.plot(p.mbm.t,mbm_mean[caxis],':',label='MBM mean')
                 from statsmodels.nonparametric.smoothers_lowess import lowess
-                caxis_mean_sm = lowess(caxis_mean, p.mbm.t, frac=self.analysisSettings.MBM_lowess_fraction,
+                mbm_meansm[caxis] = lowess(mbm_mean[caxis], p.mbm.t, frac=self.analysisSettings.MBM_lowess_fraction,
                                        return_sorted=False)
-                ax.plot(p.mbm.t,caxis_mean_sm,'-.',label='MBM lowess smoothed')
+                ax.plot(p.mbm.t,mbm_meansm[caxis],'-.',label='MBM lowess smoothed')
             ax.set_xlabel('time (s)')
             ax.set_ylabel('drift in %s (nm)' % caxis)
             ax.legend(loc="upper right")
         fig.tight_layout()
+        if has_mbm: # also plot a second figure without the non-smoothed MBM track
+            fig, axs = plt.subplots(nrows=3)
+            for caxis, ax in zip(['x','y','z'],axs):
+                if has_drift:
+                    if has_drift_ori:
+                        ax.plot(t_s,p['drift%s' % caxis]+p['drift%s_ori' % caxis], label='origami 2nd pass')
+                        ax.plot(t_s,p['drift%s_ori' % caxis],'--', label='origami 1st pass')
+                    else:
+                        ax.plot(t_s,p['drift%s' % caxis], label='origami 1st pass')
+                if has_mbm:
+                    #ax.plot(p.mbm.t,mbm_mean[caxis],':',label='MBM mean')
+                    ax.plot(p.mbm.t,mbm_meansm[caxis],'r-.',label='MBM lowess smoothed')
+                ax.set_xlabel('time (s)')
+                ax.set_ylabel('drift in %s (nm)' % caxis)
+                ax.legend(loc="upper left")
+            fig.tight_layout()
 
     def OnMINFLUXsetTempDataFile(self, event):
         import PYME.config as config
