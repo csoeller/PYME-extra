@@ -315,6 +315,54 @@ def plot_tracking(pipeline,is_coalesced=False,lowess_fraction=0.05):
         plt.ylabel('z-difference (nm)')
     plt.tight_layout()
 
+
+def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
+    p=pipeline
+    t_s = 1e-3*p['t']
+    if fignum is not None:
+        fig, axs = plt.subplots(2, 2,num='origami site tracks %d' % fignum)
+    else:
+        fig, axs = plt.subplots(2, 2)
+
+    axs[0, 0].scatter(t_s,p['x_site_nc'],s=0.3,c='black',alpha=0.7)
+    if plotSmoothingCurve:
+        axs[0, 0].plot(t_s,p['x_ori']-p['x'],'r',alpha=0.4)
+    axs[0, 0].set_ylim(-15,15)
+    axs[0, 0].set_xlabel('t [s]')
+    axs[0, 0].set_ylabel('x [nm]')
+        
+    axs[0, 1].scatter(t_s,p['y_site_nc'],s=0.3,c='black',alpha=0.7)
+    if plotSmoothingCurve:
+        axs[0, 1].plot(t_s,p['y_ori']-p['y'],'r',alpha=0.4)
+    axs[0, 1].set_ylim(-15,15)
+    axs[0, 1].set_xlabel('t [s]')
+    axs[0, 1].set_ylabel('y [nm]')
+        
+    axs[1, 0].scatter(t_s,p['z_site_nc'],s=0.3,c='black',alpha=0.7)
+    if plotSmoothingCurve:
+        axs[1, 0].plot(t_s,p['z_ori']-p['z'],'r',alpha=0.4)
+    axs[1, 0].set_ylim(-15,15)
+    axs[1, 0].set_xlabel('t [s]')
+    axs[1, 0].set_ylabel('z [nm]')
+
+    ax = axs[1,1]
+    if plotSmoothingCurve:
+        # plot the MBM track
+        ax.plot(t_s,p['x_ori']-p['x_nc'],alpha=0.5,label='x')
+        plt.plot(t_s,p['y_ori']-p['y_nc'],alpha=0.5,label='y')
+        if 'z_nc' in p.keys():
+            ax.plot(t_s,p['z_ori']-p['z_nc'],alpha=0.5,label='z')
+        ax.set_xlabel('t (s)')
+        ax.set_ylabel('MBM corr [nm]')
+        ax.legend()
+    else:
+        axs[1, 1].plot(t_s,p['x_ori']-p['x'])
+        axs[1, 1].plot(t_s,p['y_ori']-p['y'])
+        axs[1, 1].plot(t_s,p['z_ori']-p['z'])
+        axs[1, 1].set_xlabel('t [s]')
+        axs[1, 1].set_ylabel('orig. corr [nm]')
+    plt.tight_layout()
+
     
 from PYMEcs.Analysis.MINFLUX import analyse_locrate
 from PYMEcs.misc.guiMsgBoxes import Error
@@ -651,48 +699,8 @@ class MINFLUXanalyser():
     def OnOrigamiSiteTrackPlot(self, event):
         p = self.visFr.pipeline
         # need to add checks if the required properties are present in the datasource!!
-        # also plot post correction!
-        t_s = 1e-3*p['t']
-        fig, axs = plt.subplots(2, 2,num='origami site tracks %d' % self.origamiTrackFignum)
-        axs[0, 0].scatter(t_s,p['x_site_nc'],s=0.3,c='black',alpha=0.7)
-        if self.analysisSettings.withOrigamiSmoothingCurves:
-            axs[0, 0].plot(t_s,p['x_ori']-p['x'],'r',alpha=0.4)
-        axs[0, 0].set_ylim(-15,15)
-        axs[0, 0].set_xlabel('t [s]')
-        axs[0, 0].set_ylabel('x [nm]')
-        
-        axs[0, 1].scatter(t_s,p['y_site_nc'],s=0.3,c='black',alpha=0.7)
-        if self.analysisSettings.withOrigamiSmoothingCurves:
-            axs[0, 1].plot(t_s,p['y_ori']-p['y'],'r',alpha=0.4)
-        axs[0, 1].set_ylim(-15,15)
-        axs[0, 1].set_xlabel('t [s]')
-        axs[0, 1].set_ylabel('y [nm]')
-        
-        axs[1, 0].scatter(t_s,p['z_site_nc'],s=0.3,c='black',alpha=0.7)
-        if self.analysisSettings.withOrigamiSmoothingCurves:
-            axs[1, 0].plot(t_s,p['z_ori']-p['z'],'r',alpha=0.4)
-        axs[1, 0].set_ylim(-15,15)
-        axs[1, 0].set_xlabel('t [s]')
-        axs[1, 0].set_ylabel('z [nm]')
-
-        ax = axs[1,1]
-        if self.analysisSettings.withOrigamiSmoothingCurves:
-            # plot the MBM track
-            ax.plot(t_s,p['x_ori']-p['x_nc'],alpha=0.5,label='x')
-            plt.plot(t_s,p['y_ori']-p['y_nc'],alpha=0.5,label='y')
-            if 'z_nc' in p.keys():
-                ax.plot(t_s,p['z_ori']-p['z_nc'],alpha=0.5,label='z')
-            ax.set_xlabel('t (s)')
-            ax.set_ylabel('MBM corr [nm]')
-            ax.legend()
-        else:
-            axs[1, 1].plot(t_s,p['x_ori']-p['x'])
-            axs[1, 1].plot(t_s,p['y_ori']-p['y'])
-            axs[1, 1].plot(t_s,p['z_ori']-p['z'])
-            axs[1, 1].set_xlabel('t [s]')
-            axs[1, 1].set_ylabel('orig. corr [nm]')
-        plt.tight_layout()
-
+        plot_site_tracking(p,fignum=self.origamiTrackFignum,
+                           plotSmoothingCurve=self.analysisSettings.withOrigamiSmoothingCurves)
         self.origamiTrackFignum += 1
 
     def OnMINFLUXSettings(self, event):

@@ -1052,7 +1052,51 @@ def smoothed_site_func(t,coord_site,statistic='mean',bins=75,sgwindow_length=10,
     csitem, tbins, binnum = binned_statistic(t,coord_site,statistic=statistic,bins=bins)
     tmid = 0.5*(tbins[0:-1]+tbins[1:])
     return CubicSpline(tmid,savgol_filter(csitem,10,6))
-    
+
+from scipy.optimize import curve_fit
+def gfit_func(x, a0, a1, a2):
+    z = (x - a1) / a2
+    y = a0 * np.exp(-z**2 / 2)
+    return y
+
+def gaussfit(x,y,params=None):
+    try:
+        parameters, covar = curve_fit(gfit_func, x, y, params)
+    except RuntimeError:
+        return None, None
+    else:
+        return parameters, covar
+
+def fit_binedges(tms,delta_s=100,width_s=500):
+    tmin = tms.min()
+    tmax = tms.max()
+    delta_ms = 1e3*delta_s
+    width_ms = 1e3*width_s
+    numsamp = (tmax-tmin)/delta_ms
+    t_samp = np.linspace(tmin,tmax,int(numsamp+0.5))
+    edgeleft = np.maximum(t_samp - 0.5*width_ms, tmin)
+    edgeright = np.minimum(t_samp + 0.5*width_ms, tmax)
+    return (edgeleft, edgeright,t_samp)
+
+def fit_sitedrift(tms,xsite,delta_s=100,width_s=500,bins=20):
+    bel,ber,t_samp=fit_binedges(tms,delta_s=delta_s,width_s=width_s)
+    pars = np.zeros((3,bel.size))
+    errs = np.zeros_like(pars)
+    for i in range(bel.size):
+        tgood = (tms >= bel[i]) & (tms<=ber[i])
+        hv, be = np.histogram(xsite[tgood],bins=bins)
+        bctrs = 0.5*(be[:-1]+be[1:])
+        par,cov = gaussfit(bctrs,hv,params=(10.,1.,3.)) # reasonable starting values
+        pars[:,i] = par
+        errs[:,i] = np.sqrt(np.diag(cov))
+
+    return t_samp, pars, errs
+
+def site_fit_gaussian(tms,xsite,delta_s=100,width_s=500):
+    t_samp, pars, errs = fit_sitedrift(tms,xsite,delta_s=delta_s,width_s=width_s)
+    ifunc = CubicSpline(t_samp, pars[1,:])
+    return ifunc
+
 @register_module('OrigamiSiteTrack')
 class OrigamiSiteTrack(ModuleBase):
     """
@@ -1095,8 +1139,9 @@ class OrigamiSiteTrack(ModuleBase):
                              desc="the window_length argument of the scipy.signal.savgol_filter function used in smoothing to obtain the drift trajectory")
     savgolPolyorder = Int(6,label='savgol filter polynomial order',
                           desc="the polyorder argument of the scipy.signal.savgol_filter function used in smoothing to obtain the drift trajectory")
-    binnedStatistic = Enum(['mean','median'],
+    binnedStatistic = Enum(['mean','median','Gaussian'],
                            desc="statistic for smoothing when using binned_statistic function on data to obtain the drift trajectory by time windowing of the 'siteclouds'")
+    gaussianBinSizeSeconds = Float(500)
     
     def run(self, inputClusters, inputSites,inputAllPoints=None):
         site_id = self.labelKey
@@ -1137,13 +1182,18 @@ class OrigamiSiteTrack(ModuleBase):
         delta_ms = self.smoothingBinWidthsSeconds * 1e3 # 200 s 
         nbins = int(trange/delta_ms)
 
-        # we should check that with this choice of nbins we get no issues! (i.e. too few counts in some bins)
-        c_xsite = smoothed_site_func(t,xsite,bins=nbins,statistic=self.binnedStatistic,
-                                     sgwindow_length=self.savgolWindowLength,sgpolyorder=self.savgolPolyorder)
-        c_ysite = smoothed_site_func(t,ysite,bins=nbins,statistic=self.binnedStatistic,
-                                     sgwindow_length=self.savgolWindowLength,sgpolyorder=self.savgolPolyorder)
-        c_zsite = smoothed_site_func(t,zsite,bins=nbins,statistic=self.binnedStatistic,
-                                     sgwindow_length=self.savgolWindowLength,sgpolyorder=self.savgolPolyorder)
+        if self.binnedStatistic in ['mean','median']:
+            # we should check that with this choice of nbins we get no issues! (i.e. too few counts in some bins)
+            c_xsite = smoothed_site_func(t,xsite,bins=nbins,statistic=self.binnedStatistic,
+                                         sgwindow_length=self.savgolWindowLength,sgpolyorder=self.savgolPolyorder)
+            c_ysite = smoothed_site_func(t,ysite,bins=nbins,statistic=self.binnedStatistic,
+                                         sgwindow_length=self.savgolWindowLength,sgpolyorder=self.savgolPolyorder)
+            c_zsite = smoothed_site_func(t,zsite,bins=nbins,statistic=self.binnedStatistic,
+                                         sgwindow_length=self.savgolWindowLength,sgpolyorder=self.savgolPolyorder)
+        else:
+            c_xsite = site_fit_gaussian(t,xsite,delta_s=self.smoothingBinWidthsSeconds,width_s=self.gaussianBinSizeSeconds)
+            c_ysite = site_fit_gaussian(t,ysite,delta_s=self.smoothingBinWidthsSeconds,width_s=self.gaussianBinSizeSeconds)
+            c_zsite = site_fit_gaussian(t,zsite,delta_s=self.smoothingBinWidthsSeconds,width_s=self.gaussianBinSizeSeconds)
 
         for j,id in enumerate(idsunique):
             idx = ids == id
