@@ -476,7 +476,9 @@ class MINFLUXanalyser():
         has_drift = 'driftx' in p.keys()
         has_drift_ori = 'driftx_ori' in p.keys()
         has_mbm = 'mbm' in dir(p)
-        if not has_drift and not has_mbm:
+        has_mbm2 = 'mbmx' in p.keys()
+        
+        if not has_drift and not (has_mbm or has_mbm2):
             warn("pipeline has neither drift info nor MBM info, aborting...")
         t_s = 1e-3*p['t']
         mbm_mean = {} # for caching
@@ -496,6 +498,8 @@ class MINFLUXanalyser():
                 mbm_meansm[caxis] = lowess(mbm_mean[caxis], p.mbm.t, frac=self.analysisSettings.MBM_lowess_fraction,
                                        return_sorted=False)
                 ax.plot(p.mbm.t,mbm_meansm[caxis],'-.',label='MBM lowess smoothed')
+            if has_mbm2:
+                ax.plot(t_s,p['mbm%s' % caxis], label='MBM from module')
             ax.set_xlabel('time (s)')
             ax.set_ylabel('drift in %s (nm)' % caxis)
             ax.legend(loc="upper right")
