@@ -1397,31 +1397,34 @@ class MBMcorrection(ModuleBase):
         from PYMEcs.Analysis.MBMcollection import MBMCollectionDF
         from statsmodels.nonparametric.smoothers_lowess import lowess
 
-        fp = Path(self.mbmfile)
-        mbm = MBMCollectionDF(name=fp.stem,filename=fp)
-        
-        s = unifiedIO.read(self.mbmsettings)
-        mbmconf = json.loads(s)
-
-        for bead in mbmconf['beads']:
-            mbm.beadisgood[bead] =  mbmconf['beads'][bead]
-        mbm.median_window = self.Median_window
-
-        tnew = 1e-3*inputLocalizations['t']
-        mbmcorr = {}
-        for axis in ['x','y','z']:
-            axismean = mbm.mean(axis)
-            axismean_g = axismean[~np.isnan(axismean)]
-            t_g = mbm.t[~np.isnan(axismean)]
-            axismean_sm = lowess(axismean_g, t_g, frac=self.MBM_lowess_fraction,
-                                 return_sorted=False)
-            axis_interp_msm = np.interp(tnew,t_g,axismean_sm)            
-            mbmcorr[axis] = axis_interp_msm
-
         mapped_ds = tabular.MappingFilter(inputLocalizations)
-        for axis in ['x','y','z']:
-            mapped_ds.addColumn('mbm%s' % axis, mbmcorr[axis])
-            mapped_ds.addColumn(axis,inputLocalizations["%s_nc" % axis] - mbmcorr[axis])
-        mapped_ds.mbm = mbm # attach mbm object to the output
+
+        if self.mbmfile != '':
+            fp = Path(self.mbmfile)
+            mbm = MBMCollectionDF(name=fp.stem,filename=fp)
+        
+            s = unifiedIO.read(self.mbmsettings)
+            mbmconf = json.loads(s)
+
+            for bead in mbmconf['beads']:
+                mbm.beadisgood[bead] =  mbmconf['beads'][bead]
+            mbm.median_window = self.Median_window
+
+            tnew = 1e-3*inputLocalizations['t']
+            mbmcorr = {}
+            for axis in ['x','y','z']:
+                axismean = mbm.mean(axis)
+                axismean_g = axismean[~np.isnan(axismean)]
+                t_g = mbm.t[~np.isnan(axismean)]
+                axismean_sm = lowess(axismean_g, t_g, frac=self.MBM_lowess_fraction,
+                                     return_sorted=False)
+                axis_interp_msm = np.interp(tnew,t_g,axismean_sm)            
+                mbmcorr[axis] = axis_interp_msm
+
+
+            for axis in ['x','y','z']:
+                mapped_ds.addColumn('mbm%s' % axis, mbmcorr[axis])
+                mapped_ds.addColumn(axis,inputLocalizations["%s_nc" % axis] - mbmcorr[axis])
+            mapped_ds.mbm = mbm # attach mbm object to the output
 
         return mapped_ds
