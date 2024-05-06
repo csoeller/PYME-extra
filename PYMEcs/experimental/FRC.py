@@ -45,8 +45,13 @@ def sigmaline(L):
     return np.minimum(thresh,1)
 
 def tukey2d(shape,fraction=0.5):
-    tx = signal.tukey(shape[0],fraction)
-    ty = signal.tukey(shape[1],fraction)
+    try:
+        from scipy.signal import tukey
+    except ImportError:
+        from scipy.signal.windows import tukey # from some version onwards only available from the scipy.signal.windows namespace
+        
+    tx = tukey(shape[0],fraction)
+    ty = tukey(shape[1],fraction)
 
     #tY, tX = np.meshgrid(ty,tx)
     #return tY*tX
