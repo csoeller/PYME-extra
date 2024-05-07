@@ -218,8 +218,11 @@ def monkeypatch_npy_io(visFr):
             
             ds.mdh = MetaDataHandler.NestedClassMDHandler()
             data = np.load(filename)
+
+            from pathlib import Path
             ds.mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D(data)
             ds.mdh['MINFLUX.ExtraIteration'] = minflux_npy_has_extra_iter(data)
+            ds.mdh['MINFLUX.Filename'] = Path(filename).name # the MINFLUX filename holds some metadata
             return ds
         else:
             return self._ds_from_file_original(filename, **kwargs)

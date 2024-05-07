@@ -4,6 +4,7 @@ from PYME.recipes.traits import Input, Output, Float, Enum, CStr, Bool, Int, Lis
 import numpy as np
 import pandas as pd
 from PYME.IO import tabular
+from PYME.warnings import warn
 
 import logging
 logger = logging.getLogger(__file__)
@@ -964,7 +965,7 @@ class BiplanePhotons(ModuleBase):
            
             mdh = inp.mdh
             if mdh.getEntry('Analysis.FitModule') not in ['SplitterFitInterpBNR']:
-                Warn('Plugin works only for Biplane analysis')
+                warn('Plugin works only for Biplane analysis')
                 return
             fitMod = __import__('PYME.localization.FitFactories.' +
                                 mdh.getEntry('Analysis.FitModule'),
@@ -1378,6 +1379,16 @@ class MINFLUXcolours(ModuleBase):
 
         return mapped_ds
 
+from pathlib import Path
+def check_mbm_name(mbmfilename,datafilename,endswith='__MBM-beads'):
+    if datafilename is None:
+        return True
+    mbmp = Path(mbmfilename)
+    datap = Path(datafilename)
+    
+    # should return False if warning is necessary
+    return mbmp.stem.startswith(datap.stem) and mbmp.stem.endswith(endswith)
+
 @register_module('MBMcorrection')
 class MBMcorrection(ModuleBase):
     inputLocalizations = Input('localizations')
@@ -1385,7 +1396,8 @@ class MBMcorrection(ModuleBase):
 
     mbmfile = FileOrURI('')
     mbmsettings = FileOrURI('')
-
+    mbmfilename_checks = Bool(True)
+    
     Median_window = Int(5)
     MBM_lowess_fraction = Float(0.1,label='lowess fraction for MBM smoothing',
                                 desc='lowess fraction used for smoothing of mean MBM trajectories (default 0.1)')
@@ -1425,6 +1437,15 @@ class MBMcorrection(ModuleBase):
             for axis in ['x','y','z']:
                 mapped_ds.addColumn('mbm%s' % axis, mbmcorr[axis])
                 mapped_ds.addColumn(axis,inputLocalizations["%s_nc" % axis] - mbmcorr[axis])
+
+            if self.mbmfilename_checks:
+                if not check_mbm_name(self.mbmfile,inputLocalizations.mdh.get('MINFLUX.Filename')):
+                    warn("check MBM filename (%s) vs Series filename (%s)" %
+                         (Path(self.mbmfile).name,inputLocalizations.mdh.get('MINFLUX.Filename')))
+                if not check_mbm_name(self.mbmsettings,inputLocalizations.mdh.get('MINFLUX.Filename'),endswith='npz-settings'):
+                    warn("check MBM settings filename (%s) vs Series filename (%s)" %
+                         (Path(self.mbmsettings).name,inputLocalizations.mdh.get('MINFLUX.Filename')))
+                    
             mapped_ds.mbm = mbm # attach mbm object to the output
 
         return mapped_ds
