@@ -16,6 +16,38 @@ def selectWithDialog(choices, message='select image from list', caption='Selecti
     dlg.Destroy()
     return item
 
+def setNPCsfromImg(pipeline,img):
+    with_ids = unique_name('with_ids',pipeline.dataSources.keys())
+    valid_ids = unique_name('valid_ids',pipeline.dataSources.keys())
+    recipe = pipeline.recipe
+    mapp = tablefilters.Mapping(recipe,inputName=pipeline.selectedDataSourceKey,
+                                        outputName=with_ids)
+    recipe.add_module(mapp)
+    recipe.execute()
+        
+    withIDs = recipe.namespace[with_ids]
+           
+    pixX = np.round((pipeline['x'] - img.imgBounds.x0 )/img.pixelSize).astype('i')
+    pixY = np.round((pipeline['y'] - img.imgBounds.y0 )/img.pixelSize).astype('i')
+
+    ind = (pixX < img.data_xyztc.shape[0])*(pixY < img.data_xyztc.shape[1])*(pixX >= 0)*(pixY >= 0)
+        
+    ids = np.zeros_like(pixX)
+    #assume there is only one channel
+    ids[ind] = img.data_xyztc[:,:,0,0,0].squeeze()[pixX[ind], pixY[ind]].astype('i')
+        
+    numPerObject, b = np.histogram(ids, np.arange(ids.max() + 1.5) + .5)
+        
+    withIDs.addColumn('objectID', ids)
+    withIDs.addColumn('NEvents', numPerObject[ids-1])
+        
+    recipe.add_module(tablefilters.FilterTable(recipe,inputName=with_ids, outputName=valid_ids,
+                                                   filters={'objectID' : [.5, 1e5]}))
+    recipe.execute()
+        
+    pipeline.selectDataSource(valid_ids)
+
+
 class NPCsettings(HasTraits):
     SegmentThreshold = Int(10)
     SecondPass = Bool(False)
@@ -87,36 +119,8 @@ class NPCcalc():
 
         if img is None:
             return
-        
-        with_ids = unique_name('with_ids',pipeline.dataSources.keys())
-        valid_ids = unique_name('valid_ids',pipeline.dataSources.keys())
-        recipe = pipeline.recipe
-        mapp = tablefilters.Mapping(recipe,inputName=pipeline.selectedDataSourceKey,
-                                    outputName=with_ids)
-        recipe.add_module(mapp)
-        recipe.execute()
-        
-        withIDs = recipe.namespace[with_ids]
-           
-        pixX = np.round((pipeline['x'] - img.imgBounds.x0 )/img.pixelSize).astype('i')
-        pixY = np.round((pipeline['y'] - img.imgBounds.y0 )/img.pixelSize).astype('i')
 
-        ind = (pixX < img.data.shape[0])*(pixY < img.data.shape[1])*(pixX >= 0)*(pixY >= 0)
-        
-        ids = np.zeros_like(pixX)
-        #assume there is only one channel
-        ids[ind] = img.data[:,:,:,0].squeeze()[pixX[ind], pixY[ind]].astype('i')
-        
-        numPerObject, b = np.histogram(ids, np.arange(ids.max() + 1.5) + .5)
-        
-        withIDs.addColumn('objectID', ids)
-        withIDs.addColumn('NEvents', numPerObject[ids-1])
-        
-        recipe.add_module(tablefilters.FilterTable(recipe,inputName=with_ids, outputName=valid_ids,
-                                                   filters={'objectID' : [.5, 1e5]}))
-        recipe.execute()
-        
-        pipeline.selectDataSource(valid_ids)
+        setNPCsfromImg(pipeline,img)
 
     def OnNPCstats(self,event=None):
         pipeline = self.visFr.pipeline

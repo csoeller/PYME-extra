@@ -497,7 +497,7 @@ class MINFLUXanalyser():
                 from statsmodels.nonparametric.smoothers_lowess import lowess
                 mbm_meansm[caxis] = lowess(mbm_mean[caxis], p.mbm.t, frac=self.analysisSettings.MBM_lowess_fraction,
                                        return_sorted=False)
-                ax.plot(p.mbm.t,mbm_meansm[caxis],'-.',label='MBM lowess smoothed')
+                ax.plot(p.mbm.t,mbm_meansm[caxis],'-.',label='MBM lowess (lf=%.2f)' % self.analysisSettings.MBM_lowess_fraction)
             if has_mbm2:
                 ax.plot(t_s,p['mbm%s' % caxis], label='MBM from module')
             ax.set_xlabel('time (s)')
@@ -515,7 +515,7 @@ class MINFLUXanalyser():
                         ax.plot(t_s,p['drift%s' % caxis], label='origami 1st pass')
                 if has_mbm:
                     #ax.plot(p.mbm.t,mbm_mean[caxis],':',label='MBM mean')
-                    ax.plot(p.mbm.t,mbm_meansm[caxis],'r-.',label='MBM lowess smoothed')
+                    ax.plot(p.mbm.t,mbm_meansm[caxis],'r-.',label='MBM lowess (lf=%.2f)' % self.analysisSettings.MBM_lowess_fraction)
                 ax.set_xlabel('time (s)')
                 ax.set_ylabel('drift in %s (nm)' % caxis)
                 ax.legend(loc="upper left")
