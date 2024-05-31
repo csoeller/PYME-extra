@@ -107,18 +107,24 @@ def rfilt(xn,yn,r0,dr=25.0):
     rimask = (ri >r0-dr)*(ri < r0+dr)
     return (xn[rimask],yn[rimask])
 
-def estimate_nlabeled(x,y,nthresh=10,do_plot=False,secondpass=False,fitmode='abs',return_radius=False):
-    xc, yc, r0, sigma = fitcirc(x,y)
-    xn, yn = centreshift(x, y, xc, yc)
-    radrot = estimate_rotation(xn,yn,mode=fitmode)
-    xr1,yr1 = rot_coords(xn,yn,radrot)
-    xr, yr = rfilt(xr1,yr1,r0,dr=30.0)
-    if secondpass:
-        xc2, yc2, r0, sigma = fitcirc(xr,yr)
-        xn, yn = centreshift(xr, yr, xc2, yc2)
+def estimate_nlabeled(x,y,r0=None,nthresh=10,dr=30.0,
+                      do_plot=False,secondpass=False,fitmode='abs',return_radius=False):
+    if r0 is None:
+        xc, yc, r0, sigma = fitcirc(x,y)
+        xn, yn = centreshift(x, y, xc, yc)
         radrot = estimate_rotation(xn,yn,mode=fitmode)
-        xr,yr = rot_coords(xn,yn,radrot)
-    
+        xr1,yr1 = rot_coords(xn,yn,radrot)
+        xr, yr = rfilt(xr1,yr1,r0,dr=dr)
+        if secondpass:
+            xc2, yc2, r0, sigma = fitcirc(xr,yr)
+            xn, yn = centreshift(xr, yr, xc2, yc2)
+            radrot = estimate_rotation(xn,yn,mode=fitmode)
+            xr,yr = rot_coords(xn,yn,radrot)
+    else:
+        radrot = estimate_rotation(x,y,mode=fitmode)
+        xr1,yr1 = rot_coords(x,y,radrot)
+        xr, yr = rfilt(xr1,yr1,r0,dr=dr)
+
     phis = phi_from_coords(xr,yr)
     phibinedges = -np.pi + piover4*np.arange(9)
     nhist,be = np.histogram(phis,bins=phibinedges)
@@ -217,6 +223,29 @@ def fpinterpolate(fp3d,x,y,z,method='linear', bounds_error=True, fill_value=np.n
     fpinterp = RegularGridInterpolator((x,y,z), fp3d, method=method, bounds_error=bounds_error, fill_value=fill_value)
     return fpinterp
 
+# we may rewrite this for our purpose if bounds violations become a problem
+# code from https://stackoverflow.com/questions/21670080/how-to-find-global-minimum-in-python-optimization-with-bounds
+class RandomDisplacementBounds(object):
+    """random displacement with bounds"""
+    def __init__(self, xmin, xmax, stepsize=0.5):
+        self.xmin = xmin
+        self.xmax = xmax
+        self.stepsize = stepsize
+
+    def __call__(self, x):
+        """take a random step but ensure the new position is within the bounds"""
+        while True:
+            # this could be done in a much more clever way, but it will work for example purposes
+            xnew = x + np.random.uniform(-self.stepsize, self.stepsize, np.shape(x))
+            if np.all(xnew < self.xmax) and np.all(xnew > self.xmin):
+                break
+        return xnew
+
+# # define the new step taking routine and pass it to basinhopping
+# take_step = RandomDisplacementBounds(xmin, xmax)
+# result = basinhopping(f, x0, niter=100, minimizer_kwargs=minimizer_kwargs,
+#                       take_step=take_step)
+
 maxshift = 50.0
 class LLmaximizerNPC3D(object):
     # the bgprop value needs a little more thought, it could be specific for this set of parameters
@@ -289,19 +318,25 @@ class LLmaximizerNPC3D(object):
         self._lastpars = pars
         return self.c3dr
 
-    def plot_points(self,mode='transformed'): # supported modes should be 'original', 'transformed', 'both'
+    def plot_points(self,mode='transformed',external_pts=None): # supported modes should be 'original', 'transformed', 'both', external
         if mode == 'transformed':
             x,y,z = xyzfrom3vec(self.c3dr)
         elif mode == 'original':
             x,y,z = xyzfrom3vec(self.points)
-        else:
+        elif mode == 'both':
             x,y,z = xyzfrom3vec(self.points)
             x1,y1,z1 = xyzfrom3vec(self.c3dr)
-
+        elif mode == 'external':
+            if external_pts is None:
+                raise RuntimeError("with mode='external' need external points but none supplied")
+            x,y,z = xyzfrom3vec(external_pts)
+        else:
+            raise RuntimeError("unknown mode %s" % mode)
+        
         if mode == 'both':
             fig, (axt,axb) = plt.subplots(2,3)
         else:
-            fig, axt = plt.subplots(1,3)
+            fig, axt = plt.subplots(1,3,figsize=(6.4,2.4))
 
         axt[0].imshow(self.fpg3d.sum(axis=2).T,extent=[self.x.min(), self.x.max(), self.y.min(), self.y.max()])
         axt[0].scatter(x,y,c='orange',s=10)
@@ -367,6 +402,7 @@ class NPC3D(object):
             self.normalize_points(zclip=zclip)
         self.transformed_pts = None
         self.opt_result = None
+        self.filtered_pts = None
 
     def normalize_points(self,zclip=None):
         npts = self.points - self.points.mean(axis=0)[None,:]
@@ -377,6 +413,8 @@ class NPC3D(object):
 
     def fitbymll(self,nllminimizer,plot=True,printpars=True):
         nllm = nllminimizer
+        self.nllminimizer = nllm
+        
         nllm.registerPoints(self.npts)
         nllm.nll_basin_hopping(p0=(0,0,0,0,0,100.0,100.0))
         self.opt_result = nllm.opt_result
@@ -385,3 +423,49 @@ class NPC3D(object):
             nllm.pprint_lastpars()
         if plot:
             nllm.plot_points(mode='both')
+
+    def filter(self,axis='z',minval=0, maxval=100):
+        if axis == 'x':
+            coords = self.transformed_pts[:,0]
+        elif axis == 'y':
+            coords = self.transformed_pts[:,1]
+        elif axis == 'z':
+            coords = self.transformed_pts[:,2]
+        else:
+            raise RuntimeError("unknow axis %s requested (must be x, y or z)" % axis)
+
+        goodidx = (coords >= minval)*(coords <= maxval)
+        self.filtered_pts = self.transformed_pts[goodidx,:]
+
+
+    def plot_points(self,mode='transformed'):
+        if mode == 'normalized':
+            pts = self.npts
+        elif mode == 'transformed':
+            pts = self.transformed_pts
+        elif mode == 'filtered':
+            pts = self.filtered_pts
+        else:
+            raise RuntimeError("unknown mode %s" % mode)
+
+        self.nllminimizer.plot_points(mode='external',external_pts=pts)
+        
+            
+    def nlabeled(self,nthresh=1,r0=50.0,dr=25.0,do_plot=False):
+        self.filter('z',0,150)
+        if self.filtered_pts.size > 0:
+            # self.plot_points('filtered')
+            x=self.filtered_pts[:,0]
+            y=self.filtered_pts[:,1]
+            self.n_top = estimate_nlabeled(x,y,r0=r0,dr=dr,nthresh=nthresh-1,do_plot=do_plot)
+        else:
+            self.n_top = 0
+        self.filter('z',-150,0)
+        if self.filtered_pts.size > 0:
+            # self.plot_points('filtered')
+            x=self.filtered_pts[:,0]
+            y=self.filtered_pts[:,1]
+            self.n_bot = estimate_nlabeled(x,y,r0=r0,dr=dr,nthresh=nthresh-1,do_plot=do_plot)
+        else:
+            self.n_bot = 0
+        return (self.n_top,self.n_bot)
