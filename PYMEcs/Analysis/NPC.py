@@ -194,6 +194,25 @@ def pnpc(k,plabel):
     
     return p_k_npc
 
+# this is the formula for the 16-spot 3D arrangement, with 2 chances to label per spot
+def pnpc3d(k,plabel):
+    pbright = 1-pn(0,2,plabel)
+    p_k_npc = pn(k,16,pbright)
+    
+    return p_k_npc
+
+def prange():
+    krange = np.arange(17,dtype='i')
+    prange=0.1*np.arange(1,10)
+
+    probs = {}
+    probs['krange'] = krange
+    for p in prange:
+        probs[p] = pnpc3d(krange,p)
+
+    return probs
+
+
 def npclabel_fit(nphist,sigma=None):
     npnormed = nphist/nphist.sum()
     ks = np.arange(9)
@@ -318,7 +337,7 @@ class LLmaximizerNPC3D(object):
         self._lastpars = pars
         return self.c3dr
 
-    def plot_points(self,mode='transformed',external_pts=None): # supported modes should be 'original', 'transformed', 'both', external
+    def plot_points(self,mode='transformed',external_pts=None,axes=None): # supported modes should be 'original', 'transformed', 'both', external
         if mode == 'transformed':
             x,y,z = xyzfrom3vec(self.c3dr)
         elif mode == 'original':
@@ -334,38 +353,49 @@ class LLmaximizerNPC3D(object):
             raise RuntimeError("unknown mode %s" % mode)
         
         if mode == 'both':
-            fig, (axt,axb) = plt.subplots(2,3)
+            if axes is None:
+                fig, (axt,axb) = plt.subplots(2,3)
+            else:
+                (axt,axb) = axes
         else:
-            fig, axt = plt.subplots(1,3,figsize=(6.4,2.4))
+            if axes is None:
+                fig, axt = plt.subplots(1,3,figsize=(6.4,2.4))
+            else:
+                axt = axes
 
+        axt[0].cla()
         axt[0].imshow(self.fpg3d.sum(axis=2).T,extent=[self.x.min(), self.x.max(), self.y.min(), self.y.max()])
         axt[0].scatter(x,y,c='orange',s=10)
         axt[0].set_aspect('equal')
         axt[0].set_title('x-y')
+        axt[1].cla()
         axt[1].imshow(self.fpg3d.sum(axis=1).T,extent=[self.x.min(), self.x.max(), self.z.min(), self.z.max()])
         axt[1].scatter(x,z,c='orange',s=10)
         axt[1].set_aspect('equal')
         axt[1].set_title('x-z')
+        axt[2].cla()
         axt[2].imshow(self.fpg3d.sum(axis=0).T,extent=[self.y.min(), self.y.max(), self.z.min(), self.z.max()])
         axt[2].scatter(y,z,c='orange',s=10)
         axt[2].set_aspect('equal')
         axt[2].set_title('y-z')
 
         if mode == 'both':
+            axb[0].cla()
             axb[0].imshow(self.fpg3d.sum(axis=2).T,extent=[self.x.min(), self.x.max(), self.y.min(), self.y.max()])
             axb[0].scatter(x1,y1,c='orange',s=10)
             axb[0].set_aspect('equal')
             axb[0].set_title('x-y')
+            axb[1].cla()
             axb[1].imshow(self.fpg3d.sum(axis=1).T,extent=[self.x.min(), self.x.max(), self.z.min(), self.z.max()])
             axb[1].scatter(x1,z1,c='orange',s=10)
             axb[1].set_aspect('equal')
             axb[1].set_title('x-z')
+            axb[2].cla()
             axb[2].imshow(self.fpg3d.sum(axis=0).T,extent=[self.y.min(), self.y.max(), self.z.min(), self.z.max()])
             axb[2].scatter(y1,z1,c='orange',s=10)
             axb[2].set_aspect('equal')
             axb[2].set_title('y-z')
 
-        
 
     def function_to_minimize(self):
         def minfunc(p):
@@ -411,7 +441,7 @@ class NPC3D(object):
             npts = npts[zgood,:]
         self.npts = npts
 
-    def fitbymll(self,nllminimizer,plot=True,printpars=True):
+    def fitbymll(self,nllminimizer,plot=True,printpars=True,axes=None):
         nllm = nllminimizer
         self.nllminimizer = nllm
         
@@ -422,7 +452,7 @@ class NPC3D(object):
         if printpars:
             nllm.pprint_lastpars()
         if plot:
-            nllm.plot_points(mode='both')
+            nllm.plot_points(mode='both',axes=axes)
 
     def filter(self,axis='z',minval=0, maxval=100):
         if axis == 'x':
@@ -469,3 +499,42 @@ class NPC3D(object):
         else:
             self.n_bot = 0
         return (self.n_top,self.n_bot)
+
+class NPC3DSet(object):
+    def __init__(self):
+        self.npcs = []
+        self.llm = LLmaximizerNPC3D([100.0,70.0],eps=15.0,sigma=7.0,bgprob=1e-9,extent_nm=300.0)
+        self.measurements = []
+
+    def registerNPC(self,npc):
+        self.npcs.append(npc)
+
+    def addNPCfromPipeline(self,pipeline,oid):
+        self.registerNPC(NPC3D(pipeline=pipeline,objectID=oid,zclip=75))
+        
+    def measure_labeleff(self,nthresh=1,do_plot=False,printpars=False):
+        self.measurements = []
+        if do_plot:
+            fig, axes = plt.subplots(2,3)
+        else:
+            axes = None
+        for npc in self.npcs:
+            npc.fitbymll(self.llm,plot=do_plot,axes=axes,printpars=printpars)
+            nt,nb = npc.nlabeled(nthresh=nthresh,dr=20.0)
+            self.measurements.append([nt,nb])
+    
+    def plot_labeleff(self):
+        if len(self.measurements) < 10:
+            raise RuntimeError("not enough measurements, need at least 10, got %d" %
+                               len(self.measurements))
+        
+        plt.figure()
+        pr = prange()
+        for p in pr.keys():
+            if p != 'krange':
+                plt.plot(pr['krange'],np.cumsum(pr[p]),label="p=%.1f" % p)
+        nlab = np.array(self.measurements).sum(axis=1)
+        plt.hist(nlab,range=(0,16),bins='auto',density=True,
+                 histtype="step", cumulative=1, label='experiment')
+        plt.legend()
+        

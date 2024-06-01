@@ -60,6 +60,7 @@ class NPCcalc():
         visFr.AddMenuItem('Experimental>NPCs', "Analyse single NPC\tCtrl+N", self.OnAnalyseSingleNPC)
         visFr.AddMenuItem('Experimental>NPCs', "Select NPCs by Mask", self.OnSelectNPCsByMask)
         visFr.AddMenuItem('Experimental>NPCs', "Analyse NPCs by ID", self.OnAnalyseNPCsByID)
+        visFr.AddMenuItem('Experimental>NPCs', "Analyse 3D NPCs by ID", self.OnAnalyse3DNPCsByID)
         visFr.AddMenuItem('Experimental>NPCs', "Show NPC labeling Statistics", self.OnNPCstats)
         visFr.AddMenuItem('Experimental>NPCs', "Select by mask, analyse and show stats", self.OnNPCcombinedFuncs)
         visFr.AddMenuItem('Experimental>NPCs', 'NPC Analysis settings', self.OnNPCsettings)
@@ -107,7 +108,32 @@ class NPCcalc():
         
         pipeline.selectDataSource(with_npclinfo)
 
+    def OnAnalyse3DNPCsByID(self, event=None):
+        from PYMEcs.Analysis.NPC import NPC3DSet
+        pipeline = self.visFr.pipeline
+        npcs = NPC3DSet()
 
+        for oid in np.unique(pipeline['objectID']):
+            npcs.addNPCfromPipeline(pipeline,oid)
+
+        progress = wx.ProgressDialog("NPC analysis in progress", "please wait", maximum=len(npcs.npcs),
+                                     parent=self.visFr, style=wx.PD_SMOOTH|wx.PD_AUTO_HIDE|wx.PD_CAN_ABORT)
+        fig, axes=plt.subplots(2,3)
+        cancelled = False
+        for i,npc in enumerate(npcs.npcs):
+            npc.fitbymll(npcs.llm,plot=True,printpars=False,axes=axes)
+            nt,nb = npc.nlabeled(nthresh=1,dr=20.0)
+            npcs.measurements.append([nt,nb])
+            if not progress.Update(i+1):
+                cancelled = True
+                # Cancelled by user.
+                break
+            wx.Yield()
+
+        if not cancelled:
+            pipeline.npcs = npcs
+            npcs.plot_labeleff()
+        
     def OnSelectNPCsByMask(self,event=None):
         from PYME.DSView import dsviewer
 
