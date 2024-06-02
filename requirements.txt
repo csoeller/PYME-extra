@@ -6,3 +6,4 @@ python-microscopy
 statsmodels
 roifile
 circle-fit
+colorcet
