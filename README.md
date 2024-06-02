@@ -35,9 +35,10 @@ For user installs, plugin files can be installed in the per user config director
 External modules required for full functionality are listed in `requirements.txt`, these currently include
 
     python-microscopy
-    statsmodels
-    roifile
-    circle-fit
+    statsmodels # for FRC smoothing with the lowess filter
+    roifile     # to allow using info from ImageJ/Fiji ROIs
+    colorcet    # add some colorcet colour tables in PYME
+    circle-fit  # needs pip install to get recent version; for 2D NPC analysis
 
 ### Issues ###
 
