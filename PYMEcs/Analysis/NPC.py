@@ -201,7 +201,7 @@ def pnpc3d(k,plabel):
     
     return p_k_npc
 
-def prange():
+def prangeNPC3D():
     krange = np.arange(17,dtype='i')
     prange=0.1*np.arange(1,10)
 
@@ -222,6 +222,19 @@ def npclabel_fit(nphist,sigma=None):
     n_labels_scaled = nphist.sum()*nlabels_fit
 
     return (popt[0],n_labels_scaled,perr[0])
+
+def plotcdf_npc3d(nlab):
+    pr = prangeNPC3D()
+    for p in pr.keys():
+        if p != 'krange':
+            plt.plot(pr['krange'],np.cumsum(pr[p]),label="p=%.1f" % p)
+    plt.hist(nlab,range=(0,16),bins='auto',density=True,
+             histtype="step", cumulative=1, label='experiment')
+    plt.legend()
+    plt.title("NPC 3D analysis using %d NPCs" % nlab.size)
+    plt.xlabel("N labeled")
+    plt.ylabel("CDF")
+        
 
 #################
 # NPC 3D Analysis
@@ -527,14 +540,9 @@ class NPC3DSet(object):
         if len(self.measurements) < 10:
             raise RuntimeError("not enough measurements, need at least 10, got %d" %
                                len(self.measurements))
-        
+        meas = np.array(self.measurements)
+        nlab = meas.sum(axis=1)
+
         plt.figure()
-        pr = prange()
-        for p in pr.keys():
-            if p != 'krange':
-                plt.plot(pr['krange'],np.cumsum(pr[p]),label="p=%.1f" % p)
-        nlab = np.array(self.measurements).sum(axis=1)
-        plt.hist(nlab,range=(0,16),bins='auto',density=True,
-                 histtype="step", cumulative=1, label='experiment')
-        plt.legend()
-        
+        plotcdf_npc3d(nlab)
+

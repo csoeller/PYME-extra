@@ -1,11 +1,14 @@
 from PYME.warnings import warn
-from PYMEcs.Analysis.NPC import estimate_nlabeled, npclabel_fit
+from PYMEcs.Analysis.NPC import estimate_nlabeled, npclabel_fit, plotcdf_npc3d
 from PYME.recipes import tablefilters
 import wx
 from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float, Bool
 import numpy as np
 import matplotlib.pyplot as plt
 from PYMEcs.misc.utils import unique_name
+import logging
+
+logger = logging.getLogger(__name__)
 
 def selectWithDialog(choices, message='select image from list', caption='Selection'):
     dlg = wx.SingleChoiceDialog(None, message, caption, list(choices), wx.CHOICEDLG_STYLE)
@@ -49,7 +52,8 @@ def setNPCsfromImg(pipeline,img):
 
 
 class NPCsettings(HasTraits):
-    SegmentThreshold = Int(10)
+    SegmentThreshold_2D = Int(10)
+    SegmentThreshold_3D = Int(1)
     SecondPass = Bool(False)
     FitMode = Enum(['abs','square'])
 
@@ -57,12 +61,14 @@ class NPCcalc():
     def __init__(self, visFr):
         self.visFr = visFr
 
-        visFr.AddMenuItem('Experimental>NPCs', "Analyse single NPC\tCtrl+N", self.OnAnalyseSingleNPC)
         visFr.AddMenuItem('Experimental>NPCs', "Select NPCs by Mask", self.OnSelectNPCsByMask)
-        visFr.AddMenuItem('Experimental>NPCs', "Analyse NPCs by ID", self.OnAnalyseNPCsByID)
+        visFr.AddMenuItem('Experimental>NPCs', "Analyse single 2D NPC\tCtrl+N", self.OnAnalyseSingleNPC)
+        visFr.AddMenuItem('Experimental>NPCs', "Analyse 2D NPCs by ID", self.OnAnalyseNPCsByID)
+        visFr.AddMenuItem('Experimental>NPCs', "Show 2D NPC labeling Statistics", self.OnNPCstats)
+        visFr.AddMenuItem('Experimental>NPCs', "Select by mask, analyse and show stats (2D)", self.OnNPCcombinedFuncs)
         visFr.AddMenuItem('Experimental>NPCs', "Analyse 3D NPCs by ID", self.OnAnalyse3DNPCsByID)
-        visFr.AddMenuItem('Experimental>NPCs', "Show NPC labeling Statistics", self.OnNPCstats)
-        visFr.AddMenuItem('Experimental>NPCs', "Select by mask, analyse and show stats", self.OnNPCcombinedFuncs)
+        visFr.AddMenuItem('Experimental>NPCs', "Save 3D NPC Measurements",self.OnNPC3DSaveMeasurements)
+        visFr.AddMenuItem('Experimental>NPCs', "Load and display saved 3D NPC Measurements",self.OnNPC3DLoadMeasurements)
         visFr.AddMenuItem('Experimental>NPCs', 'NPC Analysis settings', self.OnNPCsettings)
 
         self.NPCsettings = NPCsettings()
@@ -87,7 +93,7 @@ class NPCcalc():
             warn('x or y bounding box > %d nm (%d,%d) - check if single NPC' % (maxextent_nm,xExtent,yExtent))
             return
 
-        estimate_nlabeled(pipeline['x'],pipeline['y'],nthresh=self.NPCsettings.SegmentThreshold,
+        estimate_nlabeled(pipeline['x'],pipeline['y'],nthresh=self.NPCsettings.SegmentThreshold_2D,
                           do_plot=True,secondpass=self.NPCsettings.SecondPass,fitmode=self.NPCsettings.FitMode)
         
 
@@ -98,7 +104,7 @@ class NPCcalc():
         with_npclinfo = unique_name('with_npcinfo',pipeline.dataSources.keys())
         # for the NPCAnalysisByID module use the current NPCsettings
         npcanalysis = NPCAnalysisByID(inputName=pipeline.selectedDataSourceKey,outputName=with_npclinfo,
-                                      SegmentThreshold=self.NPCsettings.SegmentThreshold,
+                                      SegmentThreshold=self.NPCsettings.SegmentThreshold_2D,
                                       SecondPass=self.NPCsettings.SecondPass,FitMode=self.NPCsettings.FitMode)
         if not npcanalysis.configure_traits(kind='modal'):
             return
@@ -117,15 +123,24 @@ class NPCcalc():
             npcs.addNPCfromPipeline(pipeline,oid)
 
         progress = wx.ProgressDialog("NPC analysis in progress", "please wait", maximum=len(npcs.npcs),
-                                     parent=self.visFr, style=wx.PD_SMOOTH|wx.PD_AUTO_HIDE|wx.PD_CAN_ABORT)
+                                     parent=self.visFr,
+                                     style=wx.PD_SMOOTH
+                                     | wx.PD_AUTO_HIDE
+                                     | wx.PD_CAN_ABORT
+                                     | wx.PD_ESTIMATED_TIME
+                                     | wx.PD_REMAINING_TIME)
         fig, axes=plt.subplots(2,3)
         cancelled = False
         for i,npc in enumerate(npcs.npcs):
             npc.fitbymll(npcs.llm,plot=True,printpars=False,axes=axes)
-            nt,nb = npc.nlabeled(nthresh=1,dr=20.0)
+            nt,nb = npc.nlabeled(nthresh=self.NPCsettings.SegmentThreshold_3D,dr=20.0)
             npcs.measurements.append([nt,nb])
-            if not progress.Update(i+1):
+            (keepGoing, skip) = progress.Update(i+1)
+            if not keepGoing:
+                logger.info('OnAnalyse3DNPCsByID: progress cancelled, aborting NPC analysis')
                 cancelled = True
+                progress.Destroy()
+                wx.Yield()
                 # Cancelled by user.
                 break
             wx.Yield()
@@ -133,6 +148,38 @@ class NPCcalc():
         if not cancelled:
             pipeline.npcs = npcs
             npcs.plot_labeleff()
+
+    def OnNPC3DSaveMeasurements(self, event=None):
+        pipeline = self.visFr.pipeline
+        if 'npcs' not in dir(pipeline) or 'measurements' not in dir(pipeline.npcs):
+            warn('no valid NPC measurements found, therefore cannot save...')
+            return
+        
+        fdialog = wx.FileDialog(self.visFr, 'Save NPC measurements as ...',
+                                wildcard='CSV (*.csv)|*.csv',
+                                style=wx.FD_SAVE)
+        if fdialog.ShowModal() != wx.ID_OK:
+            return
+
+        fpath = fdialog.GetPath()
+        meas = np.array(pipeline.npcs.measurements, dtype='i')
+        import pandas as pd
+        df = pd.DataFrame({'Ntop_NPC3D': meas[:, 0], 'Nbot_NPC3D': meas[:, 1]})
+        df.to_csv(fpath,index=False)
+
+
+    def OnNPC3DLoadMeasurements(self, event=None):
+        fdialog = wx.FileDialog(self.visFr, 'Load NPC measurements from ...',
+                                wildcard='CSV (*.csv)|*.csv',
+                                style=wx.FD_OPEN)
+        if fdialog.ShowModal() != wx.ID_OK:
+            return
+        import pandas as pd
+        meas = pd.read_csv(fdialog.GetPath())
+        # here we need some plotting code
+        nlab = meas['Ntop_NPC3D'] + meas['Nbot_NPC3D']
+        plt.figure()
+        plotcdf_npc3d(nlab)
         
     def OnSelectNPCsByMask(self,event=None):
         from PYME.DSView import dsviewer
