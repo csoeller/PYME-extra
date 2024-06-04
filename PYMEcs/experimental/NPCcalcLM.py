@@ -117,11 +117,18 @@ class NPCcalc():
     def OnAnalyse3DNPCsByID(self, event=None):
         from PYMEcs.Analysis.NPC import NPC3DSet
         pipeline = self.visFr.pipeline
-        npcs = NPC3DSet()
 
-        for oid in np.unique(pipeline['objectID']):
-            npcs.addNPCfromPipeline(pipeline,oid)
+        if 'npcs' in dir(pipeline):
+            npcs = pipeline.npcs
+            do_plot = False
+        else:
+            npcs = NPC3DSet()
+            do_plot = True
+            for oid in np.unique(pipeline['objectID']):
+                npcs.addNPCfromPipeline(pipeline,oid)
 
+        # for example use of ProgressDialog see also
+        # https://github.com/Metallicow/wxPython-Sample-Apps-and-Demos/blob/master/101_Common_Dialogs/ProgressDialog/ProgressDialog_extended.py
         progress = wx.ProgressDialog("NPC analysis in progress", "please wait", maximum=len(npcs.npcs),
                                      parent=self.visFr,
                                      style=wx.PD_SMOOTH
@@ -129,10 +136,13 @@ class NPCcalc():
                                      | wx.PD_CAN_ABORT
                                      | wx.PD_ESTIMATED_TIME
                                      | wx.PD_REMAINING_TIME)
-        fig, axes=plt.subplots(2,3)
+        if do_plot:
+            fig, axes=plt.subplots(2,3)
         cancelled = False
+        npcs.measurements = []
         for i,npc in enumerate(npcs.npcs):
-            npc.fitbymll(npcs.llm,plot=True,printpars=False,axes=axes)
+            if not npc.fitted:
+                npc.fitbymll(npcs.llm,plot=True,printpars=False,axes=axes)
             nt,nb = npc.nlabeled(nthresh=self.NPCsettings.SegmentThreshold_3D,dr=20.0)
             npcs.measurements.append([nt,nb])
             (keepGoing, skip) = progress.Update(i+1)
@@ -146,7 +156,7 @@ class NPCcalc():
             wx.Yield()
 
         if not cancelled:
-            pipeline.npcs = npcs
+            pipeline.npcs = npcs # overwriting with the same object should be fine if pipeline.npcs already existed
             npcs.plot_labeleff()
 
     def OnNPC3DSaveMeasurements(self, event=None):
@@ -165,7 +175,13 @@ class NPCcalc():
         meas = np.array(pipeline.npcs.measurements, dtype='i')
         import pandas as pd
         df = pd.DataFrame({'Ntop_NPC3D': meas[:, 0], 'Nbot_NPC3D': meas[:, 1]})
-        df.to_csv(fpath,index=False)
+
+        from pathlib import Path
+        with open(fpath, 'w') as f:
+            f.write('# threshold %d, source data file %s\n' %
+                    (self.NPCsettings.SegmentThreshold_3D,Path(pipeline.filename).name))
+
+        df.to_csv(fpath,index=False, mode='a')
 
 
     def OnNPC3DLoadMeasurements(self, event=None):
@@ -175,7 +191,7 @@ class NPCcalc():
         if fdialog.ShowModal() != wx.ID_OK:
             return
         import pandas as pd
-        meas = pd.read_csv(fdialog.GetPath())
+        meas = pd.read_csv(fdialog.GetPath(),comment='#')
         # here we need some plotting code
         nlab = meas['Ntop_NPC3D'] + meas['Nbot_NPC3D']
         plt.figure()

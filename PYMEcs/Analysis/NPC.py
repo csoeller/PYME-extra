@@ -223,13 +223,17 @@ def npclabel_fit(nphist,sigma=None):
 
     return (popt[0],n_labels_scaled,perr[0])
 
-def plotcdf_npc3d(nlab):
+def plotcdf_npc3d(nlab,plot_as_points=True):
     pr = prangeNPC3D()
     for p in pr.keys():
         if p != 'krange':
             plt.plot(pr['krange'],np.cumsum(pr[p]),label="p=%.1f" % p)
-    plt.hist(nlab,range=(0,16),bins='auto',density=True,
-             histtype="step", cumulative=1, label='experiment')
+    histret = plt.hist(nlab,range=(0,16),bins='auto',density=True,
+                       histtype="step", cumulative=1, label='experiment', alpha=0.3)
+    if plot_as_points:
+        histn = histret[0]
+        histctr = 0.5*(histret[1][1:]+histret[1][0:-1])
+        plt.scatter(histctr,histn)
     plt.legend()
     plt.title("NPC 3D analysis using %d NPCs" % nlab.size)
     plt.xlabel("N labeled")
@@ -446,6 +450,7 @@ class NPC3D(object):
         self.transformed_pts = None
         self.opt_result = None
         self.filtered_pts = None
+        self.fitted = False
 
     def normalize_points(self,zclip=None):
         npts = self.points - self.points.mean(axis=0)[None,:]
@@ -462,6 +467,7 @@ class NPC3D(object):
         nllm.nll_basin_hopping(p0=(0,0,0,0,0,100.0,100.0))
         self.opt_result = nllm.opt_result
         self.transformed_pts = nllm.c3dr
+        self.fitted = True
         if printpars:
             nllm.pprint_lastpars()
         if plot:
@@ -525,14 +531,15 @@ class NPC3DSet(object):
     def addNPCfromPipeline(self,pipeline,oid):
         self.registerNPC(NPC3D(pipeline=pipeline,objectID=oid,zclip=75))
         
-    def measure_labeleff(self,nthresh=1,do_plot=False,printpars=False):
+    def measure_labeleff(self,nthresh=1,do_plot=False,printpars=False,refit=False):
         self.measurements = []
         if do_plot:
             fig, axes = plt.subplots(2,3)
         else:
             axes = None
         for npc in self.npcs:
-            npc.fitbymll(self.llm,plot=do_plot,axes=axes,printpars=printpars)
+            if not npc.fitted and not refit:
+                npc.fitbymll(self.llm,plot=do_plot,axes=axes,printpars=printpars)
             nt,nb = npc.nlabeled(nthresh=nthresh,dr=20.0)
             self.measurements.append([nt,nb])
     
