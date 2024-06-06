@@ -203,6 +203,9 @@ def pnpc3d(k,plabel):
 
 def pnpc3dc(kfit,plabel):
     krange = np.arange(17,dtype='i')
+    # important point: we must always first evealuate the probability expressions at the
+    # canonical points (0-16), form the cumluative sum and only then
+    # interpolate onto the coordinates where the fit is tested in a second step
     pc = np.cumsum(pnpc3d(krange,plabel))
     return np.interp(kfit,krange,pc)
 
@@ -488,7 +491,8 @@ class NPC3D(object):
         self.fitted = False
 
     def normalize_points(self,zclip=None):
-        npts = self.points - self.points.mean(axis=0)[None,:]
+        self.offset = self.points.mean(axis=0)[None,:]
+        npts = self.points - self.offset
         if not zclip is None:
             zgood = (npts[:,2] > -zclip)*(npts[:,2] < zclip)
             npts = npts[zgood,:]
@@ -535,9 +539,11 @@ class NPC3D(object):
         self.nllminimizer.plot_points(mode='external',external_pts=pts)
         
             
-    def plot_points3D(self,mode='transformed'):
+    def plot_points3D(self,mode='transformed',ax=None,with_offset=False):
         if mode == 'normalized':
             pts = self.npts
+            if with_offset:
+                pts = pts + self.offset
         elif mode == 'transformed':
             pts = self.transformed_pts
         elif mode == 'filtered':
@@ -545,12 +551,61 @@ class NPC3D(object):
         else:
             raise RuntimeError("unknown mode %s" % mode)
 
-        fig = plt.figure()
-        ax = fig.add_subplot(projection='3d')
+        if ax is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(projection='3d')
         ax.scatter(pts[:,0], pts[:,1], pts[:,2], 'o')
         return ax
+
+    def plot_points3D_with_glyph(self, ax=None, with_offset=False):
+
+        def get_circ_coords(radius=50.0, npoints=25):
+            angle = np.linspace( 0 , 2 * np.pi , npoints) 
+            xc = radius * np.cos( angle ) 
+            yc = radius * np.sin( angle )
+            return (xc,yc)
         
+        if ax is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(projection='3d')
+
+        self.plot_points3D(mode='normalized',ax=ax,with_offset=with_offset)
+        xc, yc = get_circ_coords(radius=50, npoints=25)
+
+        def transform_coords_invs(x,y,z,pars,offset):
+            xr = x.copy()
+            yr = y.copy()
+            zr = z.copy()
+            zr /= 0.01*pars[6]
+            xr /= 0.01*pars[5]
+            yr /= 0.01*pars[5]
+            c3d = np.stack([xr,yr,zr],axis=1)
+            c3di = R.from_euler('zy', [pars[3],pars[4]], degrees=True).inv().apply(c3d)
+            c3di -= [pars[0],pars[1],pars[2]]
+            c3di += offset
+
+            return (c3di[:,0],c3di[:,1],c3di[:,2])
+
+        if with_offset:
+            offset = self.offset
+        else:
+            offset = 0
+            
+        pars = self.opt_result.x
+        self.glyph = {}
+        x1,y1,z1 = transform_coords_invs(xc,yc,np.zeros_like(xc)-35.0,pars,offset)
+        ax.plot(x1,y1,z1,'r')
+        self.glyph['circ_bot'] = to3vecs(x1,y1,z1)
+        x2,y2,z2 = transform_coords_invs(xc,yc,np.zeros_like(xc)+35.0,pars,offset)
+        ax.plot(x2,y2,z2,'r')
+        self.glyph['circ_top'] = to3vecs(x1,y1,z1)
+        xa,ya,za = transform_coords_invs([0,0],[0,0],[-75.0,+75.0],pars,offset)
+        ax.plot(xa,ya,za,'r')
+        self.glyph['axis'] = to3vecs(xa,ya,za)
         
+        return ax
+        
+
     def nlabeled(self,nthresh=1,r0=50.0,dr=25.0,do_plot=False):
         self.filter('z',0,150)
         if self.filtered_pts.size > 0:
