@@ -62,13 +62,13 @@ class NPCcalc():
         self.visFr = visFr
 
         visFr.AddMenuItem('Experimental>NPCs', "Select NPCs by Mask", self.OnSelectNPCsByMask)
-        visFr.AddMenuItem('Experimental>NPCs', "Analyse single 2D NPC\tCtrl+N", self.OnAnalyseSingleNPC)
-        visFr.AddMenuItem('Experimental>NPCs', "Analyse 2D NPCs by ID", self.OnAnalyseNPCsByID)
-        visFr.AddMenuItem('Experimental>NPCs', "Show 2D NPC labeling Statistics", self.OnNPCstats)
-        visFr.AddMenuItem('Experimental>NPCs', "Select by mask, analyse and show stats (2D)", self.OnNPCcombinedFuncs)
-        visFr.AddMenuItem('Experimental>NPCs', "Analyse 3D NPCs by ID", self.OnAnalyse3DNPCsByID)
-        visFr.AddMenuItem('Experimental>NPCs', "Save 3D NPC Measurements",self.OnNPC3DSaveMeasurements)
-        visFr.AddMenuItem('Experimental>NPCs', "Load and display saved 3D NPC Measurements",self.OnNPC3DLoadMeasurements)
+        visFr.AddMenuItem('Experimental>NPCs', "2D - Analyse single 2D NPC\tCtrl+N", self.OnAnalyseSingleNPC)
+        visFr.AddMenuItem('Experimental>NPCs', "2D - Analyse 2D NPCs by ID", self.OnAnalyseNPCsByID)
+        visFr.AddMenuItem('Experimental>NPCs', "2D - Show 2D NPC labeling Statistics", self.OnNPCstats)
+        visFr.AddMenuItem('Experimental>NPCs', "2D - Select by mask, analyse and show stats", self.OnNPCcombinedFuncs)
+        visFr.AddMenuItem('Experimental>NPCs', "3D - Analyse 3D NPCs by ID", self.OnAnalyse3DNPCsByID)
+        visFr.AddMenuItem('Experimental>NPCs', "3D - Save NPC Measurements",self.OnNPC3DSaveMeasurements)
+        visFr.AddMenuItem('Experimental>NPCs', "3D - Load and display saved NPC Measurements",self.OnNPC3DLoadMeasurements)
         visFr.AddMenuItem('Experimental>NPCs', 'NPC Analysis settings', self.OnNPCsettings)
 
         self.NPCsettings = NPCsettings()
@@ -122,7 +122,7 @@ class NPCcalc():
             npcs = pipeline.npcs
             do_plot = False
         else:
-            npcs = NPC3DSet()
+            npcs = NPC3DSet(filename=pipeline.filename)
             do_plot = True
             for oid in np.unique(pipeline['objectID']):
                 npcs.addNPCfromPipeline(pipeline,oid)
@@ -185,17 +185,19 @@ class NPCcalc():
 
 
     def OnNPC3DLoadMeasurements(self, event=None):
+        from PYMEcs.misc.utils import get_timestamp_from_filename
         fdialog = wx.FileDialog(self.visFr, 'Load NPC measurements from ...',
                                 wildcard='CSV (*.csv)|*.csv',
                                 style=wx.FD_OPEN)
         if fdialog.ShowModal() != wx.ID_OK:
             return
         import pandas as pd
-        meas = pd.read_csv(fdialog.GetPath(),comment='#')
+        fname = fdialog.GetPath()
+        meas = pd.read_csv(fname,comment='#')
         # here we need some plotting code
         nlab = meas['Ntop_NPC3D'] + meas['Nbot_NPC3D']
         plt.figure()
-        plotcdf_npc3d(nlab)
+        plotcdf_npc3d(nlab,timestamp=get_timestamp_from_filename(fname))
         
     def OnSelectNPCsByMask(self,event=None):
         from PYME.DSView import dsviewer

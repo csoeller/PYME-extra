@@ -201,6 +201,11 @@ def pnpc3d(k,plabel):
     
     return p_k_npc
 
+def pnpc3dc(kfit,plabel):
+    krange = np.arange(17,dtype='i')
+    pc = np.cumsum(pnpc3d(krange,plabel))
+    return np.interp(kfit,krange,pc)
+
 def prangeNPC3D():
     krange = np.arange(17,dtype='i')
     prange=0.1*np.arange(1,10)
@@ -223,22 +228,41 @@ def npclabel_fit(nphist,sigma=None):
 
     return (popt[0],n_labels_scaled,perr[0])
 
-def plotcdf_npc3d(nlab,plot_as_points=True):
+from PYMEcs.misc.utils import get_timestamp_from_filename
+def plotcdf_npc3d(nlab,plot_as_points=True,timestamp=None):
     pr = prangeNPC3D()
     for p in pr.keys():
         if p != 'krange':
             plt.plot(pr['krange'],np.cumsum(pr[p]),label="p=%.1f" % p)
+    if timestamp is None:
+        labelexp = 'experiment'
+    else:
+        labelexp = 'exp %s' % timestamp
+
     histret = plt.hist(nlab,range=(0,16),bins='auto',density=True,
-                       histtype="step", cumulative=1, label='experiment', alpha=0.3)
+                       histtype="step", cumulative=1, label=labelexp, alpha=0.3)
     if plot_as_points:
         histn = histret[0]
         histctr = 0.5*(histret[1][1:]+histret[1][0:-1])
         plt.scatter(histctr,histn)
+
+    popt,perr, pcbfx, pcbestfit = npclabel_fit3D(histctr,histn)
+    plt.plot(pcbfx,pcbestfit,'--')
     plt.legend()
-    plt.title("NPC 3D analysis using %d NPCs" % nlab.size)
+    
+    plt.title("NPC 3D analysis using %d NPCs, LE = %d %% +- %.1f %%" %
+              (nlab.size,np.round(100.0*popt),100.0*perr))
     plt.xlabel("N labeled")
     plt.ylabel("CDF")
-        
+
+def npclabel_fit3D(histx,histv,sigma=0.1):
+    popt, pcov = curve_fit(pnpc3dc, histx, histv, sigma=sigma, method='lm', p0=[0.4])
+    perr = np.sqrt(np.diag(pcov))
+    krange = np.arange(17,dtype='i')
+    pcumulative = pnpc3dc(krange,popt[0])
+
+    return (popt[0],perr[0], krange, pcumulative)
+
 
 #################
 # NPC 3D Analysis
@@ -353,6 +377,17 @@ class LLmaximizerNPC3D(object):
         self.c3dr[:,2]   *= 0.01*pars[6]
         self._lastpars = pars
         return self.c3dr
+
+    def transform_coords_inv(self,pars):
+        if 'c3dr' not in dir(self) or self.c3dr is None:
+            raise RuntimeError("need transformed points to start with")
+        c3dr = self.c3dr.copy()
+        c3dr[:,0:2] /= 0.01*pars[5]
+        c3dr[:,2]   /= 0.01*pars[6]
+        c3di = R.from_euler('zy', [pars[3],pars[4]], degrees=True).inv.apply(c3d)
+        c3di -= [pars[0],pars[1],pars[2]]
+        self.c3di = c3di
+        return self.c3di
 
     def plot_points(self,mode='transformed',external_pts=None,axes=None): # supported modes should be 'original', 'transformed', 'both', external
         if mode == 'transformed':
@@ -500,6 +535,22 @@ class NPC3D(object):
         self.nllminimizer.plot_points(mode='external',external_pts=pts)
         
             
+    def plot_points3D(self,mode='transformed'):
+        if mode == 'normalized':
+            pts = self.npts
+        elif mode == 'transformed':
+            pts = self.transformed_pts
+        elif mode == 'filtered':
+            pts = self.filtered_pts
+        else:
+            raise RuntimeError("unknown mode %s" % mode)
+
+        fig = plt.figure()
+        ax = fig.add_subplot(projection='3d')
+        ax.scatter(pts[:,0], pts[:,1], pts[:,2], 'o')
+        return ax
+        
+        
     def nlabeled(self,nthresh=1,r0=50.0,dr=25.0,do_plot=False):
         self.filter('z',0,150)
         if self.filtered_pts.size > 0:
@@ -520,7 +571,8 @@ class NPC3D(object):
         return (self.n_top,self.n_bot)
 
 class NPC3DSet(object):
-    def __init__(self):
+    def __init__(self,filename=None):
+        self.filename=filename
         self.npcs = []
         self.llm = LLmaximizerNPC3D([100.0,70.0],eps=15.0,sigma=7.0,bgprob=1e-9,extent_nm=300.0)
         self.measurements = []
@@ -544,6 +596,7 @@ class NPC3DSet(object):
             self.measurements.append([nt,nb])
     
     def plot_labeleff(self):
+        from PYMEcs.misc.utils import get_timestamp_from_filename
         if len(self.measurements) < 10:
             raise RuntimeError("not enough measurements, need at least 10, got %d" %
                                len(self.measurements))
@@ -551,5 +604,5 @@ class NPC3DSet(object):
         nlab = meas.sum(axis=1)
 
         plt.figure()
-        plotcdf_npc3d(nlab)
+        plotcdf_npc3d(nlab,timestamp=get_timestamp_from_filename(self.filename))
 
