@@ -539,7 +539,7 @@ class NPC3D(object):
         self.nllminimizer.plot_points(mode='external',external_pts=pts)
         
             
-    def plot_points3D(self,mode='transformed',ax=None,with_offset=False):
+    def plot_points3D(self,mode='transformed',ax=None,with_offset=False,s=10):
         if mode == 'normalized':
             pts = self.npts
             if with_offset:
@@ -554,22 +554,55 @@ class NPC3D(object):
         if ax is None:
             fig = plt.figure()
             ax = fig.add_subplot(projection='3d')
-        ax.scatter(pts[:,0], pts[:,1], pts[:,2], 'o')
+        ax.scatter(pts[:,0], pts[:,1], pts[:,2], 'o', s=s)
         return ax
 
-    def plot_points3D_with_glyph(self, ax=None, with_offset=False):
+    def get_glyph(self, with_offset=True):
 
         def get_circ_coords(radius=50.0, npoints=25):
             angle = np.linspace( 0 , 2 * np.pi , npoints) 
             xc = radius * np.cos( angle ) 
             yc = radius * np.sin( angle )
             return (xc,yc)
+
+        def transform_coords_invs(x,y,z,pars,offset):
+            xr = x.copy()
+            yr = y.copy()
+            zr = z.copy()
+            zr /= 0.01*pars[6]
+            xr /= 0.01*pars[5]
+            yr /= 0.01*pars[5]
+            c3d = np.stack([xr,yr,zr],axis=1)
+            c3di = R.from_euler('zy', [pars[3],pars[4]], degrees=True).inv().apply(c3d)
+            c3di -= [pars[0],pars[1],pars[2]]
+            c3di += offset
+
+            return (c3di[:,0],c3di[:,1],c3di[:,2])
         
+        xc, yc = get_circ_coords(radius=50, npoints=25)
+
+        if with_offset:
+            offset = self.offset
+        else:
+            offset = 0
+        pars = self.opt_result.x
+        glyph = {}
+        x1,y1,z1 = transform_coords_invs(xc,yc,np.zeros_like(xc)-35.0,pars,offset)
+        glyph['circ_bot'] = to3vecs(x1,y1,z1)
+        x2,y2,z2 = transform_coords_invs(xc,yc,np.zeros_like(xc)+35.0,pars,offset)
+        glyph['circ_top'] = to3vecs(x2,y2,z2)
+        xa,ya,za = transform_coords_invs([0,0],[0,0],[-75.0,+75.0],pars,offset)
+        glyph['axis'] = to3vecs(xa,ya,za)
+
+        return glyph
+        
+    def plot_points3D_with_glyph(self, ax=None, with_offset=False, s=10):
+
         if ax is None:
             fig = plt.figure()
             ax = fig.add_subplot(projection='3d')
 
-        self.plot_points3D(mode='normalized',ax=ax,with_offset=with_offset)
+        self.plot_points3D(mode='normalized',ax=ax,with_offset=with_offset,s=s)
         xc, yc = get_circ_coords(radius=50, npoints=25)
 
         def transform_coords_invs(x,y,z,pars,offset):

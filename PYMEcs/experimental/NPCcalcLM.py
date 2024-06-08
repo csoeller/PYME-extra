@@ -67,6 +67,7 @@ class NPCcalc():
         visFr.AddMenuItem('Experimental>NPCs', "2D - Show 2D NPC labeling Statistics", self.OnNPCstats)
         visFr.AddMenuItem('Experimental>NPCs', "2D - Select by mask, analyse and show stats", self.OnNPCcombinedFuncs)
         visFr.AddMenuItem('Experimental>NPCs', "3D - Analyse 3D NPCs by ID", self.OnAnalyse3DNPCsByID)
+        visFr.AddMenuItem('Experimental>NPCs', "3D - Add 3D NPC templates", self.On3DNPCaddTemplates)
         visFr.AddMenuItem('Experimental>NPCs', "3D - Save NPC Measurements",self.OnNPC3DSaveMeasurements)
         visFr.AddMenuItem('Experimental>NPCs', "3D - Load and display saved NPC Measurements",self.OnNPC3DLoadMeasurements)
         visFr.AddMenuItem('Experimental>NPCs', 'NPC Analysis settings', self.OnNPCsettings)
@@ -155,9 +156,58 @@ class NPCcalc():
                 break
             wx.Yield()
 
-        if not cancelled:
-            pipeline.npcs = npcs # overwriting with the same object should be fine if pipeline.npcs already existed
-            npcs.plot_labeleff()
+        if cancelled:
+            return
+        
+        pipeline.npcs = npcs # overwriting with the same object should be fine if pipeline.npcs already existed
+        npcs.plot_labeleff()
+
+
+    def On3DNPCaddTemplates(self, event=None):
+        pipeline = self.visFr.pipeline
+        if 'npcs' not in dir(pipeline) or 'measurements' not in dir(pipeline.npcs):
+            warn('no valid NPC measurements found, therefore cannot add templates...')
+            return
+        npcs = pipeline.npcs
+        
+        x = np.empty((0))
+        y = np.empty((0))
+        z = np.empty((0))
+        clumpIndex = np.empty((0),int)
+        clumpSize = np.empty((0),int)
+        objectID = np.empty((0),int)
+        ci = 1
+        for npc in npcs.npcs:
+            glyph = npc.get_glyph()
+            for poly in ['circ_bot','circ_top','axis']:
+                c3 = glyph[poly]
+                xg = c3[:,0]
+                yg = c3[:,1]
+                zg = c3[:,2]
+                x = np.append(x,xg)
+                y = np.append(y,yg)
+                z = np.append(z,zg)
+                clumpIndex = np.append(clumpIndex,np.full_like(xg,ci,dtype=int))
+                clumpSize = np.append(clumpSize,np.full_like(xg,xg.size,dtype=int))
+                ci += 1
+                objectID = np.append(objectID,np.full_like(xg,npc.objectID,dtype=int))
+
+        t = np.arange(x.size)
+        A = np.full_like(x,10.0,dtype='f')
+        error_x = np.full_like(x,1.0,dtype='f')
+        error_y = np.full_like(x,1.0,dtype='f')
+        error_z = np.full_like(x,1.0,dtype='f')
+        
+        dsdict = dict(x=x,y=y,z=z,clumpIndex=clumpIndex,clumpSize=clumpSize,
+                      objectID=objectID,t=t,A=A,error_x=error_x,error_y=error_y,error_z=error_z)
+
+        from PYME.IO.tabular import DictSource
+        ds = DictSource(dsdict)
+        pipeline.addDataSource('NPCtemplates',ds,False) # should check if already exists!
+        pipeline.Rebuild()
+        from PYME.LMVis.layers.tracks import TrackRenderLayer
+        layer = TrackRenderLayer(pipeline, dsname='NPCtemplates', method='tracks')
+        self.visFr.add_layer(layer)        
 
     def OnNPC3DSaveMeasurements(self, event=None):
         pipeline = self.visFr.pipeline
