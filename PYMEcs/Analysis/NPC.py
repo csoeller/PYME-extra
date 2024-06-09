@@ -603,38 +603,13 @@ class NPC3D(object):
             ax = fig.add_subplot(projection='3d')
 
         self.plot_points3D(mode='normalized',ax=ax,with_offset=with_offset,s=s)
-        xc, yc = get_circ_coords(radius=50, npoints=25)
-
-        def transform_coords_invs(x,y,z,pars,offset):
-            xr = x.copy()
-            yr = y.copy()
-            zr = z.copy()
-            zr /= 0.01*pars[6]
-            xr /= 0.01*pars[5]
-            yr /= 0.01*pars[5]
-            c3d = np.stack([xr,yr,zr],axis=1)
-            c3di = R.from_euler('zy', [pars[3],pars[4]], degrees=True).inv().apply(c3d)
-            c3di -= [pars[0],pars[1],pars[2]]
-            c3di += offset
-
-            return (c3di[:,0],c3di[:,1],c3di[:,2])
-
-        if with_offset:
-            offset = self.offset
-        else:
-            offset = 0
-            
-        pars = self.opt_result.x
-        self.glyph = {}
-        x1,y1,z1 = transform_coords_invs(xc,yc,np.zeros_like(xc)-35.0,pars,offset)
+        glyph = self.get_glyph(with_offset=with_offset)
+        x1,y1,z1 = xyzfrom3vec(glyph['circ_bot'])
         ax.plot(x1,y1,z1,'r')
-        self.glyph['circ_bot'] = to3vecs(x1,y1,z1)
-        x2,y2,z2 = transform_coords_invs(xc,yc,np.zeros_like(xc)+35.0,pars,offset)
+        x2,y2,z2 = xyzfrom3vec(glyph['circ_top'])
         ax.plot(x2,y2,z2,'r')
-        self.glyph['circ_top'] = to3vecs(x1,y1,z1)
-        xa,ya,za = transform_coords_invs([0,0],[0,0],[-75.0,+75.0],pars,offset)
+        xa,ya,za = xyzfrom3vec(glyph['axis'])
         ax.plot(xa,ya,za,'r')
-        self.glyph['axis'] = to3vecs(xa,ya,za)
         
         return ax
         
@@ -662,6 +637,7 @@ class NPC3DSet(object):
     def __init__(self,filename=None):
         self.filename=filename
         self.npcs = []
+        # TODO: expose llm parameters to this init method as needed in practice!
         self.llm = LLmaximizerNPC3D([100.0,70.0],eps=15.0,sigma=7.0,bgprob=1e-9,extent_nm=300.0)
         self.measurements = []
 
@@ -678,7 +654,7 @@ class NPC3DSet(object):
         else:
             axes = None
         for npc in self.npcs:
-            if not npc.fitted and not refit:
+            if not npc.fitted or refit:
                 npc.fitbymll(self.llm,plot=do_plot,axes=axes,printpars=printpars)
             nt,nb = npc.nlabeled(nthresh=nthresh,dr=20.0)
             self.measurements.append([nt,nb])

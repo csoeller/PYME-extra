@@ -61,16 +61,18 @@ class NPCcalc():
     def __init__(self, visFr):
         self.visFr = visFr
 
-        visFr.AddMenuItem('Experimental>NPCs', "Select NPCs by Mask", self.OnSelectNPCsByMask)
-        visFr.AddMenuItem('Experimental>NPCs', "2D - Analyse single 2D NPC\tCtrl+N", self.OnAnalyseSingleNPC)
-        visFr.AddMenuItem('Experimental>NPCs', "2D - Analyse 2D NPCs by ID", self.OnAnalyseNPCsByID)
-        visFr.AddMenuItem('Experimental>NPCs', "2D - Show 2D NPC labeling Statistics", self.OnNPCstats)
-        visFr.AddMenuItem('Experimental>NPCs', "2D - Select by mask, analyse and show stats", self.OnNPCcombinedFuncs)
-        visFr.AddMenuItem('Experimental>NPCs', "3D - Analyse 3D NPCs by ID", self.OnAnalyse3DNPCsByID)
-        visFr.AddMenuItem('Experimental>NPCs', "3D - Add 3D NPC templates", self.On3DNPCaddTemplates)
-        visFr.AddMenuItem('Experimental>NPCs', "3D - Save NPC Measurements",self.OnNPC3DSaveMeasurements)
-        visFr.AddMenuItem('Experimental>NPCs', "3D - Load and display saved NPC Measurements",self.OnNPC3DLoadMeasurements)
-        visFr.AddMenuItem('Experimental>NPCs', 'NPC Analysis settings', self.OnNPCsettings)
+        visFr.AddMenuItem('Experimental>NPC2D', "Select NPCs by Mask", self.OnSelectNPCsByMask)
+        visFr.AddMenuItem('Experimental>NPC3D', "Select NPCs by Mask", self.OnSelectNPCsByMask)
+        visFr.AddMenuItem('Experimental>NPC2D', "Analyse single 2D NPC\tCtrl+N", self.OnAnalyseSingleNPC)
+        visFr.AddMenuItem('Experimental>NPC2D', "Analyse 2D NPCs by ID", self.OnAnalyseNPCsByID)
+        visFr.AddMenuItem('Experimental>NPC2D', "Show 2D NPC labeling Statistics", self.OnNPCstats)
+        visFr.AddMenuItem('Experimental>NPC2D', "Select by mask, analyse and show stats", self.OnNPCcombinedFuncs)
+        visFr.AddMenuItem('Experimental>NPC3D', "Analyse 3D NPCs by ID", self.OnAnalyse3DNPCsByID)
+        visFr.AddMenuItem('Experimental>NPC3D', "Add 3D NPC templates", self.On3DNPCaddTemplates)
+        visFr.AddMenuItem('Experimental>NPC3D', "Save NPC 3D Measurements",self.OnNPC3DSaveMeasurements)
+        visFr.AddMenuItem('Experimental>NPC3D', "Load and display saved NPC 3D Measurements",self.OnNPC3DLoadMeasurements)
+        visFr.AddMenuItem('Experimental>NPC2D', 'NPC Analysis settings', self.OnNPCsettings)
+        visFr.AddMenuItem('Experimental>NPC3D', 'NPC Analysis settings', self.OnNPCsettings)
 
         self.NPCsettings = NPCsettings()
 
@@ -169,15 +171,24 @@ class NPCcalc():
             warn('no valid NPC measurements found, therefore cannot add templates...')
             return
         npcs = pipeline.npcs
+
+        if 'NPCtemplates' in pipeline.dataSources.keys():
+            # TODO: if practically this becomes an issue learn how to update an existing datasource
+            warn("dataSource 'NPCtemplates' already exists, currently we do not support recalculating a new template set")
+            return
         
         x = np.empty((0))
         y = np.empty((0))
         z = np.empty((0))
-        clumpIndex = np.empty((0),int)
-        clumpSize = np.empty((0),int)
+        polyIndex = np.empty((0),int)
+        polySize = np.empty((0),int)
         objectID = np.empty((0),int)
+        NtopLabelled = np.empty((0),int)
+        NbotLabelled = np.empty((0),int)
+        NLabelled = np.empty((0),int)
         ci = 1
         for npc in npcs.npcs:
+            nt, nb = (npc.n_top,npc.n_bot)
             glyph = npc.get_glyph()
             for poly in ['circ_bot','circ_top','axis']:
                 c3 = glyph[poly]
@@ -187,10 +198,13 @@ class NPCcalc():
                 x = np.append(x,xg)
                 y = np.append(y,yg)
                 z = np.append(z,zg)
-                clumpIndex = np.append(clumpIndex,np.full_like(xg,ci,dtype=int))
-                clumpSize = np.append(clumpSize,np.full_like(xg,xg.size,dtype=int))
+                polyIndex = np.append(polyIndex,np.full_like(xg,ci,dtype=int))
+                polySize = np.append(polySize,np.full_like(xg,xg.size,dtype=int))
                 ci += 1
                 objectID = np.append(objectID,np.full_like(xg,npc.objectID,dtype=int))
+                NtopLabelled = np.append(NtopLabelled,np.full_like(xg,nt,dtype=int))
+                NbotLabelled = np.append(NbotLabelled,np.full_like(xg,nb,dtype=int))
+                NLabelled = np.append(NLabelled,np.full_like(xg,nt+nb,dtype=int))               
 
         t = np.arange(x.size)
         A = np.full_like(x,10.0,dtype='f')
@@ -198,15 +212,19 @@ class NPCcalc():
         error_y = np.full_like(x,1.0,dtype='f')
         error_z = np.full_like(x,1.0,dtype='f')
         
-        dsdict = dict(x=x,y=y,z=z,clumpIndex=clumpIndex,clumpSize=clumpSize,
-                      objectID=objectID,t=t,A=A,error_x=error_x,error_y=error_y,error_z=error_z)
+        dsdict = dict(x=x,y=y,z=z,polyIndex=polyIndex,polySize=polySize,
+                      NtopLabelled=NtopLabelled,NbotLabelled=NbotLabelled,NLabelled=NLabelled,
+                      objectID=objectID,t=t,A=A,
+                      error_x=error_x,error_y=error_y,error_z=error_z)
 
         from PYME.IO.tabular import DictSource
-        ds = DictSource(dsdict)
-        pipeline.addDataSource('NPCtemplates',ds,False) # should check if already exists!
-        pipeline.Rebuild()
-        from PYME.LMVis.layers.tracks import TrackRenderLayer
-        layer = TrackRenderLayer(pipeline, dsname='NPCtemplates', method='tracks')
+        pipeline.addDataSource('NPCtemplates',DictSource(dsdict),False) # should check if already exists!
+        pipeline.Rebuild() # check, is this the right way when add a new non-module based dataSource?
+
+        # now we add a track layer to render our template polygons
+        # TODO - we may need to check if this happened before or not!
+        from PYME.LMVis.layers.tracks import TrackRenderLayer # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
+        layer = TrackRenderLayer(pipeline, dsname='NPCtemplates', method='tracks', clump_key='polyIndex')
         self.visFr.add_layer(layer)        
 
     def OnNPC3DSaveMeasurements(self, event=None):
