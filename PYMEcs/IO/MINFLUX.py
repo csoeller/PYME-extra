@@ -223,6 +223,11 @@ def monkeypatch_npy_io(visFr):
             ds.mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D(data)
             ds.mdh['MINFLUX.ExtraIteration'] = minflux_npy_has_extra_iter(data)
             ds.mdh['MINFLUX.Filename'] = Path(filename).name # the MINFLUX filename holds some metadata
+            from PYMEcs.misc.utils import get_timestamp_from_filename, parse_timestamp_from_filename
+            ts = get_timestamp_from_filename(filename)
+            if ts is not None:
+                ds.mdh['MINFLUX.TimeStamp'] = ts
+                ds.mdh['MINFLUX.StartTime'] = parse_timestamp_from_filename(filename)
             return ds
         else:
             return self._ds_from_file_original(filename, **kwargs)

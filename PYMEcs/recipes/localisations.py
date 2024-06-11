@@ -1380,14 +1380,13 @@ class MINFLUXcolours(ModuleBase):
         return mapped_ds
 
 from pathlib import Path
-def check_mbm_name(mbmfilename,datafilename,endswith='__MBM-beads'):
-    if datafilename is None:
+def check_mbm_name(mbmfilename,timestamp,endswith='__MBM-beads'):
+    if timestamp is None:
         return True
     mbmp = Path(mbmfilename)
-    datap = Path(datafilename)
     
     # should return False if warning is necessary
-    return mbmp.stem.startswith(datap.stem) and mbmp.stem.endswith(endswith)
+    return mbmp.stem.startswith(timestamp) and mbmp.stem.endswith(endswith)
 
 @register_module('MBMcorrection')
 class MBMcorrection(ModuleBase):
@@ -1400,7 +1399,7 @@ class MBMcorrection(ModuleBase):
     
     Median_window = Int(5)
     MBM_lowess_fraction = Float(0.1,label='lowess fraction for MBM smoothing',
-                                desc='lowess fraction used for smoothing of mean MBM trajectories (default 0.1)')
+                                desc='lowess fraction used for smoothing of mean MBM trajectories (default 0.1); 0 = no smoothing')
     
     def run(self,inputLocalizations):
         import json
@@ -1428,23 +1427,26 @@ class MBMcorrection(ModuleBase):
                 axismean = mbm.mean(axis)
                 axismean_g = axismean[~np.isnan(axismean)]
                 t_g = mbm.t[~np.isnan(axismean)]
-                axismean_sm = lowess(axismean_g, t_g, frac=self.MBM_lowess_fraction,
-                                     return_sorted=False)
-                axis_interp_msm = np.interp(tnew,t_g,axismean_sm)            
-                mbmcorr[axis] = axis_interp_msm
-
+                if self.MBM_lowess_fraction > 1e-5:
+                    axismean_sm = lowess(axismean_g, t_g, frac=self.MBM_lowess_fraction,
+                                         return_sorted=False)
+                    axis_interp_msm = np.interp(tnew,t_g,axismean_sm)            
+                    mbmcorr[axis] = axis_interp_msm
+                else: # fraction 0 or close to zero implies no lowess smoothing
+                    axis_interp_g = np.interp(tnew,t_g,axismean_g)            
+                    mbmcorr[axis] = axis_interp_g
 
             for axis in ['x','y','z']:
                 mapped_ds.addColumn('mbm%s' % axis, mbmcorr[axis])
                 mapped_ds.addColumn(axis,inputLocalizations["%s_nc" % axis] - mbmcorr[axis])
 
             if self.mbmfilename_checks:
-                if not check_mbm_name(self.mbmfile,inputLocalizations.mdh.get('MINFLUX.Filename')):
-                    warn("check MBM filename (%s) vs Series filename (%s)" %
-                         (Path(self.mbmfile).name,inputLocalizations.mdh.get('MINFLUX.Filename')))
-                if not check_mbm_name(self.mbmsettings,inputLocalizations.mdh.get('MINFLUX.Filename'),endswith='npz-settings'):
-                    warn("check MBM settings filename (%s) vs Series filename (%s)" %
-                         (Path(self.mbmsettings).name,inputLocalizations.mdh.get('MINFLUX.Filename')))
+                if not check_mbm_name(self.mbmfile,inputLocalizations.mdh.get('MINFLUX.TimeStamp')):
+                    warn("check MBM filename (%s) vs Series timestamp (%s)" %
+                         (Path(self.mbmfile).name,inputLocalizations.mdh.get('MINFLUX.TimeStamp')))
+                if not check_mbm_name(self.mbmsettings,inputLocalizations.mdh.get('MINFLUX.TimeStamp'),endswith='npz-settings'):
+                    warn("check MBM settings filename (%s) vs Series timestamp (%s)" %
+                         (Path(self.mbmsettings).name,inputLocalizations.mdh.get('MINFLUX.TimeStamp')))
                     
             mapped_ds.mbm = mbm # attach mbm object to the output
 
