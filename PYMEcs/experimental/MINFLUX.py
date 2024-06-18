@@ -433,7 +433,7 @@ class MINFLUXanalyser():
                            style=wx.FD_OPEN) as dialog:
             if dialog.ShowModal() == wx.ID_CANCEL:
                 return
-        fname = dialog.GetPath()
+            fname = dialog.GetPath()
         from pathlib import Path
         fp = Path(fname)
         from PYMEcs.Analysis.MBMcollection import MBMCollectionDF
@@ -443,10 +443,10 @@ class MINFLUXanalyser():
         if pfp.suffix != '.npy':
             warn("likely not a MINFLUX npy dataset, extension is %s; aborting..." % pfp.suffix)
             return
-        MINFLUXstem = pfp.stem
-        if MINFLUXstem not in fp.stem:
-            warn("different name stems in MINFLUX and MBM dataset; do they match? %s vs %s" %
-                 (MINFLUXstem,fp.stem))
+        MINFLUXts = self.visFr.pipeline.mdh.get('MINFLUX.TimeStamp')
+        if MINFLUXts is not None and MINFLUXts not in fp.stem:
+            warn("different time stamps in MINFLUX and MBM dataset; do they match? %s vs %s" %
+                 (MINFLUXts,fp.stem))
         self.visFr.pipeline.mbm = mbm
 
     def OnMBMLoadJSONbeads(self,event):
