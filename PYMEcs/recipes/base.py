@@ -1,8 +1,10 @@
 from PYME.recipes.base import register_module, ModuleBase, Filter
-from PYME.recipes.traits import HasTraits, Float, List, Bool, Int, CStr, Enum, on_trait_change, Input, Output
+from PYME.recipes.traits import HasTraits, Float, List, Bool, Int, CStr, Enum, on_trait_change, Input, Output, FileOrURI
 
 from PYME.IO.image import ImageStack
 import numpy as np
+from PYME.warnings import warn
+from pathlib import Path
 
 import logging
 logger = logging.getLogger(__name__)
@@ -47,4 +49,27 @@ class ExtractChannelByName(ModuleBase):
     def execute(self, namespace):
         namespace[self.outputName] = self._pickChannel(namespace[self.inputName])
 
+from PYME.IO.image import ImageStack
+        
+@register_module('LoadMask')    
+class LoadMask(ModuleBase):
 
+    inputName = Input('FitResults') # we use this as a dummy input since we need at least one input
+    outputImageStack = Output('image_mask')
+
+    maskfile = FileOrURI('')
+
+    def run(self,inputName):
+        if self.maskfile != '':
+            fp = Path(self.maskfile)
+            if not fp.exists():
+                warn("trying to load file '%s' that does not exist" % self.maskfile)
+                return None
+            mask = ImageStack(filename=self.maskfile)
+            return mask
+        else:
+            return None # this will trigger an error as it tries to attach the mdh; may be better to have an empty container type
+
+        
+        
+    
