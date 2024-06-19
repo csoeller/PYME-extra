@@ -458,11 +458,15 @@ class MINFLUXanalyser():
                            style=wx.FD_OPEN) as dialog:
             if dialog.ShowModal() == wx.ID_CANCEL:
                 return
-        fname = dialog.GetPath()
+            fname = dialog.GetPath()
         from pathlib import Path
         fp = Path(fname)
+        MINFLUXts = self.visFr.pipeline.mdh.get('MINFLUX.TimeStamp')
+        if MINFLUXts is not None and MINFLUXts not in fp.stem:
+            warn("different time stamps in MINFLUX and MBM JSON settings; do they match? %s vs %s" %
+                 (MINFLUXts,fp.stem))
         if not self.visFr.pipeline.mbm.name in fp.stem:
-            warn("JSON file name and mbm names do not match; are you sure? Will try to load anyway but results may vary...")
+            warn("JSON file name and mbm names do not closely match; are you sure? Will try to load anyway but results may vary...")
         import json
         with open(fname) as f:
             mbmsettings = json.load(f)
