@@ -70,6 +70,8 @@ class NPCcalc():
         visFr.AddMenuItem('Experimental>NPC3D', "Analyse 3D NPCs by ID", self.OnAnalyse3DNPCsByID)
         visFr.AddMenuItem('Experimental>NPC3D', "Add 3D NPC templates", self.On3DNPCaddTemplates)
         visFr.AddMenuItem('Experimental>NPC3D', "Save NPC 3D Measurements",self.OnNPC3DSaveMeasurements)
+        visFr.AddMenuItem('Experimental>NPC3D', "Save full NPC Set with Analysis", self.OnNPC3DSaveNPCSet)
+        visFr.AddMenuItem('Experimental>NPC3D', "Load NPC Set with Analysis", self.OnNPC3DLoadNPCSet)
         visFr.AddMenuItem('Experimental>NPC3D', "Load and display saved NPC 3D Measurements",self.OnNPC3DLoadMeasurements)
         visFr.AddMenuItem('Experimental>NPC2D', 'NPC Analysis settings', self.OnNPCsettings)
         visFr.AddMenuItem('Experimental>NPC3D', 'NPC Analysis settings', self.OnNPCsettings)
@@ -266,6 +268,34 @@ class NPCcalc():
         nlab = meas['Ntop_NPC3D'] + meas['Nbot_NPC3D']
         plt.figure()
         plotcdf_npc3d(nlab,timestamp=get_timestamp_from_filename(fname))
+
+    def OnNPC3DLoadNPCSet(self, event=None):
+        import pickle
+        pipeline = self.visFr.pipeline
+        fdialog = wx.FileDialog(self.visFr, 'Load NPC measurements from ...',
+                                wildcard='Pickle (*.pickle)|*.pickle',
+                                style=wx.FD_OPEN)
+        if fdialog.ShowModal() != wx.ID_OK:
+            return
+        fname = fdialog.GetPath()
+        with open(fname,'rb') as fi:
+            pipeline.npcs=pickle.load(fi)
+
+    def OnNPC3DSaveNPCSet(self, event=None):
+        import pickle
+        pipeline = self.visFr.pipeline
+        if 'npcs' not in dir(pipeline):
+            warn('no valid NPC Set found, therefore cannot save...')
+            return
+        fdialog = wx.FileDialog(self.visFr, 'Save NPC Set as ...',
+                                wildcard='Pickle (*.pickle)|*.pickle',
+                                style=wx.FD_SAVE)
+        if fdialog.ShowModal() != wx.ID_OK:
+            return
+
+        fpath = fdialog.GetPath()
+        with open(fpath, "wb") as file:
+            pickle.dump(pipeline.npcs,file)
         
     def OnSelectNPCsByMask(self,event=None):
         from PYME.DSView import dsviewer
