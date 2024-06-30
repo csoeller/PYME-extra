@@ -56,7 +56,10 @@ class NPCsettings(HasTraits):
     SegmentThreshold_3D = Int(1)
     SecondPass = Bool(False)
     FitMode = Enum(['abs','square'])
-
+    RotationLocked_3D = Bool(False)
+    RadiusUncertainty_3D = Float(20.0)
+    Zrange_3D = Float(150.0)
+    
 class NPCcalc():
     def __init__(self, visFr):
         self.visFr = visFr
@@ -148,7 +151,10 @@ class NPCcalc():
         for i,npc in enumerate(npcs.npcs):
             if not npc.fitted:
                 npc.fitbymll(npcs.llm,plot=True,printpars=False,axes=axes)
-            nt,nb = npc.nlabeled(nthresh=self.NPCsettings.SegmentThreshold_3D,dr=20.0)
+            nt,nb = npc.nlabeled(nthresh=self.NPCsettings.SegmentThreshold_3D,
+                                 dr=self.NPCsettings.RadiusUncertainty_3D,
+                                 rotlocked=self.NPCsettings.RotationLocked_3D,
+                                 zrange=self.NPCsettings.Zrange_3D)
             npcs.measurements.append([nt,nb])
             (keepGoing, skip) = progress.Update(i+1)
             if not keepGoing:
@@ -271,24 +277,34 @@ class NPCcalc():
 
     def OnNPC3DLoadNPCSet(self, event=None):
         import pickle
+        from pathlib import Path
         pipeline = self.visFr.pipeline
         fdialog = wx.FileDialog(self.visFr, 'Load NPC measurements from ...',
                                 wildcard='Pickle (*.pickle)|*.pickle',
                                 style=wx.FD_OPEN)
         if fdialog.ShowModal() != wx.ID_OK:
             return
-        fname = fdialog.GetPath()
+        fname = Path(fdialog.GetPath())
+        MINFLUXts = pipeline.mdh.get('MINFLUX.TimeStamp')
+        if MINFLUXts is not None and MINFLUXts not in fname.stem:
+            warn("MINFLUX time stamp not in NPC dataset filename; check correct filename chosen: %s vs %s" %
+                 (MINFLUXts,fname.stem))
         with open(fname,'rb') as fi:
             pipeline.npcs=pickle.load(fi)
 
     def OnNPC3DSaveNPCSet(self, event=None):
         import pickle
         pipeline = self.visFr.pipeline
+        defaultFile = None
+        MINFLUXts = pipeline.mdh.get('MINFLUX.TimeStamp')
+        if MINFLUXts is not None:
+            defaultFile = "%s-NPCset.pickle" % MINFLUXts
         if 'npcs' not in dir(pipeline):
             warn('no valid NPC Set found, therefore cannot save...')
             return
         fdialog = wx.FileDialog(self.visFr, 'Save NPC Set as ...',
                                 wildcard='Pickle (*.pickle)|*.pickle',
+                                defaultFile=defaultFile,
                                 style=wx.FD_SAVE)
         if fdialog.ShowModal() != wx.ID_OK:
             return

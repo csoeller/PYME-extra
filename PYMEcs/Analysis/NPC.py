@@ -107,21 +107,30 @@ def rfilt(xn,yn,r0,dr=25.0):
     rimask = (ri >r0-dr)*(ri < r0+dr)
     return (xn[rimask],yn[rimask])
 
-def estimate_nlabeled(x,y,r0=None,nthresh=10,dr=30.0,
+def estimate_nlabeled(x,y,r0=None,nthresh=10,dr=30.0,rotation=None,
                       do_plot=False,secondpass=False,fitmode='abs',return_radius=False):
     if r0 is None:
         xc, yc, r0, sigma = fitcirc(x,y)
         xn, yn = centreshift(x, y, xc, yc)
-        radrot = estimate_rotation(xn,yn,mode=fitmode)
+        if rotation is None:
+            radrot = estimate_rotation(xn,yn,mode=fitmode)
+        else:
+            radrot = rotation
         xr1,yr1 = rot_coords(xn,yn,radrot)
         xr, yr = rfilt(xr1,yr1,r0,dr=dr)
         if secondpass:
             xc2, yc2, r0, sigma = fitcirc(xr,yr)
             xn, yn = centreshift(xr, yr, xc2, yc2)
-            radrot = estimate_rotation(xn,yn,mode=fitmode)
+            if rotation is None:
+                radrot = estimate_rotation(xn,yn,mode=fitmode)
+            else:
+                radrot = rotation
             xr,yr = rot_coords(xn,yn,radrot)
     else:
-        radrot = estimate_rotation(x,y,mode=fitmode)
+        if rotation is None:
+            radrot = estimate_rotation(x,y,mode=fitmode)
+        else:
+            radrot = rotation
         xr1,yr1 = rot_coords(x,y,radrot)
         xr, yr = rfilt(xr1,yr1,r0,dr=dr)
 
@@ -614,21 +623,30 @@ class NPC3D(object):
         return ax
         
 
-    def nlabeled(self,nthresh=1,r0=50.0,dr=25.0,do_plot=False):
-        self.filter('z',0,150)
+    def nlabeled(self,nthresh=1,r0=50.0,dr=25.0,do_plot=False,rotlocked=True,zrange=150.0):
+        zrangeabs = abs(zrange)
+        if rotlocked:
+            self.filter('z',-zrangeabs,zrangeabs)
+            if self.filtered_pts.size > 0:
+                rotation = estimate_rotation(self.filtered_pts[:,0],self.filtered_pts[:,1])
+            else:
+                rotation=None
+        else:
+            rotation=None
+        self.filter('z',0,zrangeabs)
         if self.filtered_pts.size > 0:
             # self.plot_points('filtered')
             x=self.filtered_pts[:,0]
             y=self.filtered_pts[:,1]
-            self.n_top = estimate_nlabeled(x,y,r0=r0,dr=dr,nthresh=nthresh-1,do_plot=do_plot)
+            self.n_top = estimate_nlabeled(x,y,r0=r0,dr=dr,nthresh=nthresh-1,do_plot=do_plot,rotation=rotation)
         else:
             self.n_top = 0
-        self.filter('z',-150,0)
+        self.filter('z',-zrangeabs,0)
         if self.filtered_pts.size > 0:
             # self.plot_points('filtered')
             x=self.filtered_pts[:,0]
             y=self.filtered_pts[:,1]
-            self.n_bot = estimate_nlabeled(x,y,r0=r0,dr=dr,nthresh=nthresh-1,do_plot=do_plot)
+            self.n_bot = estimate_nlabeled(x,y,r0=r0,dr=dr,nthresh=nthresh-1,do_plot=do_plot,rotation=rotation)
         else:
             self.n_bot = 0
         return (self.n_top,self.n_bot)

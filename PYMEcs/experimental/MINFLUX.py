@@ -226,15 +226,16 @@ def fourcornerplot(pipeline,sigma=None,backgroundFraction=0.0,showplot=True,quie
     ks = np.arange(4)+1
     popt, pcov = curve_fit(pnn, ks, ccsn,sigma=sigma)
     perr = np.sqrt(np.diag(pcov))
+    p_missed = pn(0,popt[0])
+    p_m_min = pn(0,popt[0]+perr[0])
+    p_m_max = pn(0,popt[0]-perr[0])
     if showplot:
         plt.figure()
         ax = plt.subplot(111)
         ax.bar(ks-0.4, ccsn, width=0.4, color='b', align='center')
         ax.bar(ks, pnn(ks,popt[0]), width=0.4, color='g', align='center')
         ax.legend(['Experimental data', 'Fit'])
-    p_missed = pn(0,popt[0])
-    p_m_min = pn(0,popt[0]+perr[0])
-    p_m_max = pn(0,popt[0]-perr[0])
+        plt.title("Best fit p_lab=%.3f +- %.3f" % (popt[0],perr[0]))
     if not quiet:
         print('optimal p: %.3f +- %.3f' % (popt[0],perr[0]))
         print('missed fraction: %.2f (%.2f...%.2f)' % (p_missed,p_m_min,p_m_max))
@@ -412,6 +413,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>MBM', "Load MBM data in npz format", self.OnMBMLoadnpz)
         visFr.AddMenuItem('MINFLUX>MBM', "Load JSON MBM bead data config", self.OnMBMLoadJSONbeads)
         visFr.AddMenuItem('MINFLUX>MBM', "Plot MBM info", self.OnMBMplot)
+        visFr.AddMenuItem('MINFLUX>RyRs', "Plot corner info", self.OnCornerplot)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -757,6 +759,12 @@ class MINFLUXanalyser():
         else:
             warn('Colour panel appears to already exist - not creating new colour panel')
 
+    def OnCornerplot(self,event):
+        for ds in ['withNNdist','group2','group3','group4']:
+            if ds not in self.visFr.pipeline.dataSources.keys():
+                warn("need datasource %s which is not present, giving up..." % ds)
+                return
+        fourcornerplot_default(self.visFr.pipeline)
 
 def Plug(visFr):
     # we are trying to monkeypatch pipeline and VisGUIFrame methods to sneak MINFLUX npy IO in;
