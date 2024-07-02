@@ -1098,8 +1098,63 @@ def site_fit_gaussian(tms,xsite,delta_s=100,width_s=500):
     ifunc = CubicSpline(t_samp, pars[1,:])
     return ifunc
 
+class ModuleBaseMDHmod(ModuleBase):
+    """
+    Exactly like ModuleBase but with a modified execute method
+    that allows passing an 'mdh' key in the dict to modify mdh from run method
+    """
+    # NOTE: we override the 'execute' method here because we want to meddle with the metadata from within the run method;
+    #       a bit of a hack but mainly used
+    #       for experimentation in this case; we may solve this differently in future if really needed
+    def execute(self, namespace):
+        """
+        takes a namespace (a dictionary like object) from which it reads its inputs and
+        into which it writes outputs
+
+        NOTE: This was previously the function to define / override to make a module work. To support automatic metadata propagation
+        and reduce the ammount of boiler plate, new modules should override the `run()` method instead.
+        """
+        from PYME.IO import MetaDataHandler
+        inputs = {k: namespace[v] for k, v in self._input_traits.items()}
+
+        ret = self.run(**inputs)
+        mdhret = None # the default unless 'mdh' is in returned dictironary
+
+        # convert output to a dictionary if needed
+        if isinstance(ret, dict):
+            out = {k : ret[v] for v, k in self._output_traits.items()}
+            if 'mdh' in ret:
+                mdhret = ret['mdh']
+        elif isinstance(ret, List):
+            out = {k : v  for k, v in zip(self.outputs, ret)} #TODO - is this safe (is ordering consistent)
+        else:
+            # single output
+            if len(self.outputs) > 1:
+                raise RuntimeError('Module has multiple outputs, but .run() returns a single value')
+
+            out = {list(self.outputs)[0] : ret}
+
+        # complete metadata (injecting as appropriate)
+        mdhin = MetaDataHandler.DictMDHandler(getattr(list(inputs.values())[0], 'mdh', None))
+        
+        mdh = MetaDataHandler.DictMDHandler()
+        self._params_to_metadata(mdh)
+
+        for v in out.values():
+            if getattr(v, 'mdh', None) is None:
+                v.mdh = MetaDataHandler.DictMDHandler()
+
+            v.mdh.mergeEntriesFrom(mdhin) #merge, to allow e.g. voxel size overrides due to downsampling
+            #print(v.mdh, mdh)
+            v.mdh.copyEntriesFrom(mdh) # copy / overwrite with module processing parameters
+            if mdhret is not None:
+                v.mdh.copyEntriesFrom(mdhret)
+
+        namespace.update(out)
+
+
 @register_module('OrigamiSiteTrack')
-class OrigamiSiteTrack(ModuleBase):
+class OrigamiSiteTrack(ModuleBaseMDHmod):
     """
     Recipe module aimed at analysing oregami MINFLUX datasets. More docs to be added.
 
@@ -1286,52 +1341,8 @@ class OrigamiSiteTrack(ModuleBase):
             mdh[checkmdh('Processing.DriftFuncs.Z',mdhin)] = c_zsite
             mdh[checkmdh('Processing.DriftFuncs.TRange',mdhin)] = [t.min(),t.max()]
         
-        return ({'outputName': mapped_ds, 'outputAllPoints' : mapped_ap}, None) # pass mdh instead of None if metadata editing needed
+        return {'outputName': mapped_ds, 'outputAllPoints' : mapped_ap, 'mdh' : None } # pass proper mdh instead of None if metadata output needed
 
-    # NOTE: we override 'run' AND 'execute' methods here because we want to meddle with the metadata; a bit of a hack but mainly used
-    #       for experimentation in this case; we may solve this differently in future if really needed
-    def execute(self, namespace):
-        """
-        takes a namespace (a dictionary like object) from which it reads its inputs and
-        into which it writes outputs
-
-        NOTE: This was previously the function to define / override to make a module work. To support automatic metadata propagation
-        and reduce the ammount of boiler plate, new modules should override the `run()` method instead.
-        """
-        from PYME.IO import MetaDataHandler
-        inputs = {k: namespace[v] for k, v in self._input_traits.items()}
-
-        ret, mdhret = self.run(**inputs)
-
-        # convert output to a dictionary if needed
-        if isinstance(ret, dict):
-            out = {k : ret[v] for v, k in self._output_traits.items()}
-        elif isinstance(ret, List):
-            out = {k : v  for k, v in zip(self.outputs, ret)} #TODO - is this safe (is ordering consistent)
-        else:
-            # single output
-            if len(self.outputs) > 1:
-                raise RuntimeError('Module has multiple outputs, but .run() returns a single value')
-
-            out = {list(self.outputs)[0] : ret}
-
-        # complete metadata (injecting as appropriate)
-        mdhin = MetaDataHandler.DictMDHandler(getattr(list(inputs.values())[0], 'mdh', None))
-        
-        mdh = MetaDataHandler.DictMDHandler()
-        self._params_to_metadata(mdh)
-
-        for v in out.values():
-            if getattr(v, 'mdh', None) is None:
-                v.mdh = MetaDataHandler.DictMDHandler()
-
-            v.mdh.mergeEntriesFrom(mdhin) #merge, to allow e.g. voxel size overrides due to downsampling
-            #print(v.mdh, mdh)
-            v.mdh.copyEntriesFrom(mdh) # copy / overwrite with module processing parameters
-            if mdhret is not None:
-                v.mdh.copyEntriesFrom(mdhret)
-
-        namespace.update(out)
 
 import numpy as np
 import scipy.special
@@ -1389,7 +1400,7 @@ def check_mbm_name(mbmfilename,timestamp,endswith='__MBM-beads'):
     return mbmp.stem.startswith(timestamp) and mbmp.stem.endswith(endswith)
 
 @register_module('MBMcorrection')
-class MBMcorrection(ModuleBase):
+class MBMcorrection(ModuleBaseMDHmod):
     inputLocalizations = Input('localizations')
     output = Output('mbm_corrected')
 
@@ -1447,7 +1458,11 @@ class MBMcorrection(ModuleBase):
                 if not check_mbm_name(self.mbmsettings,inputLocalizations.mdh.get('MINFLUX.TimeStamp'),endswith='npz-settings'):
                     warn("check MBM settings filename (%s) vs Series timestamp (%s)" %
                          (Path(self.mbmsettings).name,inputLocalizations.mdh.get('MINFLUX.TimeStamp')))
-                    
-            mapped_ds.mbm = mbm # attach mbm object to the output
+
+            from PYME.IO import MetaDataHandler
+            MBMmdh = MetaDataHandler.DictMDHandler()
+            MBMmdh['Processing.MBMcorrection.mbm'] = mbm
+            return dict(output=mapped_ds, mdh=MBMmdh)
+            # mapped_ds.mbm = mbm # attach mbm object to the output
 
         return mapped_ds

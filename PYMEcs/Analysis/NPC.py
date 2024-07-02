@@ -352,8 +352,8 @@ class LLmaximizerNPC3D(object):
             (-maxshift,maxshift), # p[2]
             (-90.0,90.0), # p[3]
             (-35.0,35.0), # p[4]
-            (85.0,115.0), # p[5]
-            (85.0,115.0) # p[6]
+            (80.0,120.0), # p[5]
+            (80.0,120.0) # p[6]
         )
 
     def registerPoints(self,pts): # register candidate points for fitting
@@ -483,7 +483,7 @@ class LLmaximizerNPC3D(object):
         print("Ring diam: %d, ring spacing: %d" % tuple(np.round(np.array(self.p0)*100.0/np.array(self._lastpars[5:]))))
 
 class NPC3D(object):
-    def __init__(self, points=None, pipeline=None, objectID=None, zclip=None):
+    def __init__(self, points=None, pipeline=None, objectID=None, zclip=None, offset_mode='mean'):
         self.points = points
         if pipeline is not None:
             if objectID is None:
@@ -493,14 +493,19 @@ class NPC3D(object):
             self.objectID = objectID
         self.npts = None
         if self.points is not None:
-            self.normalize_points(zclip=zclip)
+            self.normalize_points(zclip=zclip, mode=offset_mode)
         self.transformed_pts = None
         self.opt_result = None
         self.filtered_pts = None
         self.fitted = False
 
-    def normalize_points(self,zclip=None):
-        self.offset = self.points.mean(axis=0)[None,:]
+    def normalize_points(self,zclip=None,mode='mean'):
+        if mode == 'mean':
+            self.offset = self.points.mean(axis=0)[None,:]
+        elif mode == 'median':
+            self.offset = np.median(self.points,axis=0)[None,:]
+        else:
+            raise RuntimeError("unknown mode '%s', should be mean or median" % mode)
         npts = self.points - self.offset
         if not zclip is None:
             zgood = (npts[:,2] > -zclip)*(npts[:,2] < zclip)
@@ -652,8 +657,10 @@ class NPC3D(object):
         return (self.n_top,self.n_bot)
 
 class NPC3DSet(object):
-    def __init__(self,filename=None):
+    def __init__(self,filename=None,zclip=75.0,offset_mode='median'):
         self.filename=filename
+        self.zclip = zclip
+        self.offset_mode = offset_mode
         self.npcs = []
         # TODO: expose llm parameters to this init method as needed in practice!
         self.llm = LLmaximizerNPC3D([100.0,70.0],eps=15.0,sigma=7.0,bgprob=1e-9,extent_nm=300.0)
@@ -663,7 +670,7 @@ class NPC3DSet(object):
         self.npcs.append(npc)
 
     def addNPCfromPipeline(self,pipeline,oid):
-        self.registerNPC(NPC3D(pipeline=pipeline,objectID=oid,zclip=75))
+        self.registerNPC(NPC3D(pipeline=pipeline,objectID=oid,zclip=self.zclip,offset_mode=self.offset_mode))
         
     def measure_labeleff(self,nthresh=1,do_plot=False,printpars=False,refit=False):
         self.measurements = []

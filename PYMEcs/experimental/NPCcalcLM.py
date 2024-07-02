@@ -50,7 +50,7 @@ def setNPCsfromImg(pipeline,img):
         
     pipeline.selectDataSource(valid_ids)
 
-
+# Todo: add tooltips and help!!!!
 class NPCsettings(HasTraits):
     SegmentThreshold_2D = Int(10)
     SegmentThreshold_3D = Int(1)
@@ -58,7 +58,14 @@ class NPCsettings(HasTraits):
     FitMode = Enum(['abs','square'])
     RotationLocked_3D = Bool(False)
     RadiusUncertainty_3D = Float(20.0)
+    # the two next things seem to set the same thing, so unify
     Zrange_3D = Float(150.0)
+    Zclip_3D = Float(75.0,label='Z-clip value from center of NPC',
+                     desc='The used zrange from the (estimated) center of the NPC, from (-zclip..+zclip)')
+    OffsetMode_3D = Enum(['median','mean'])
+
+
+# TODO: make NPC height and radius initial diameter for fit settable via NPCsettings
     
 class NPCcalc():
     def __init__(self, visFr):
@@ -72,10 +79,10 @@ class NPCcalc():
         visFr.AddMenuItem('Experimental>NPC2D', "Select by mask, analyse and show stats", self.OnNPCcombinedFuncs)
         visFr.AddMenuItem('Experimental>NPC3D', "Analyse 3D NPCs by ID", self.OnAnalyse3DNPCsByID)
         visFr.AddMenuItem('Experimental>NPC3D', "Add 3D NPC templates", self.On3DNPCaddTemplates)
-        visFr.AddMenuItem('Experimental>NPC3D', "Save NPC 3D Measurements",self.OnNPC3DSaveMeasurements)
-        visFr.AddMenuItem('Experimental>NPC3D', "Save full NPC Set with Analysis", self.OnNPC3DSaveNPCSet)
-        visFr.AddMenuItem('Experimental>NPC3D', "Load NPC Set with Analysis", self.OnNPC3DLoadNPCSet)
-        visFr.AddMenuItem('Experimental>NPC3D', "Load and display saved NPC 3D Measurements",self.OnNPC3DLoadMeasurements)
+        visFr.AddMenuItem('Experimental>NPC3D', "Save NPC Set with full fit analysis", self.OnNPC3DSaveNPCSet)
+        visFr.AddMenuItem('Experimental>NPC3D', "Load stored NPC Set with full fit analysis", self.OnNPC3DLoadNPCSet)
+        visFr.AddMenuItem('Experimental>NPC3D', "Save Measurements Only (csv, no fit info saved)",self.OnNPC3DSaveMeasurements)
+        visFr.AddMenuItem('Experimental>NPC3D', "Load and display saved Measurements (from csv)",self.OnNPC3DLoadMeasurements)
         visFr.AddMenuItem('Experimental>NPC2D', 'NPC Analysis settings', self.OnNPCsettings)
         visFr.AddMenuItem('Experimental>NPC3D', 'NPC Analysis settings', self.OnNPCsettings)
 
@@ -130,7 +137,7 @@ class NPCcalc():
             npcs = pipeline.npcs
             do_plot = False
         else:
-            npcs = NPC3DSet(filename=pipeline.filename)
+            npcs = NPC3DSet(filename=pipeline.filename,zclip=self.NPCsettings.Zclip_3D,offset_mode=self.NPCsettings.OffsetMode_3D)
             do_plot = True
             for oid in np.unique(pipeline['objectID']):
                 npcs.addNPCfromPipeline(pipeline,oid)
