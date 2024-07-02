@@ -63,6 +63,8 @@ class NPCsettings(HasTraits):
     Zclip_3D = Float(75.0,label='Z-clip value from center of NPC',
                      desc='The used zrange from the (estimated) center of the NPC, from (-zclip..+zclip)')
     OffsetMode_3D = Enum(['median','mean'])
+    StartHeight_3D = Float(70.0)
+    StartDiam_3D = Float(100.0)
 
 
 # TODO: make NPC height and radius initial diameter for fit settable via NPCsettings
@@ -83,6 +85,7 @@ class NPCcalc():
         visFr.AddMenuItem('Experimental>NPC3D', "Load stored NPC Set with full fit analysis", self.OnNPC3DLoadNPCSet)
         visFr.AddMenuItem('Experimental>NPC3D', "Save Measurements Only (csv, no fit info saved)",self.OnNPC3DSaveMeasurements)
         visFr.AddMenuItem('Experimental>NPC3D', "Load and display saved Measurements (from csv)",self.OnNPC3DLoadMeasurements)
+        visFr.AddMenuItem('Experimental>NPC3D', "Show NPC geometry statistics",self.OnNPC3DGeometryStats)
         visFr.AddMenuItem('Experimental>NPC2D', 'NPC Analysis settings', self.OnNPCsettings)
         visFr.AddMenuItem('Experimental>NPC3D', 'NPC Analysis settings', self.OnNPCsettings)
 
@@ -133,11 +136,15 @@ class NPCcalc():
         from PYMEcs.Analysis.NPC import NPC3DSet
         pipeline = self.visFr.pipeline
 
-        if 'npcs' in dir(pipeline):
+        if 'npcs' in dir(pipeline) and pipeline.npcs is not None:
             npcs = pipeline.npcs
             do_plot = False
         else:
-            npcs = NPC3DSet(filename=pipeline.filename,zclip=self.NPCsettings.Zclip_3D,offset_mode=self.NPCsettings.OffsetMode_3D)
+            npcs = NPC3DSet(filename=pipeline.filename,
+                            zclip=self.NPCsettings.Zclip_3D,
+                            offset_mode=self.NPCsettings.OffsetMode_3D,
+                            NPCdiam=self.NPCsettings.StartDiam_3D,
+                            NPCheight=self.NPCsettings.StartHeight_3D)
             do_plot = True
             for oid in np.unique(pipeline['objectID']):
                 npcs.addNPCfromPipeline(pipeline,oid)
@@ -201,10 +208,15 @@ class NPCcalc():
         NtopLabelled = np.empty((0),int)
         NbotLabelled = np.empty((0),int)
         NLabelled = np.empty((0),int)
+        diams = np.empty((0),float)
+        heights = np.empty((0),float)
         ci = 1
         for npc in npcs.npcs:
             nt, nb = (npc.n_top,npc.n_bot)
             glyph = npc.get_glyph()
+            pars = npc.opt_result.x
+            diam = npc.get_glyph_diam() / (0.01*pars[5])
+            height = npc.get_glyph_height() / (0.01*pars[6])
             for poly in ['circ_bot','circ_top','axis']:
                 c3 = glyph[poly]
                 xg = c3[:,0]
@@ -220,7 +232,8 @@ class NPCcalc():
                 NtopLabelled = np.append(NtopLabelled,np.full_like(xg,nt,dtype=int))
                 NbotLabelled = np.append(NbotLabelled,np.full_like(xg,nb,dtype=int))
                 NLabelled = np.append(NLabelled,np.full_like(xg,nt+nb,dtype=int))               
-
+                diams = np.append(diams,np.full_like(xg,diam,dtype=float))
+                heights = np.append(heights,np.full_like(xg,height,dtype=float))
         t = np.arange(x.size)
         A = np.full_like(x,10.0,dtype='f')
         error_x = np.full_like(x,1.0,dtype='f')
@@ -230,7 +243,8 @@ class NPCcalc():
         dsdict = dict(x=x,y=y,z=z,polyIndex=polyIndex,polySize=polySize,
                       NtopLabelled=NtopLabelled,NbotLabelled=NbotLabelled,NLabelled=NLabelled,
                       objectID=objectID,t=t,A=A,
-                      error_x=error_x,error_y=error_y,error_z=error_z)
+                      error_x=error_x,error_y=error_y,error_z=error_z,
+                      npc_height=heights,npc_diam=diams)
 
         from PYME.IO.tabular import DictSource
         pipeline.addDataSource('NPCtemplates',DictSource(dsdict),False) # should check if already exists!
@@ -319,7 +333,16 @@ class NPCcalc():
         fpath = fdialog.GetPath()
         with open(fpath, "wb") as file:
             pickle.dump(pipeline.npcs,file)
-        
+
+    def OnNPC3DGeometryStats(self,event=None):
+        pipeline = self.visFr.pipeline
+        if 'npcs' not in dir(pipeline) or pipeline.npcs is None:
+            warn('no valid NPC measurements found, thus no geometry info available...')
+            return
+        plt.figure()
+        res = plt.boxplot([pipeline.npcs.diam(),pipeline.npcs.height()],showmeans=True,labels=['diameter','height'])
+        plt.ylim(0,150)
+
     def OnSelectNPCsByMask(self,event=None):
         from PYME.DSView import dsviewer
 

@@ -321,12 +321,12 @@ class RandomDisplacementBounds(object):
 maxshift = 50.0
 class LLmaximizerNPC3D(object):
     # the bgprop value needs a little more thought, it could be specific for this set of parameters
-    def __init__(self, p0, extent_nm=150.0, voxelsize_nm=2.0, eps=15.0, sigma=5.0, bgprob=1e-9):
+    def __init__(self, npcgeometry, extent_nm=150.0, voxelsize_nm=2.0, eps=15.0, sigma=5.0, bgprob=1e-9):
         self.x = np.arange(-extent_nm/2.0, extent_nm/2.0+1.0, voxelsize_nm, dtype='f')
         self.y = self.x.copy()
         self.z = self.x.copy()
-        self.p0 = p0
-        d0, h0 = p0 # diameter of ring and ring spacing
+        self.npcgeometry = npcgeometry
+        d0, h0 = npcgeometry # diameter of ring and ring spacing
         x2d,y2d = np.meshgrid(self.x,self.y)
         x3d,y3d, z3d = np.meshgrid(self.x,self.y,self.z)
         self.circ2d = (x2d**2 + y2d**2 -0.25*d0**2 <= eps**2) & (x2d**2 + y2d**2 -0.25*d0**2 >= -eps**2)
@@ -352,8 +352,8 @@ class LLmaximizerNPC3D(object):
             (-maxshift,maxshift), # p[2]
             (-90.0,90.0), # p[3]
             (-35.0,35.0), # p[4]
-            (80.0,120.0), # p[5]
-            (80.0,120.0) # p[6]
+            (70.0,130.0), # p[5]
+            (70.0,130.0) # p[6]
         )
 
     def registerPoints(self,pts): # register candidate points for fitting
@@ -480,7 +480,7 @@ class LLmaximizerNPC3D(object):
     def pprint_lastpars(self):
         print("Origin: %s" % self._lastpars[0:3])
         print("Angles: %d rot-z, %d rot-y" % tuple(np.round(self._lastpars[3:5])))
-        print("Ring diam: %d, ring spacing: %d" % tuple(np.round(np.array(self.p0)*100.0/np.array(self._lastpars[5:]))))
+        print("Ring diam: %d, ring spacing: %d" % tuple(np.round(np.array(self.npcgeometry)*100.0/np.array(self._lastpars[5:]))))
 
 class NPC3D(object):
     def __init__(self, points=None, pipeline=None, objectID=None, zclip=None, offset_mode='mean'):
@@ -571,6 +571,14 @@ class NPC3D(object):
         ax.scatter(pts[:,0], pts[:,1], pts[:,2], 'o', s=s)
         return ax
 
+    # the nominal glyph diam and height, set by the LLM fitter npcgeometry
+    # note access will only work after llm fit has taklen place!
+    def get_glyph_diam(self):
+        return self.nllminimizer.npcgeometry[0]
+
+    def get_glyph_height(self):
+        return self.nllminimizer.npcgeometry[1]
+    
     def get_glyph(self, with_offset=True):
 
         def get_circ_coords(radius=50.0, npoints=25):
@@ -593,7 +601,7 @@ class NPC3D(object):
 
             return (c3di[:,0],c3di[:,1],c3di[:,2])
         
-        xc, yc = get_circ_coords(radius=50, npoints=25)
+        xc, yc = get_circ_coords(radius=0.5*self.get_glyph_diam(), npoints=25)
 
         if with_offset:
             offset = self.offset
@@ -601,9 +609,9 @@ class NPC3D(object):
             offset = 0
         pars = self.opt_result.x
         glyph = {}
-        x1,y1,z1 = transform_coords_invs(xc,yc,np.zeros_like(xc)-35.0,pars,offset)
+        x1,y1,z1 = transform_coords_invs(xc,yc,np.zeros_like(xc)-0.5*self.get_glyph_height(),pars,offset)
         glyph['circ_bot'] = to3vecs(x1,y1,z1)
-        x2,y2,z2 = transform_coords_invs(xc,yc,np.zeros_like(xc)+35.0,pars,offset)
+        x2,y2,z2 = transform_coords_invs(xc,yc,np.zeros_like(xc)+0.5*self.get_glyph_height(),pars,offset)
         glyph['circ_top'] = to3vecs(x2,y2,z2)
         xa,ya,za = transform_coords_invs([0,0],[0,0],[-75.0,+75.0],pars,offset)
         glyph['axis'] = to3vecs(xa,ya,za)
@@ -657,13 +665,15 @@ class NPC3D(object):
         return (self.n_top,self.n_bot)
 
 class NPC3DSet(object):
-    def __init__(self,filename=None,zclip=75.0,offset_mode='median'):
+    def __init__(self,filename=None,zclip=75.0,offset_mode='median',NPCdiam=100.0,NPCheight=70.0):
         self.filename=filename
         self.zclip = zclip
         self.offset_mode = offset_mode
+        self.npcdiam = NPCdiam
+        self.npcheight = NPCheight
         self.npcs = []
         # TODO: expose llm parameters to this init method as needed in practice!
-        self.llm = LLmaximizerNPC3D([100.0,70.0],eps=15.0,sigma=7.0,bgprob=1e-9,extent_nm=300.0)
+        self.llm = LLmaximizerNPC3D([self.npcdiam,self.npcheight],eps=15.0,sigma=7.0,bgprob=1e-9,extent_nm=300.0)
         self.measurements = []
 
     def registerNPC(self,npc):
@@ -695,3 +705,14 @@ class NPC3DSet(object):
         plt.figure()
         plotcdf_npc3d(nlab,timestamp=get_timestamp_from_filename(self.filename))
 
+    def diam(self):
+        diams = []
+        for npc in self.npcs:
+            diams.append(npc.get_glyph_diam()/(0.01*npc.opt_result.x[5]))
+        return diams
+
+    def height(self):
+        heights = []
+        for npc in self.npcs:
+            heights.append(npc.get_glyph_height()/(0.01*npc.opt_result.x[6]))
+        return heights
