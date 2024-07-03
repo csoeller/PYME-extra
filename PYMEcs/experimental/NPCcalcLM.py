@@ -357,7 +357,7 @@ class NPCcalc():
         heights = np.asarray(pipeline.npcs.height())
         plt.figure()
         res = plt.boxplot([diams,heights],showmeans=True,labels=['diameter','height'])
-        plt.title("NPC mean diam %.0f, mean ring spacing %.0f" % (diams.mean(),heights.mean()))
+        plt.title("NPC mean diam %.0f nm, mean ring spacing %.0f nm" % (diams.mean(),heights.mean()))
         plt.ylim(0,150)
 
     def OnSelectNPCsByMask(self,event=None):

@@ -457,3 +457,57 @@ class MBMCollectionDF(object): # collection based on dataframe objects
                 fig.update_yaxes(range = (0,np.max([10.0,dfplotg.max().max()])))
             fig.show()
         
+    def plot_tracks_matplotlib(self,axis,unaligned=False,tmin=None,tmax=None):
+        if tmin is None:
+            tmin=self._trange[0]
+        if tmax is None:
+            tmax=self._trange[1]
+
+        if tmin is None:
+            tmin = self.t.min()
+        if tmax is None:
+            tmax = self.t.max()
+
+        if axis.startswith('std'):
+            unaligned = True # not sensible to align the std devs
+
+        if self.median_window > 0:
+            startdf = self.beads[axis].rolling(self.median_window).median()
+        else:
+            startdf = self.beads[axis]
+        if not unaligned:
+            startdfg = startdf[[bead for bead in self.beadisgood if self.beadisgood[bead]]]
+            dfplotg = startdfg-startdfg.loc[tmin:tmax].mean(axis=0)
+            has_bads = not np.all(list(self.beadisgood.values())) # we have at least a single bad bead
+            if has_bads:
+                dfplotb = startdf[[bead for bead in self.beadisgood if not self.beadisgood[bead]]]
+                dfplotb = dfplotb - dfplotb.loc[tmin:tmax].mean(axis=0)
+            emptybeads = dfplotg.columns[dfplotg.isnull().all(axis=0)]
+            if len(emptybeads)>0:
+                warn('removing beads with no valid info after alignment %s...' % emptybeads)
+                dfplotg = dfplotg[dfplotg.columns[~dfplotg.isnull().all(axis=0)]]
+
+            ax = dfplotb.plot(legend = True,alpha=0.2)
+            dfplotg.plot(legend = True,ax = ax)
+            ax.plot(self.t, dfplotg.mean(axis=1),label='mean') # add the mean
+            ax.legend()
+            ax.set_title("MBM for %s axis" % axis)
+            ax.set_xlabel("time (s)")
+            ax.set_ylabel("drift %s (nm)" % axis)
+            ax.set_ylim(np.min([-15.0,dfplotg.min().min()]),np.max([15.0,dfplotg.max().max()]))
+
+        else:
+            if axis.startswith('std'):
+                yaxis_title = "std dev (nm)"
+                title = 'MBM localisation precisions (%s)' % axis
+            else:
+                title = 'tracks along %s, not aligned' % axis
+                yaxis_title = "distance (nm)"
+            dfplot = startdf
+            dfplotg = dfplot[[bead for bead in self.beadisgood if self.beadisgood[bead]]]
+
+            ax = dfplotg.plot(legend = True)
+            ax.set_title(title)
+            ax.set_xlabel("time (s)")
+            ax.set_ylabel(yaxis_title)
+            ax.set_ylim(0,np.max([10.0,dfplotg.max().max()]))

@@ -388,6 +388,11 @@ class MINFLUXSettings(HasTraits):
 class DateString(HasTraits):
     TimeStampString = CStr('',label="Time stamp",desc='the time stamp string in format yymmdd-HHMMSS')
 
+
+class MBMaxisSelection(HasTraits):
+    SelectAxis = Enum(['x','y','z','std_x','std_y','std_z'])
+
+
 class MINFLUXanalyser():
     def __init__(self, visFr):
         self.visFr = visFr
@@ -396,6 +401,7 @@ class MINFLUXanalyser():
         self.origamiTrackFignum = 0
         self.analysisSettings = MINFLUXSettings()
         self.dstring = DateString()
+        self.mbmAxisSelection = MBMaxisSelection()
         
         visFr.AddMenuItem('MINFLUX', "Localisation Error analysis", self.OnErrorAnalysis)
         visFr.AddMenuItem('MINFLUX', "Cluster sizes - 3D", self.OnCluster3D)
@@ -413,6 +419,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>MBM', "Load MBM data in npz format", self.OnMBMLoadnpz)
         visFr.AddMenuItem('MINFLUX>MBM', "Load JSON MBM bead data config", self.OnMBMLoadJSONbeads)
         visFr.AddMenuItem('MINFLUX>MBM', "Plot MBM info", self.OnMBMplot)
+        visFr.AddMenuItem('MINFLUX>MBM', "Show MBM tracks", self.OnMBMtracks)
         visFr.AddMenuItem('MINFLUX>RyRs', "Plot corner info", self.OnCornerplot)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
@@ -527,6 +534,26 @@ class MINFLUXanalyser():
                 ax.legend(loc="upper left")
             fig.tight_layout()
 
+
+    def OnMBMtracks(self, event):
+        pipeline = self.visFr.pipeline
+        if not 'coalesced_mbm' in pipeline.dataSources.keys():
+            warn("we rely on mbm info present in datasource named coalesced_mbm. Can't find datasource, aborting...")
+            return
+        curds = pipeline.selectedDataSourceKey
+        pipeline.selectDataSource('coalesced_mbm')
+        mbm = pipeline.mdh.get('Processing.MBMcorrection.mbm')
+        pipeline.selectDataSource(curds)
+        if mbm is None:
+            warn("found no mbm collection in metadata, aborting...")
+            return        
+        if not self.mbmAxisSelection.configure_traits(kind='modal'):
+            return
+        ori_win = mbm.median_window
+        mbm.median_window = 21 # go for pretty agressive smoothing
+        mbm.plot_tracks_matplotlib(self.mbmAxisSelection.SelectAxis)
+        mbm.median_window = ori_win
+        
     def OnMINFLUXsetTempDataFile(self, event):
         import PYME.config as config
         with wx.FileDialog(self.visFr, "Choose Temperature data file", wildcard='CSV (*.csv)|*.csv',
