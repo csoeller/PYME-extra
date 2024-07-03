@@ -137,7 +137,7 @@ def estimate_nlabeled(x,y,r0=None,nthresh=10,dr=30.0,rotation=None,
     phis = phi_from_coords(xr,yr)
     phibinedges = -np.pi + piover4*np.arange(9)
     nhist,be = np.histogram(phis,bins=phibinedges)
-    Nlabeled = np.sum(nhist>nthresh)
+    Nlabeled = np.sum(nhist>=nthresh)
     
     if do_plot:
         segment_radius = 80.0
@@ -161,7 +161,7 @@ def estimate_nlabeled(x,y,r0=None,nthresh=10,dr=30.0,rotation=None,
         axs[0].set_xlim(-100,100)
         axs[0].set_ylim(-100,100)
         for i in range(nhist.size):
-            if nhist[i] > nthresh:
+            if nhist[i] >= nthresh:
                 axs[0].add_patch(Wedge(
                     (0, 0),                # (x,y)
                     segment_radius,        # radius
@@ -651,7 +651,7 @@ class NPC3D(object):
             # self.plot_points('filtered')
             x=self.filtered_pts[:,0]
             y=self.filtered_pts[:,1]
-            self.n_top = estimate_nlabeled(x,y,r0=r0,dr=dr,nthresh=nthresh-1,do_plot=do_plot,rotation=rotation)
+            self.n_top = estimate_nlabeled(x,y,r0=r0,dr=dr,nthresh=nthresh,do_plot=do_plot,rotation=rotation)
         else:
             self.n_top = 0
         self.filter('z',-zrangeabs,0)
@@ -659,7 +659,7 @@ class NPC3D(object):
             # self.plot_points('filtered')
             x=self.filtered_pts[:,0]
             y=self.filtered_pts[:,1]
-            self.n_bot = estimate_nlabeled(x,y,r0=r0,dr=dr,nthresh=nthresh-1,do_plot=do_plot,rotation=rotation)
+            self.n_bot = estimate_nlabeled(x,y,r0=r0,dr=dr,nthresh=nthresh,do_plot=do_plot,rotation=rotation)
         else:
             self.n_bot = 0
         return (self.n_top,self.n_bot)

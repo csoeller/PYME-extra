@@ -50,21 +50,35 @@ def setNPCsfromImg(pipeline,img):
         
     pipeline.selectDataSource(valid_ids)
 
-# Todo: add tooltips and help!!!!
 class NPCsettings(HasTraits):
-    SegmentThreshold_2D = Int(10)
-    SegmentThreshold_3D = Int(1)
-    SecondPass = Bool(False)
-    FitMode = Enum(['abs','square'])
-    RotationLocked_3D = Bool(False)
-    RadiusUncertainty_3D = Float(20.0)
+    SegmentThreshold_2D = Int(10,label='Threshold localisation count (2D)',
+                              desc="a minimum number of localisations in a segment in 2D fitting to be counted as labeled; "+
+                              "NOTE: definition changed from original code where 11 localisations where required with a threshold of 10 etc!")
+    SegmentThreshold_3D = Int(1,label='Threshold localisation count (3D)',
+                              desc="a minimum number of localisations in a segment in 3D fitting to be counted as labeled")
+    SecondPass_2D = Bool(False,label='Second pass for NPC fitting (2D)',
+                         desc="a second pass for 2D fitting should be run; we have experimented with a second pass rotation "+
+                         "estimate and fitting hoping to improve on the first estimate; still experimental")
+    StartHeight_3D = Float(70.0,label='Starting ring spacing for 3D fitting',
+                           desc="starting ring spacing value for the 3D fit; note only considered when doing the initial full fit; "+
+                           "not considered when re-evaluating existing fit")
+    StartDiam_3D = Float(107.0,label='Starting ring diameter for 3D fitting',
+                           desc="starting ring diameter value for the 3D fit; note only considered when doing the initial full fit; "+
+                           "not considered when re-evaluating existing fit")
+    FitMode = Enum(['abs','square'],label='Fit mode for NPC rotation',
+                   desc="fit mode for NPC rotation; in 2D and 3D estimation of the NPC lateral rotation a simple algorithm is used to find the start of the 'pizza pieces'; "+
+                   "this mode refers to use of absolute or squared differences in the calculation; default should be ok")
+    RotationLocked_3D = Bool(True,label='NPC rotation estimate locked (3D)',
+                             desc="when estimating the NPC rotation (pizza slice boundaries), the top and bottom rings in 3D should be locked, "+
+                             "i.e. have the same rotation from the underlying structure")
+    RadiusUncertainty_3D = Float(20.0,label="Radius scatter in nm",
+                                 desc="a radius scatter that determines how much localisations can deviate from the mean ring radius "+
+                                 "and still be accepted as part of the NPC; allows for distortions of NPCs and localisation errors")
     # the two next things seem to set the same thing, so unify
-    Zrange_3D = Float(150.0)
     Zclip_3D = Float(75.0,label='Z-clip value from center of NPC',
-                     desc='The used zrange from the (estimated) center of the NPC, from (-zclip..+zclip)')
-    OffsetMode_3D = Enum(['median','mean'])
-    StartHeight_3D = Float(70.0)
-    StartDiam_3D = Float(100.0)
+                     desc='the used zrange from the (estimated) center of the NPC, from (-zclip..+zclip) in 3D fitting')
+    OffsetMode_3D = Enum(['median','mean'],label='Method to estimate NPC center',
+                         desc="Method to estimate the likely 3D center of an NPC; median seems more robust against outliners (say in z)")
 
 
 # TODO: make NPC height and radius initial diameter for fit settable via NPCsettings
@@ -112,7 +126,7 @@ class NPCcalc():
             return
 
         estimate_nlabeled(pipeline['x'],pipeline['y'],nthresh=self.NPCsettings.SegmentThreshold_2D,
-                          do_plot=True,secondpass=self.NPCsettings.SecondPass,fitmode=self.NPCsettings.FitMode)
+                          do_plot=True,secondpass=self.NPCsettings.SecondPass_2D,fitmode=self.NPCsettings.FitMode)
         
 
     def OnAnalyseNPCsByID(self, event=None):
@@ -123,7 +137,7 @@ class NPCcalc():
         # for the NPCAnalysisByID module use the current NPCsettings
         npcanalysis = NPCAnalysisByID(inputName=pipeline.selectedDataSourceKey,outputName=with_npclinfo,
                                       SegmentThreshold=self.NPCsettings.SegmentThreshold_2D,
-                                      SecondPass=self.NPCsettings.SecondPass,FitMode=self.NPCsettings.FitMode)
+                                      SecondPass=self.NPCsettings.SecondPass_2D,FitMode=self.NPCsettings.FitMode)
         if not npcanalysis.configure_traits(kind='modal'):
             return
 
@@ -168,7 +182,7 @@ class NPCcalc():
             nt,nb = npc.nlabeled(nthresh=self.NPCsettings.SegmentThreshold_3D,
                                  dr=self.NPCsettings.RadiusUncertainty_3D,
                                  rotlocked=self.NPCsettings.RotationLocked_3D,
-                                 zrange=self.NPCsettings.Zrange_3D)
+                                 zrange=self.NPCsettings.Zclip_3D)
             npcs.measurements.append([nt,nb])
             (keepGoing, skip) = progress.Update(i+1)
             if not keepGoing:
@@ -339,8 +353,11 @@ class NPCcalc():
         if 'npcs' not in dir(pipeline) or pipeline.npcs is None:
             warn('no valid NPC measurements found, thus no geometry info available...')
             return
+        diams = np.asarray(pipeline.npcs.diam())
+        heights = np.asarray(pipeline.npcs.height())
         plt.figure()
-        res = plt.boxplot([pipeline.npcs.diam(),pipeline.npcs.height()],showmeans=True,labels=['diameter','height'])
+        res = plt.boxplot([diams,heights],showmeans=True,labels=['diameter','height'])
+        plt.title("NPC mean diam %.0f, mean ring spacing %.0f" % (diams.mean(),heights.mean()))
         plt.ylim(0,150)
 
     def OnSelectNPCsByMask(self,event=None):
