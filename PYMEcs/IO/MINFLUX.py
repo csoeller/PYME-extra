@@ -227,7 +227,8 @@ def monkeypatch_npy_io(visFr):
             ts = get_timestamp_from_filename(filename)
             if ts is not None:
                 ds.mdh['MINFLUX.TimeStamp'] = ts
-                ds.mdh['MINFLUX.StartTime'] = parse_timestamp_from_filename(filename)
+                # we add the zero to defeat the regexp that checks for names ending with 'time$'
+                ds.mdh['MINFLUX.StartTime0'] = parse_timestamp_from_filename(filename)
             return ds
         else:
             return self._ds_from_file_original(filename, **kwargs)
