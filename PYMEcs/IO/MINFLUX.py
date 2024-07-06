@@ -210,32 +210,62 @@ def monkeypatch_npy_io(visFr):
     visFr._populate_open_args_original = visFr._populate_open_args
     visFr._populate_open_args = types.MethodType(_populate_open_args_npy,visFr)
 
+    def _load_ds_npy(filename):
+        from PYMEcs.IO.tabular import MinfluxNpySource
+        ds = MinfluxNpySource(filename)
+        ds.filename = filename
+            
+        ds.mdh = MetaDataHandler.NestedClassMDHandler()
+        data = np.load(filename)
+
+        from pathlib import Path
+        ds.mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D(data)
+        ds.mdh['MINFLUX.ExtraIteration'] = minflux_npy_has_extra_iter(data)
+        ds.mdh['MINFLUX.Filename'] = Path(filename).name # the MINFLUX filename holds some metadata
+        from PYMEcs.misc.utils import get_timestamp_from_filename, parse_timestamp_from_filename
+        ts = get_timestamp_from_filename(filename)
+        if ts is not None:
+            ds.mdh['MINFLUX.TimeStamp'] = ts
+            # we add the zero to defeat the regexp that checks for names ending with 'time$'
+            # this falls foul of the comparison with an int (epoch time) in the metadata repr function
+            # because our time stamp is a pandas time stamp and comparison with int fails
+            ds.mdh['MINFLUX.StartTime0'] = parse_timestamp_from_filename(filename)
+        return ds
+    
     def _ds_from_file_npy(self, filename, **kwargs):
         if os.path.splitext(filename)[1] == '.npy': # MINFLUX NPY file
             logger.info('.npy file, trying to load as MINFLUX npy ...')
-            from PYMEcs.IO.tabular import MinfluxNpySource
-            ds = MinfluxNpySource(filename)
-            
-            ds.mdh = MetaDataHandler.NestedClassMDHandler()
-            data = np.load(filename)
-
-            from pathlib import Path
-            ds.mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D(data)
-            ds.mdh['MINFLUX.ExtraIteration'] = minflux_npy_has_extra_iter(data)
-            ds.mdh['MINFLUX.Filename'] = Path(filename).name # the MINFLUX filename holds some metadata
-            from PYMEcs.misc.utils import get_timestamp_from_filename, parse_timestamp_from_filename
-            ts = get_timestamp_from_filename(filename)
-            if ts is not None:
-                ds.mdh['MINFLUX.TimeStamp'] = ts
-                # we add the zero to defeat the regexp that checks for names ending with 'time$'
-                ds.mdh['MINFLUX.StartTime0'] = parse_timestamp_from_filename(filename)
-            return ds
+            return _load_ds_npy(filename)
         else:
             return self._ds_from_file_original(filename, **kwargs)
 
     visFr.pipeline._ds_from_file_original = visFr.pipeline._ds_from_file
     visFr.pipeline._ds_from_file = types.MethodType(_ds_from_file_npy,visFr.pipeline)
 
+
+    ### we now also need to monkey_patch the _load_input method of the pipeline recipe
+    ### this should allow session loading to succeed
+    def _load_input_npy(self, filename, key='input', metadata_defaults={}, cache={}, default_to_image=True, args={}):
+        """
+        Load input data from a file and inject into namespace
+        """
+        from PYME.IO import unifiedIO
+        import os
+
+        if '?' in filename:
+            self._load_input_original(filename,key=key,metadata_defaults=metadata_defaults,
+                                      cache=cache,default_to_image=default_to_image,args=args)
+        if os.path.splitext(filename)[1] == '.npy': # MINFLUX NPY file
+            logger.info('.npy file, trying to load as MINFLUX npy ...')
+            self.namespace[key] = _load_ds_npy(filename)
+        else:
+            self._load_input_original(filename,key=key,metadata_defaults=metadata_defaults,
+                                      cache=cache,default_to_image=default_to_image,args=args)
+
+    if '_load_input' in dir(visFr.pipeline.recipe):
+        visFr.pipeline.recipe._load_input_original = visFr.pipeline.recipe._load_input
+        visFr.pipeline.recipe._load_input = types.MethodType(_load_input_npy,visFr.pipeline.recipe)
+ 
     # we install this as new Menu item as File>Open is already assigned
     # however the new File>Open MINFLUX NPY entry can also open all other allowed file types
     def OnOpenFileNPY(self, event):
