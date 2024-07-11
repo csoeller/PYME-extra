@@ -1399,11 +1399,52 @@ def check_mbm_name(mbmfilename,timestamp,endswith='__MBM-beads'):
     # should return False if warning is necessary
     return mbmp.stem.startswith(timestamp) and mbmp.stem.endswith(endswith)
 
+def get_bead_dict_from_mbm(mbm):
+    beads = {}
+    raw_beads = mbm._raw_beads
+    for bead in raw_beads:
+        beads[bead] = {}
+        beads[bead]['x'] = 1e9*raw_beads[bead]['pos'][:,0]
+        beads[bead]['y'] = 1e9*raw_beads[bead]['pos'][:,1]
+        beads[bead]['z'] = 1e9*raw_beads[bead]['pos'][:,2]
+        beads[bead]['A'] = raw_beads[bead]['str']
+        beads[bead]['t'] = np.asarray(1e3*raw_beads[bead]['tim'],dtype=int)
+        beads[bead]['tim'] = raw_beads[bead]['tim']
+        beads[bead]['tid'] = raw_beads[bead]['tid']
+
+    x = np.empty((0))
+    y = np.empty((0))
+    z = np.empty((0))
+    t = np.empty((0),int)
+    tid = np.empty((0),int)
+    beadID = np.empty((0),int)
+    A = np.empty((0))
+    tim = np.empty((0))
+    good = np.empty((0),int)
+
+    for bead in beads:
+        beadid = int(bead[1:])
+        beadisgood = mbm.beadisgood[bead]
+        # print('beadid %d' % beadid)
+        x = np.append(x,beads[bead]['x'])
+        y = np.append(y,beads[bead]['y'])
+        z = np.append(z,beads[bead]['z'])
+        t = np.append(t,beads[bead]['t'])
+        tim = np.append(tim,beads[bead]['tim'])
+        tid = np.append(tid,beads[bead]['tid'])
+        A = np.append(A,beads[bead]['A'])
+        beadID = np.append(beadID,np.full_like(beads[bead]['x'],beadid,dtype=int))
+        good = np.append(good,np.full_like(beads[bead]['x'],beadisgood,dtype=int))
+
+    return dict(x=x,y=y,z=z,t=t,tim=tim,beadID=beadID,tid=tid,A=A,good=good)
+    
 @register_module('MBMcorrection')
 class MBMcorrection(ModuleBaseMDHmod):
     inputLocalizations = Input('localizations')
     output = Output('mbm_corrected')
-
+    outputTracks = Output('mbm_tracks')
+    outputTracksCorr = Output('mbm_tracks_corrected')
+    
     mbmfile = FileOrURI('')
     mbmsettings = FileOrURI('')
     mbmfilename_checks = Bool(True)
@@ -1432,8 +1473,10 @@ class MBMcorrection(ModuleBaseMDHmod):
                 mbm.beadisgood[bead] =  mbmconf['beads'][bead]
             mbm.median_window = self.Median_window
 
+            bead_ds_dict = get_bead_dict_from_mbm(mbm)
             tnew = 1e-3*inputLocalizations['t']
             mbmcorr = {}
+            mbmtrack_corr = {}
             for axis in ['x','y','z']:
                 axismean = mbm.mean(axis)
                 axismean_g = axismean[~np.isnan(axismean)]
@@ -1443,9 +1486,11 @@ class MBMcorrection(ModuleBaseMDHmod):
                                          return_sorted=False)
                     axis_interp_msm = np.interp(tnew,t_g,axismean_sm)            
                     mbmcorr[axis] = axis_interp_msm
+                    mbmtrack_corr[axis] = np.interp(bead_ds_dict['tim'],t_g,axismean_sm)
                 else: # fraction 0 or close to zero implies no lowess smoothing
                     axis_interp_g = np.interp(tnew,t_g,axismean_g)            
                     mbmcorr[axis] = axis_interp_g
+                    mbmtrack_corr[axis] = np.interp(bead_ds_dict['tim'],t_g,axismean_g)
 
             for axis in ['x','y','z']:
                 mapped_ds.addColumn('mbm%s' % axis, mbmcorr[axis])
@@ -1462,7 +1507,15 @@ class MBMcorrection(ModuleBaseMDHmod):
             from PYME.IO import MetaDataHandler
             MBMmdh = MetaDataHandler.DictMDHandler()
             MBMmdh['Processing.MBMcorrection.mbm'] = mbm
-            return dict(output=mapped_ds, mdh=MBMmdh)
+
+            from PYME.IO.tabular import DictSource
+            mbmtrack_ds = DictSource(bead_ds_dict)
+            mbmtrack_dscorr = tabular.MappingFilter(mbmtrack_ds)
+            for axis in ['x','y','z']:
+                mbmtrack_dscorr.addColumn(axis,mbmtrack_ds[axis] - mbmtrack_corr[axis])
+            
+            return dict(output=mapped_ds, outputTracks=mbmtrack_ds,
+                        outputTracksCorr=mbmtrack_dscorr, mdh=MBMmdh)
             # mapped_ds.mbm = mbm # attach mbm object to the output
 
         return mapped_ds
