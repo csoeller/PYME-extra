@@ -487,8 +487,11 @@ class MBMCollectionDF(object): # collection based on dataframe objects
                 warn('removing beads with no valid info after alignment %s...' % emptybeads)
                 dfplotg = dfplotg[dfplotg.columns[~dfplotg.isnull().all(axis=0)]]
 
-            ax = dfplotb.plot(legend = True,alpha=0.2)
-            dfplotg.plot(legend = True,ax = ax)
+            if has_bads:
+                ax = dfplotb.plot(legend = True,alpha=0.2)
+                dfplotg.plot(legend = True,ax = ax)
+            else:
+                ax = dfplotg.plot(legend = True)
             ax.plot(self.t, dfplotg.mean(axis=1),label='mean') # add the mean
             ax.legend()
             ax.set_title("MBM for %s axis" % axis)

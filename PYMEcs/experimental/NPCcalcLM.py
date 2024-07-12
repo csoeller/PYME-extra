@@ -81,8 +81,15 @@ class NPCsettings(HasTraits):
                          desc="Method to estimate the likely 3D center of an NPC; median seems more robust against outliners (say in z)")
 
 
-# TODO: make NPC height and radius initial diameter for fit settable via NPCsettings
-    
+# this should be a backwards compatible way to access the main filename associated with the pipeline/datasource
+def pipeline_filename(pipeline):
+    try:
+        filename = pipeline.filename
+    except (KeyError,AttributeError):
+        # latest versions with session saving associated filenames with the actual datasource read in
+        filename = pipeline.dataSources['FitResults'].filename
+    return filename
+        
 class NPCcalc():
     def __init__(self, visFr):
         self.visFr = visFr
@@ -154,7 +161,7 @@ class NPCcalc():
             npcs = pipeline.npcs
             do_plot = False
         else:
-            npcs = NPC3DSet(filename=pipeline.filename,
+            npcs = NPC3DSet(filename=pipeline_filename(pipeline),
                             zclip=self.NPCsettings.Zclip_3D,
                             offset_mode=self.NPCsettings.OffsetMode_3D,
                             NPCdiam=self.NPCsettings.StartDiam_3D,
@@ -290,7 +297,7 @@ class NPCcalc():
         from pathlib import Path
         with open(fpath, 'w') as f:
             f.write('# threshold %d, source data file %s\n' %
-                    (self.NPCsettings.SegmentThreshold_3D,Path(pipeline.filename).name))
+                    (self.NPCsettings.SegmentThreshold_3D,Path(pipeline_filename(pipeline)).name))
 
         df.to_csv(fpath,index=False, mode='a')
 
