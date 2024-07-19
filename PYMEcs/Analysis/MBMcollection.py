@@ -457,7 +457,7 @@ class MBMCollectionDF(object): # collection based on dataframe objects
                 fig.update_yaxes(range = (0,np.max([10.0,dfplotg.max().max()])))
             fig.show()
         
-    def plot_tracks_matplotlib(self,axis,unaligned=False,tmin=None,tmax=None):
+    def plot_tracks_matplotlib(self,axis,unaligned=False,tmin=None,tmax=None,ax=None):
         if tmin is None:
             tmin=self._trange[0]
         if tmax is None:
@@ -488,10 +488,10 @@ class MBMCollectionDF(object): # collection based on dataframe objects
                 dfplotg = dfplotg[dfplotg.columns[~dfplotg.isnull().all(axis=0)]]
 
             if has_bads:
-                ax = dfplotb.plot(legend = True,alpha=0.2)
+                ax = dfplotb.plot(legend = True,alpha=0.2,ax=ax)
                 dfplotg.plot(legend = True,ax = ax)
             else:
-                ax = dfplotg.plot(legend = True)
+                ax = dfplotg.plot(legend = True,ax=ax)
             ax.plot(self.t, dfplotg.mean(axis=1),label='mean') # add the mean
             ax.legend()
             ax.set_title("MBM for %s axis" % axis)
