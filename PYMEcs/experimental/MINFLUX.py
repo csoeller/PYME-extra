@@ -444,6 +444,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Util', "Set MINFLUX temperature file location", self.OnMINFLUXsetTempDataFile)
         visFr.AddMenuItem('MINFLUX>MBM', "Plot mean MBM info (and if present origami info)", self.OnMBMplot)
         visFr.AddMenuItem('MINFLUX>MBM', "Show MBM tracks", self.OnMBMtracks)
+        visFr.AddMenuItem('MINFLUX>MBM', "Add MBM track labels to view", self.OnMBMaddTrackLabels)
         visFr.AddMenuItem('MINFLUX>RyRs', "Plot corner info", self.OnCornerplot)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
@@ -523,7 +524,31 @@ class MINFLUXanalyser():
         mbm.median_window = 21 # go for pretty agressive smoothing
         mbm.plot_tracks_matplotlib(self.mbmAxisSelection.SelectAxis)
         mbm.median_window = ori_win
+
+    def OnMBMaddTrackLabels(self, event):
+        pipeline = self.visFr.pipeline
+        try:
+            from PYME.LMVis.layers.labels import LabelLayer
+        except:
+            hasLL = False
+        else:
+            hasLL = True
+
+        # note: should also add the merge module?
+        # note: should also add the layer for mbm_tracks?
+
+        if 'mbm_pos' not in pipeline.dataSources.keys():
+            warn("no datasource 'mbm_pos' which is needed for label display")
+            return
+        if not hasLL:
+            warn("could not load new experimental feature label layer, aborting...")
+            return
         
+        if hasLL:
+            ll = LabelLayer(pipeline, dsname='mbm_pos', format_string='R{beadID:.0f}', cmap='grey_overflow', font_size=13, textColour='good')
+            self.visFr.add_layer(ll)
+            ll.update()
+
     def OnMINFLUXsetTempDataFile(self, event):
         import PYME.config as config
         with wx.FileDialog(self.visFr, "Choose Temperature data file", wildcard='CSV (*.csv)|*.csv',

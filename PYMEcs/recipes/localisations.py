@@ -1418,6 +1418,7 @@ def get_bead_dict_from_mbm(mbm):
     t = np.empty((0),int)
     tid = np.empty((0),int)
     beadID = np.empty((0),int)
+    objectID = np.empty((0),int)
     A = np.empty((0))
     tim = np.empty((0))
     good = np.empty((0),int)
@@ -1434,9 +1435,11 @@ def get_bead_dict_from_mbm(mbm):
         tid = np.append(tid,beads[bead]['tid'])
         A = np.append(A,beads[bead]['A'])
         beadID = np.append(beadID,np.full_like(beads[bead]['x'],beadid,dtype=int))
+        # objectIDs start at 1, beadIDs can start at 0
+        objectID = np.append(objectID,np.full_like(beads[bead]['x'],beadid+1,dtype=int))
         good = np.append(good,np.full_like(beads[bead]['x'],beadisgood,dtype=int))
 
-    return dict(x=x,y=y,z=z,t=t,tim=tim,beadID=beadID,tid=tid,A=A,good=good)
+    return dict(x=x,y=y,z=z,t=t,tim=tim,beadID=beadID,tid=tid,A=A,good=good,objectID=objectID)
     
 @register_module('MBMcorrection')
 class MBMcorrection(ModuleBaseMDHmod):
@@ -1452,6 +1455,11 @@ class MBMcorrection(ModuleBaseMDHmod):
     Median_window = Int(5)
     MBM_lowess_fraction = Float(0.1,label='lowess fraction for MBM smoothing',
                                 desc='lowess fraction used for smoothing of mean MBM trajectories (default 0.1); 0 = no smoothing')
+    MBM_beads = List()
+
+    _mbm_allbeads = List()
+
+    _mbm_cache = {}
     
     def run(self,inputLocalizations):
         import json
@@ -1463,14 +1471,27 @@ class MBMcorrection(ModuleBaseMDHmod):
         mapped_ds = tabular.MappingFilter(inputLocalizations)
 
         if self.mbmfile != '':
-            fp = Path(self.mbmfile)
-            mbm = MBMCollectionDF(name=fp.stem,filename=fp)
-        
-            s = unifiedIO.read(self.mbmsettings)
-            mbmconf = json.loads(s)
+            mbmkey = self.mbmfile
+            if mbmkey not in self._mbm_cache.keys():
+                mbm = MBMCollectionDF(name=Path(self.mbmfile).stem,filename=self.mbmfile)
+                self._mbm_allbeads = list(mbm.beadisgood.keys())
+                self._mbm_cache[mbmkey] = mbm
+            else:
+                mbm = self._mbm_cache[mbmkey]
 
-            for bead in mbmconf['beads']:
-                mbm.beadisgood[bead] =  mbmconf['beads'][bead]
+            mbmsettingskey = self.mbmsettings
+            if mbmsettingskey not in self._mbm_cache.keys():
+                s = unifiedIO.read(self.mbmsettings)
+                mbmconf = json.loads(s)
+
+                for bead in mbmconf['beads']:
+                    mbm.beadisgood[bead] =  mbmconf['beads'][bead]
+                self.MBM_beads = [bead for bead in mbmconf['beads'].keys() if mbmconf['beads'][bead]]
+                self._mbm_cache[mbmsettingskey] = mbmconf
+            else:
+                for bead in self._mbm_allbeads:
+                    mbm.beadisgood[bead] = bead in self.MBM_beads
+
             mbm.median_window = self.Median_window
 
             bead_ds_dict = get_bead_dict_from_mbm(mbm)
@@ -1519,3 +1540,25 @@ class MBMcorrection(ModuleBaseMDHmod):
             # mapped_ds.mbm = mbm # attach mbm object to the output
 
         return mapped_ds
+    
+    @property
+    def default_view(self):
+        from traitsui.api import View, Group, Item, CheckListEditor
+        from PYME.ui.custom_traits_editors import CBEditor
+
+        return View(Item('inputLocalizations', editor=CBEditor(choices=self._namespace_keys)),
+                    Item('_'),
+                    Item('mbmfile'),
+                    Item('mbmsettings'),
+                    Item('mbmfilename_checks'),
+                    Item('MBM_beads', editor=CheckListEditor(values=self._mbm_allbeads,cols=4),
+                         style='custom',
+                         ),
+                    Item('_'),
+                    Item('output'),
+                    Item('outputTracks'),
+                    Item('outputTracksCorr'),
+                    buttons=['OK'])
+
+
+    
