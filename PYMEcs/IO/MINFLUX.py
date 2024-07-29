@@ -161,7 +161,8 @@ def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,wit
 
     # copy a few entries verbatim
     for key in ['tid','act','vld']:
-        pymedct[key] = data[key].astype('i') # these are either integer types or should be converted to integer
+        if key in data.dtype.fields:
+            pymedct[key] = data[key].astype('i') # these are either integer types or should be converted to integer
 
     # TODO: think this through - we don't really need a dataframe here,
     # could return a record array, or at least make that optional
