@@ -274,7 +274,7 @@ class NPCcalc():
         # now we add a track layer to render our template polygons
         # TODO - we may need to check if this happened before or not!
         from PYME.LMVis.layers.tracks import TrackRenderLayer # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
-        layer = TrackRenderLayer(pipeline, dsname='NPCtemplates', method='tracks', clump_key='polyIndex')
+        layer = TrackRenderLayer(pipeline, dsname='NPCtemplates', method='tracks', clump_key='polyIndex', line_width=2.0, alpha=0.5)
         self.visFr.add_layer(layer)        
 
     def OnNPC3DSaveMeasurements(self, event=None):

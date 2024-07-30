@@ -1554,6 +1554,8 @@ class MBMcorrection(ModuleBaseMDHmod):
                     Item('MBM_beads', editor=CheckListEditor(values=self._mbm_allbeads,cols=4),
                          style='custom',
                          ),
+                    Item('Median_window'),
+                    Item('MBM_lowess_fraction'),
                     Item('_'),
                     Item('output'),
                     Item('outputTracks'),

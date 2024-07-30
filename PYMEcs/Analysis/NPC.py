@@ -352,8 +352,8 @@ class LLmaximizerNPC3D(object):
             (-maxshift,maxshift), # p[2]
             (-90.0,90.0), # p[3]
             (-35.0,35.0), # p[4]
-            (70.0,130.0), # p[5]
-            (70.0,130.0) # p[6]
+            (80.0,120.0), # p[5] - limit to 20% variation to avoid misfits
+            (80.0,120.0) # p[6]  - limit to 20% variation to avoid misfits
         )
 
     def registerPoints(self,pts): # register candidate points for fitting
