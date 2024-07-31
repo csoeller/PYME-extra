@@ -665,13 +665,14 @@ class NPC3D(object):
         return (self.n_top,self.n_bot)
 
 class NPC3DSet(object):
-    def __init__(self,filename=None,zclip=75.0,offset_mode='median',NPCdiam=100.0,NPCheight=70.0):
+    def __init__(self,filename=None,zclip=75.0,offset_mode='median',NPCdiam=100.0,NPCheight=70.0,foreshortening=1.0):
         self.filename=filename
         self.zclip = zclip
         self.offset_mode = offset_mode
         self.npcdiam = NPCdiam
         self.npcheight = NPCheight
         self.npcs = []
+        self.foreshortening=foreshortening # we just record this for reference
         # TODO: expose llm parameters to this init method as needed in practice!
         self.llm = LLmaximizerNPC3D([self.npcdiam,self.npcheight],eps=15.0,sigma=7.0,bgprob=1e-9,extent_nm=300.0)
         self.measurements = []

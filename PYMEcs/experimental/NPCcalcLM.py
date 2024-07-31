@@ -162,11 +162,13 @@ class NPCcalc():
             npcs = pipeline.npcs
             do_plot = False
         else:
+            from PYMEcs.IO.MINFLUX import foreshortening
             npcs = NPC3DSet(filename=pipeline_filename(pipeline),
                             zclip=self.NPCsettings.Zclip_3D,
                             offset_mode=self.NPCsettings.OffsetMode_3D,
                             NPCdiam=self.NPCsettings.StartDiam_3D,
-                            NPCheight=self.NPCsettings.StartHeight_3D)
+                            NPCheight=self.NPCsettings.StartHeight_3D,
+                            foreshortening=foreshortening)
             do_plot = True
             for oid in np.unique(pipeline['objectID']):
                 npcs.addNPCfromPipeline(pipeline,oid)
