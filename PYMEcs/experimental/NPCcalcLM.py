@@ -51,7 +51,6 @@ def setNPCsfromImg(pipeline,img):
     pipeline.selectDataSource(valid_ids)
 
 class NPCsettings(HasTraits):
-    from PYMEcs.IO.MINFLUX import foreshortening
     SegmentThreshold_2D = Int(10,label='Threshold localisation count (2D)',
                               desc="a minimum number of localisations in a segment in 2D fitting to be counted as labeled; "+
                               "NOTE: definition changed from original code where 11 localisations where required with a threshold of 10 etc!")
@@ -60,7 +59,7 @@ class NPCsettings(HasTraits):
     SecondPass_2D = Bool(False,label='Second pass for NPC fitting (2D)',
                          desc="a second pass for 2D fitting should be run; we have experimented with a second pass rotation "+
                          "estimate and fitting hoping to improve on the first estimate; still experimental")
-    StartHeight_3D = Float(70.0*foreshortening,label='Starting ring spacing for 3D fitting',
+    StartHeight_3D = Float(70.0,label='Starting ring spacing for 3D fitting',
                            desc="starting ring spacing value for the 3D fit; note only considered when doing the initial full fit; "+
                            "not considered when re-evaluating existing fit")
     StartDiam_3D = Float(107.0,label='Starting ring diameter for 3D fitting',
@@ -76,7 +75,7 @@ class NPCsettings(HasTraits):
                                  desc="a radius scatter that determines how much localisations can deviate from the mean ring radius "+
                                  "and still be accepted as part of the NPC; allows for distortions of NPCs and localisation errors")
     # the two next things seem to set the same thing, so unify
-    Zclip_3D = Float(75.0*foreshortening,label='Z-clip value from center of NPC',
+    Zclip_3D = Float(75.0,label='Z-clip value from center of NPC',
                      desc='the used zrange from the (estimated) center of the NPC, from (-zclip..+zclip) in 3D fitting')
     OffsetMode_3D = Enum(['median','mean'],label='Method to estimate NPC center',
                          desc="Method to estimate the likely 3D center of an NPC; median seems more robust against outliners (say in z)")
@@ -111,10 +110,11 @@ class NPCcalc():
         visFr.AddMenuItem('Experimental>NPC2D', 'NPC Analysis settings', self.OnNPCsettings)
         visFr.AddMenuItem('Experimental>NPC3D', 'NPC Analysis settings', self.OnNPCsettings)
 
-        self.NPCsettings = NPCsettings()
-
-
     def OnNPCsettings(self, event=None):
+        if 'NPCsettings' not in dir(self):
+            foreshortening=self.visFr.pipeline.mdh.get('MINFLUX.Foreshortening',1.0)
+            self.NPCsettings = NPCsettings(StartHeight_3D=70.0*foreshortening,Zclip_3D=75.0*foreshortening)
+
         if self.NPCsettings.configure_traits(kind='modal'):
             pass
 
@@ -168,7 +168,7 @@ class NPCcalc():
                             offset_mode=self.NPCsettings.OffsetMode_3D,
                             NPCdiam=self.NPCsettings.StartDiam_3D,
                             NPCheight=self.NPCsettings.StartHeight_3D,
-                            foreshortening=foreshortening)
+                            foreshortening=pipeline.mdh.get('MINFLUX.Foreshortening',1.0))
             do_plot = True
             for oid in np.unique(pipeline['objectID']):
                 npcs.addNPCfromPipeline(pipeline,oid)
