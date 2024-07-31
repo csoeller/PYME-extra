@@ -12,6 +12,8 @@ import pandas as pd
 import numpy as np
 import os
 
+foreshortening = 0.75 # foreshortening factor estimate, see also Gwosch, K. C. et al. MINFLUX nanoscopy delivers 3D multicolor nanometer resolution in cells. Nature Methods 17, 217–224 (2020), who use 0.7.
+
 warning_msg = ""
 
 def get_stddev_property(ids, prop, statistic='std'):
@@ -95,8 +97,10 @@ def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,wit
 
 
     posnm = 1e9*data['itr']['loc'][:,iterno_loc] # we keep all distances in units of nm
+    posnm[:,2] *= foreshortening
     if 'lnc' in data['itr'].dtype.fields:
         posnm_nc = 1e9*data['itr']['lnc'][:,iterno_loc]
+        posnm_nc[:,2] *= foreshortening
         has_lnc = True
     else:
         has_lnc = False

@@ -1473,7 +1473,9 @@ class MBMcorrection(ModuleBaseMDHmod):
         if self.mbmfile != '':
             mbmkey = self.mbmfile
             if mbmkey not in self._mbm_cache.keys():
-                mbm = MBMCollectionDF(name=Path(self.mbmfile).stem,filename=self.mbmfile)
+                from PYMEcs.IO.MINFLUX import foreshortening
+                mbm = MBMCollectionDF(name=Path(self.mbmfile).stem,filename=self.mbmfile,
+                                      foreshortening=foreshortening)
                 self._mbm_allbeads = list(mbm.beadisgood.keys())
                 self._mbm_cache[mbmkey] = mbm
             else:
