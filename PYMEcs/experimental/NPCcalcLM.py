@@ -110,11 +110,16 @@ class NPCcalc():
         visFr.AddMenuItem('Experimental>NPC2D', 'NPC Analysis settings', self.OnNPCsettings)
         visFr.AddMenuItem('Experimental>NPC3D', 'NPC Analysis settings', self.OnNPCsettings)
 
-    def OnNPCsettings(self, event=None):
-        if 'NPCsettings' not in dir(self):
-            foreshortening=self.visFr.pipeline.mdh.get('MINFLUX.Foreshortening',1.0)
-            self.NPCsettings = NPCsettings(StartHeight_3D=70.0*foreshortening,Zclip_3D=75.0*foreshortening)
+        self._npcsettings = None
 
+    @property
+    def NPCsettings(self):
+        if self._npcsettings is None:
+            foreshortening=self.visFr.pipeline.mdh.get('MINFLUX.Foreshortening',1.0)
+            self._npcsettings = NPCsettings(StartHeight_3D=70.0*foreshortening,Zclip_3D=75.0*foreshortening)
+        return self._npcsettings
+    
+    def OnNPCsettings(self, event=None):
         if self.NPCsettings.configure_traits(kind='modal'):
             pass
 
