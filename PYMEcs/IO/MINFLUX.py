@@ -12,7 +12,11 @@ import pandas as pd
 import numpy as np
 import os
 
-foreshortening = 0.75 # foreshortening factor estimate, see also Gwosch, K. C. et al. MINFLUX nanoscopy delivers 3D multicolor nanometer resolution in cells. Nature Methods 17, 217–224 (2020), who use 0.7.
+import PYME.config
+# foreshortening factor estimate, see also
+# Gwosch, K. C. et al. MINFLUX nanoscopy delivers 3D multicolor nanometer
+# resolution in cells. Nature Methods 17, 217–224 (2020), who use 0.7.
+foreshortening = PYME.config.get('MINFLUX_foreshortening',0.75)
 
 warning_msg = ""
 
