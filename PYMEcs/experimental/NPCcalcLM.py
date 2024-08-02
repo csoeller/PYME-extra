@@ -342,6 +342,16 @@ class NPCcalc():
         with open(fname,'rb') as fi:
             pipeline.npcs=pickle.load(fi)
 
+        try:
+            npc_foreshortening = pipeline.npcs.foreshortening
+        except AttributeError:
+            npc_foreshortening = 1.0
+
+        ds_foreshortening = pipeline.mdh.get('MINFLUX.Foreshortening',1.0)
+        if np.abs(npc_foreshortening-ds_foreshortening) >= 0.01:
+            warn("NPC foreshortening is %.2f while dataset foreshortening is %.2f, check this is compatible" %
+                 (npc_foreshortening,ds_foreshortening))
+
     def OnNPC3DSaveNPCSet(self, event=None):
         import pickle
         pipeline = self.visFr.pipeline
