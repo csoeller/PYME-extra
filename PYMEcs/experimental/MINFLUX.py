@@ -406,8 +406,8 @@ class MINFLUXSettings(HasTraits):
     defaultDatasourceForMBM = CStr('coalesced_nz',label='default datasource for MBM analysis and plotting',
                                         desc="the datasource key that will be used by default in the MINFLUX " +
                                         "MBM analysis") # default datasource for MBM analysis
-    MBM_lowess_fraction = Float(0.03,label='lowess fraction for MBM smoothing',
-                                        desc='lowess fraction used for smoothing of coalesced MBM data (default 0.05)')
+    #MBM_lowess_fraction = Float(0.03,label='lowess fraction for MBM smoothing',
+    #                                    desc='lowess fraction used for smoothing of coalesced MBM data (default 0.05)')
     origamiWith_nc = Bool(False,label='add 2nd moduleset (no MBM corr)',
                           desc="if a full second module set is inserted to also analyse the origami data without any MBM corrections")
 
@@ -484,12 +484,14 @@ class MINFLUXanalyser():
                 else:
                     ax.plot(t_s,p['drift%s' % caxis], label='origami 1st pass')
             if has_mbm:
+                mod = findmbm(p,warnings=False,return_mod=True)
+                MBM_lowess_fraction = mod.MBM_lowess_fraction
                 mbm_mean[caxis] = mbm.mean(caxis)
                 ax.plot(mbm.t,mbm_mean[caxis],':',label='MBM mean')
                 from statsmodels.nonparametric.smoothers_lowess import lowess
-                mbm_meansm[caxis] = lowess(mbm_mean[caxis], mbm.t, frac=self.analysisSettings.MBM_lowess_fraction,
+                mbm_meansm[caxis] = lowess(mbm_mean[caxis], mbm.t, frac=MBM_lowess_fraction,
                                        return_sorted=False)
-                ax.plot(mbm.t,mbm_meansm[caxis],'-.',label='MBM lowess (lf=%.2f)' % self.analysisSettings.MBM_lowess_fraction)
+                ax.plot(mbm.t,mbm_meansm[caxis],'-.',label='MBM lowess (lf=%.2f)' % MBM_lowess_fraction)
             if has_mbm2:
                 ax.plot(t_s,p['mbm%s' % caxis], label='MBM from module')
             ax.set_xlabel('time (s)')
@@ -507,7 +509,7 @@ class MINFLUXanalyser():
                         ax.plot(t_s,p['drift%s' % caxis], label='origami 1st pass')
                 if has_mbm:
                     #ax.plot(mbm.t,mbm_mean[caxis],':',label='MBM mean')
-                    ax.plot(mbm.t,mbm_meansm[caxis],'r-.',label='MBM lowess (lf=%.2f)' % self.analysisSettings.MBM_lowess_fraction)
+                    ax.plot(mbm.t,mbm_meansm[caxis],'r-.',label='MBM lowess (lf=%.2f)' % MBM_lowess_fraction)
                 ax.set_xlabel('time (s)')
                 ax.set_ylabel('drift in %s (nm)' % caxis)
                 ax.legend(loc="upper left")
@@ -679,7 +681,7 @@ class MINFLUXanalyser():
             # try instead something that should exist
             p.selectDataSource(self.analysisSettings.defaultDatasourceForAnalysis)
             is_coalesced = 'coalesced' in self.analysisSettings.defaultDatasourceForAnalysis.lower()
-        plot_tracking(p,is_coalesced,lowess_fraction=self.analysisSettings.MBM_lowess_fraction)
+        plot_tracking(p,is_coalesced,lowess_fraction=0.03)
         p.selectDataSource(curds)
 
     def OnOrigamiSiteRecipe(self, event=None):
