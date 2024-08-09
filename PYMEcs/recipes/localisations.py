@@ -1440,7 +1440,13 @@ def get_bead_dict_from_mbm(mbm):
         good = np.append(good,np.full_like(beads[bead]['x'],beadisgood,dtype=int))
 
     return dict(x=x,y=y,z=z,t=t,tim=tim,beadID=beadID,tid=tid,A=A,good=good,objectID=objectID)
-    
+
+try:
+    from PYME.LMVis.sessionpaths import register_path_modulechecks
+    register_path_modulechecks('PYMEcs.MBMcorrection','mbmfile','mbmsettings')
+except ImportError:
+    pass
+
 @register_module('MBMcorrection')
 class MBMcorrection(ModuleBaseMDHmod):
     inputLocalizations = Input('localizations')
