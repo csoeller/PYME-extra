@@ -213,7 +213,7 @@ class NPCcalc():
             return
         
         pipeline.npcs = npcs # overwriting with the same object should be fine if pipeline.npcs already existed
-        npcs.plot_labeleff()
+        npcs.plot_labeleff(thresh=self.NPCsettings.SegmentThreshold_3D)
 
 
     def On3DNPCaddTemplates(self, event=None):
