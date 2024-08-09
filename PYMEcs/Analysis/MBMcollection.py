@@ -298,7 +298,7 @@ def hashdf(df):
     return hashlib.sha1(pd.util.hash_pandas_object(df).values).hexdigest()
 
 class MBMCollectionDF(object): # collection based on dataframe objects
-    def __init__(self,name=None,filename=None,variance_window = 9):
+    def __init__(self,name=None,filename=None,variance_window = 9,foreshortening=1.0):
         self.mbms = {}
         self.beadisgood = {}
         self.t = None
@@ -306,6 +306,7 @@ class MBMCollectionDF(object): # collection based on dataframe objects
         self._trange= (None,None)
         self.variance_window = variance_window # by default use last 9 localisations for variance/std calculation
         self.median_window = 0 # 0 means not active
+        self.foreshortening = foreshortening
         self.plotbad = False
         
         if filename is not None:
@@ -321,6 +322,8 @@ class MBMCollectionDF(object): # collection based on dataframe objects
         # this is a MBM bead file with raw bead tracks
         self.name=filename
         self._raw_beads = np.load(filename)
+        for bead in self._raw_beads:
+            self._raw_beads[bead]['pos'][:,2] *= self.foreshortening
         self.beads = df_from_interp_beads(self._raw_beads)
         self.t = self.beads['x'].index
         

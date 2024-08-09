@@ -12,6 +12,12 @@ import pandas as pd
 import numpy as np
 import os
 
+import PYME.config
+# foreshortening factor estimate, see also
+# Gwosch, K. C. et al. MINFLUX nanoscopy delivers 3D multicolor nanometer
+# resolution in cells. Nature Methods 17, 217–224 (2020), who use 0.7.
+foreshortening = PYME.config.get('MINFLUX_foreshortening',0.72)
+
 warning_msg = ""
 
 def get_stddev_property(ids, prop, statistic='std'):
@@ -95,8 +101,10 @@ def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,wit
 
 
     posnm = 1e9*data['itr']['loc'][:,iterno_loc] # we keep all distances in units of nm
+    posnm[:,2] *= foreshortening
     if 'lnc' in data['itr'].dtype.fields:
         posnm_nc = 1e9*data['itr']['lnc'][:,iterno_loc]
+        posnm_nc[:,2] *= foreshortening
         has_lnc = True
     else:
         has_lnc = False
@@ -223,6 +231,7 @@ def monkeypatch_npy_io(visFr):
         ds.mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D(data)
         ds.mdh['MINFLUX.ExtraIteration'] = minflux_npy_has_extra_iter(data)
         ds.mdh['MINFLUX.Filename'] = Path(filename).name # the MINFLUX filename holds some metadata
+        ds.mdh['MINFLUX.Foreshortening'] = foreshortening
         from PYMEcs.misc.utils import get_timestamp_from_filename, parse_timestamp_from_filename
         ts = get_timestamp_from_filename(filename)
         if ts is not None:

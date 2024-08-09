@@ -110,9 +110,15 @@ class NPCcalc():
         visFr.AddMenuItem('Experimental>NPC2D', 'NPC Analysis settings', self.OnNPCsettings)
         visFr.AddMenuItem('Experimental>NPC3D', 'NPC Analysis settings', self.OnNPCsettings)
 
-        self.NPCsettings = NPCsettings()
+        self._npcsettings = None
 
-
+    @property
+    def NPCsettings(self):
+        if self._npcsettings is None:
+            foreshortening=self.visFr.pipeline.mdh.get('MINFLUX.Foreshortening',1.0)
+            self._npcsettings = NPCsettings(StartHeight_3D=70.0*foreshortening,Zclip_3D=75.0*foreshortening)
+        return self._npcsettings
+    
     def OnNPCsettings(self, event=None):
         if self.NPCsettings.configure_traits(kind='modal'):
             pass
@@ -161,11 +167,13 @@ class NPCcalc():
             npcs = pipeline.npcs
             do_plot = False
         else:
+            from PYMEcs.IO.MINFLUX import foreshortening
             npcs = NPC3DSet(filename=pipeline_filename(pipeline),
                             zclip=self.NPCsettings.Zclip_3D,
                             offset_mode=self.NPCsettings.OffsetMode_3D,
                             NPCdiam=self.NPCsettings.StartDiam_3D,
-                            NPCheight=self.NPCsettings.StartHeight_3D)
+                            NPCheight=self.NPCsettings.StartHeight_3D,
+                            foreshortening=pipeline.mdh.get('MINFLUX.Foreshortening',1.0))
             do_plot = True
             for oid in np.unique(pipeline['objectID']):
                 npcs.addNPCfromPipeline(pipeline,oid)
@@ -205,7 +213,7 @@ class NPCcalc():
             return
         
         pipeline.npcs = npcs # overwriting with the same object should be fine if pipeline.npcs already existed
-        npcs.plot_labeleff()
+        npcs.plot_labeleff(thresh=self.NPCsettings.SegmentThreshold_3D)
 
 
     def On3DNPCaddTemplates(self, event=None):
@@ -333,6 +341,16 @@ class NPCcalc():
                  (MINFLUXts,fname.stem))
         with open(fname,'rb') as fi:
             pipeline.npcs=pickle.load(fi)
+
+        try:
+            npc_foreshortening = pipeline.npcs.foreshortening
+        except AttributeError:
+            npc_foreshortening = 1.0
+
+        ds_foreshortening = pipeline.mdh.get('MINFLUX.Foreshortening',1.0)
+        if np.abs(npc_foreshortening-ds_foreshortening) >= 0.01:
+            warn("NPC foreshortening is %.2f while dataset foreshortening is %.2f, check this is compatible" %
+                 (npc_foreshortening,ds_foreshortening))
 
     def OnNPC3DSaveNPCSet(self, event=None):
         import pickle

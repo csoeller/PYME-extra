@@ -241,7 +241,7 @@ def npclabel_fit(nphist,sigma=None):
     return (popt[0],n_labels_scaled,perr[0])
 
 from PYMEcs.misc.utils import get_timestamp_from_filename
-def plotcdf_npc3d(nlab,plot_as_points=True,timestamp=None):
+def plotcdf_npc3d(nlab,plot_as_points=True,timestamp=None,thresh=None):
     pr = prangeNPC3D()
     for p in pr.keys():
         if p != 'krange':
@@ -250,6 +250,9 @@ def plotcdf_npc3d(nlab,plot_as_points=True,timestamp=None):
         labelexp = 'experiment'
     else:
         labelexp = 'exp %s' % timestamp
+
+    if thresh is not None:
+        labelexp = "thresh %d, %s" % (thresh,labelexp)
 
     histret = plt.hist(nlab,range=(0,16),bins='auto',density=True,
                        histtype="step", cumulative=1, label=labelexp, alpha=0.3)
@@ -665,13 +668,14 @@ class NPC3D(object):
         return (self.n_top,self.n_bot)
 
 class NPC3DSet(object):
-    def __init__(self,filename=None,zclip=75.0,offset_mode='median',NPCdiam=100.0,NPCheight=70.0):
+    def __init__(self,filename=None,zclip=75.0,offset_mode='median',NPCdiam=100.0,NPCheight=70.0,foreshortening=1.0):
         self.filename=filename
         self.zclip = zclip
         self.offset_mode = offset_mode
         self.npcdiam = NPCdiam
         self.npcheight = NPCheight
         self.npcs = []
+        self.foreshortening=foreshortening # we just record this for reference
         # TODO: expose llm parameters to this init method as needed in practice!
         self.llm = LLmaximizerNPC3D([self.npcdiam,self.npcheight],eps=15.0,sigma=7.0,bgprob=1e-9,extent_nm=300.0)
         self.measurements = []
@@ -694,7 +698,7 @@ class NPC3DSet(object):
             nt,nb = npc.nlabeled(nthresh=nthresh,dr=20.0)
             self.measurements.append([nt,nb])
     
-    def plot_labeleff(self):
+    def plot_labeleff(self,thresh=None):
         from PYMEcs.misc.utils import get_timestamp_from_filename
         if len(self.measurements) < 10:
             raise RuntimeError("not enough measurements, need at least 10, got %d" %
@@ -703,7 +707,7 @@ class NPC3DSet(object):
         nlab = meas.sum(axis=1)
 
         plt.figure()
-        plotcdf_npc3d(nlab,timestamp=get_timestamp_from_filename(self.filename))
+        plotcdf_npc3d(nlab,timestamp=get_timestamp_from_filename(self.filename),thresh=thresh)
 
     def diam(self):
         diams = []
