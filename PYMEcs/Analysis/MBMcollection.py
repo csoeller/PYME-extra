@@ -517,3 +517,11 @@ class MBMCollectionDF(object): # collection based on dataframe objects
             ax.set_xlabel("time (s)")
             ax.set_ylabel(yaxis_title)
             ax.set_ylim(0,np.max([10.0,dfplotg.max().max()]))
+
+    def __getstate__(self):
+        warn("mbm is being pickled - won't be usable after unpickling")
+        return 'not a valid mbm collection after pickling/unpickling'
+    
+    def __setstate__(self, d):
+        warn("mbm is being unpickled - won't be usable after unpickling")
+        self._unpickled = d
