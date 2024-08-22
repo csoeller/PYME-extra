@@ -518,10 +518,13 @@ class MBMCollectionDF(object): # collection based on dataframe objects
             ax.set_ylabel(yaxis_title)
             ax.set_ylim(0,np.max([10.0,dfplotg.max().max()]))
 
+    # we add custom pickling/unopickling method so that an mbm instance in the
+    # PYME metadata won't trip up image saving with metadata
+    # really some kind of hack, perhaps it is better to save the mbm instance in some other form
     def __getstate__(self):
-        warn("mbm is being pickled - won't be usable after unpickling")
+        warn("mbm is being pickled - just a dummy mostly for PYME metadata - won't be usable after unpickling")
         return 'not a valid mbm collection after pickling/unpickling'
     
     def __setstate__(self, d):
-        warn("mbm is being unpickled - won't be usable after unpickling")
+        warn("mbm is being unpickled - this is just a dummy unpickle, won't be usable after unpickling")
         self._unpickled = d

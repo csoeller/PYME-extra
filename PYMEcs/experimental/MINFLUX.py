@@ -65,7 +65,7 @@ def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', **kwargs):
         # get position data for median line
         x, y = line.get_xydata()[0] # top of median line
         # overlay median value
-        plt.text(x, y, '%.1f' % y,
+        plt.text(x-0.25, y, '%.1f' % y,
                  horizontalalignment='center') # draw above, centered    
     plt.tight_layout()
 
@@ -396,6 +396,7 @@ def findmbm(pipeline,warnings=True,return_mod=False):
 
 
 from PYME.recipes.traits import HasTraits, Float, Enum, CStr, Bool, Int, List
+import PYME.config
 
 class MINFLUXSettings(HasTraits):
     withOrigamiSmoothingCurves = Bool(True,label='Plot smoothing curves',desc="if overplotting smoothing curves " +
@@ -406,6 +407,9 @@ class MINFLUXSettings(HasTraits):
     defaultDatasourceForMBM = CStr('coalesced_nz',label='default datasource for MBM analysis and plotting',
                                         desc="the datasource key that will be used by default in the MINFLUX " +
                                         "MBM analysis") # default datasource for MBM analysis
+    datasourceForClusterAnalysis = CStr(PYME.config.get('MINFLUX-clusterDS','dbscan_clustered'),label='datasource for 3D cluster analysis',
+                                        desc="the datasource key that will be used to generate the 3D cluster size analysis")
+    
     #MBM_lowess_fraction = Float(0.03,label='lowess fraction for MBM smoothing',
     #                                    desc='lowess fraction used for smoothing of coalesced MBM data (default 0.05)')
     origamiWith_nc = Bool(False,label='add 2nd moduleset (no MBM corr)',
@@ -577,21 +581,21 @@ class MINFLUXanalyser():
                 return
         fname = dialog.GetPath()
         
-        if config.get('MINFLUX_temperature_file') == fname:
-            warn("config option 'MINFLUX_temperature_file' already set to %s" % fname)
+        if config.get('MINFLUX-temperature_file') == fname:
+            warn("config option 'MINFLUX-temperature_file' already set to %s" % fname)
             return # already set to this value, return
 
-        config.update_config({'MINFLUX_temperature_file': fname},
+        config.update_config({'MINFLUX-temperature_file': fname},
                              config='user', create_backup=True)
 
 
     def OnMINFLUXplotTempData(self, event):
         import PYME.config as config
-        if config.get('MINFLUX_temperature_file') is None:
+        if config.get('MINFLUX-temperature_file') is None:
             warn("Need to set Temperature file location first")
             return
         from PYMEcs.misc.utils import read_temp_csv, set_diff, parse_timestamp_from_filename
-        mtemps = read_temp_csv(config.get('MINFLUX_temperature_file'))
+        mtemps = read_temp_csv(config.get('MINFLUX-temperature_file'))
         if len(self.visFr.pipeline.dataSources) == 0:
             warn("no datasources, this is probably an empty pipeline, have you loaded any data?")
             return
@@ -634,7 +638,7 @@ class MINFLUXanalyser():
         plot_errors(self.visFr.pipeline)
 
     def OnCluster3D(self, event):
-        plot_cluster_analysis(self.visFr.pipeline, ds='dbscanClustered')
+        plot_cluster_analysis(self.visFr.pipeline, ds=self.analysisSettings.datasourceForClusterAnalysis)
 
     def OnCluster2D(self, event):
         plot_cluster_analysis(self.visFr.pipeline, ds='dbscan2D')
