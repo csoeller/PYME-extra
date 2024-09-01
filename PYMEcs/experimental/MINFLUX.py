@@ -393,10 +393,16 @@ def plot_density_stats(ds,objectID='dbscanClumpID',scatter=False):
         ax1[0].boxplot(vol/1e6,labels=['Volume'])
         ax1[1].boxplot(sz,labels=['Stddev Z'])
     else:
-        ax0[0].scattered_boxplot(dens,labels=['Density'])
-        ax0[1].scattered_boxplot(area,labels=['Area'])
-        ax1[0].scattered_boxplot(vol/1e6,labels=['Volume'])
-        ax1[1].scattered_boxplot(sz,labels=['Stddev Z'])
+        bp_dict = ax0[0].scattered_boxplot(dens,labels=['Density'],showmeans=True)
+        for line in bp_dict['means']:
+            # get position data for median line
+            x, y = line.get_xydata()[0] # top of median line
+            # overlay median value
+            ax0[0].text(x-0.25, y, '%.0f' % y,
+                        horizontalalignment='center') # draw above, centered
+        ax0[1].scattered_boxplot(area,labels=['Area'],showmeans=True)
+        ax1[0].scattered_boxplot(vol/1e6,labels=['Volume'],showmeans=True)
+        ax1[1].scattered_boxplot(sz,labels=['Stddev Z'],showmeans=True)
     plt.tight_layout()
     
 from PYMEcs.Analysis.MINFLUX import analyse_locrate
@@ -499,7 +505,8 @@ class MINFLUXanalyser():
                 self.minfluxRIDs[ID] = minfluxRecipes[r]
 
     def OnDensityStats(self, event):
-        plot_density_stats(self.visFr.pipeline)
+        from PYMEcs.misc.matplotlib import scattered_boxplot
+        plot_density_stats(self.visFr.pipeline,scatter=True)
 
     def OnAlphaShapes(self, event):
         if 'cluster_shapes' not in self.visFr.pipeline.dataSources.keys():
