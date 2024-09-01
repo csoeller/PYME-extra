@@ -364,6 +364,40 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
         axs[1, 1].set_ylabel('orig. corr [nm]')
     plt.tight_layout()
 
+
+def propcheck_density_stats(ds,warning=True):
+    for prop in ['clst_area','clst_vol','clst_density','clst_stdz']:
+        if prop not in ds.keys():
+            if warning:
+                warn("required property %s not in data source" % prop)
+            return False
+    return True
+            
+def density_stats(ds,objectID='dbscanClumpID'):    
+    uids, idx = np.unique(ds[objectID],return_index=True)
+    area = ds['clst_area'][idx]
+    vol = ds['clst_vol'][idx]
+    dens = ds['clst_density'][idx]
+    sz = ds['clst_stdz'][idx]
+
+    return area, vol, dens, sz
+
+def plot_density_stats(ds,objectID='dbscanClumpID',scatter=False):
+    if not propcheck_density_stats(ds):
+        return
+    area, vol, dens, sz = density_stats(ds,objectID=objectID)
+    fig, (ax0,ax1) = plt.subplots(2,2)
+    if not scatter:
+        ax0[0].boxplot(dens,labels=['Density'])
+        ax0[1].boxplot(area,labels=['Area'])
+        ax1[0].boxplot(vol/1e6,labels=['Volume'])
+        ax1[1].boxplot(sz,labels=['Stddev Z'])
+    else:
+        ax0[0].scattered_boxplot(dens,labels=['Density'])
+        ax0[1].scattered_boxplot(area,labels=['Area'])
+        ax1[0].scattered_boxplot(vol/1e6,labels=['Volume'])
+        ax1[1].scattered_boxplot(sz,labels=['Stddev Z'])
+    plt.tight_layout()
     
 from PYMEcs.Analysis.MINFLUX import analyse_locrate
 from PYMEcs.misc.guiMsgBoxes import Error
@@ -450,7 +484,8 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>MBM', "Show MBM tracks", self.OnMBMtracks)
         visFr.AddMenuItem('MINFLUX>MBM', "Add MBM track labels to view", self.OnMBMaddTrackLabels)
         visFr.AddMenuItem('MINFLUX>RyRs', "Plot corner info", self.OnCornerplot)
-        
+        visFr.AddMenuItem('MINFLUX>RyRs', "Plot density stats", self.OnDensityStats)
+        visFr.AddMenuItem('MINFLUX>RyRs', "Show cluster alpha shapes", self.OnAlphaShapes)
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
         # and are populated from the customrecipes folder in the PYME config directories
@@ -462,6 +497,19 @@ class MINFLUXanalyser():
             for r in minfluxRecipes:
                 ID = visFr.AddMenuItem('MINFLUX>Recipes', r, self.OnLoadCustom).GetId()
                 self.minfluxRIDs[ID] = minfluxRecipes[r]
+
+    def OnDensityStats(self, event):
+        plot_density_stats(self.visFr.pipeline)
+
+    def OnAlphaShapes(self, event):
+        if 'cluster_shapes' not in self.visFr.pipeline.dataSources.keys():
+            warn("missing data source 'cluster_shapes', will not display alpha shapes")
+            return
+        
+        # now we add a layer to render our alpha shape polygons
+        from PYME.LMVis.layers.tracks import TrackRenderLayer # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
+        layer = TrackRenderLayer(self.visFr.pipeline, dsname='cluster_shapes', method='tracks', clump_key='polyIndex', line_width=2.0, alpha=0.5)
+        self.visFr.add_layer(layer)
 
     def OnLoadCustom(self, event):
         self.visFr._recipe_manager.LoadRecipe(self.minfluxRIDs[event.GetId()])

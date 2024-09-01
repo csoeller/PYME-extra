@@ -1571,4 +1571,134 @@ class MBMcorrection(ModuleBaseMDHmod):
                     buttons=['OK'])
 
 
+try:
+    import alphashape
+except ImportError:
+    has_ashape = False
+    raise RuntimeError("Cannot import alphashape module, giving up") # in future fall back to convex hull
+else:
+    has_ashape = True
+
+def shape_measure(points,alpha=0.01):
+    alpha_shape = alphashape.alphashape(points[:,0:2], alpha)
+    alpha_vol = alphashape.alphashape(points, alpha)
+
+    area = alpha_shape.area
+    vol = alpha_vol.volume
+
+    nlabel = points.shape[0]
+
+    if alpha_shape.geom_type != 'Polygon':
+        raise RuntimeError("Got alpha shape that is not bounded by a single poygon, got geom type %s with alpha = %.2f" %
+                           (alpha_shape.geom_type,alpha))
+
+    polx = np.array(alpha_shape.boundary.coords.xy[0])
+    poly = np.array(alpha_shape.boundary.coords.xy[1])
+
+    return (area,vol,nlabel,polx,poly)
+
+@register_module('SiteDensity')
+class SiteDensity(ModuleBase):
+    """Documentation to be added."""
+    inputLocalisations = Input('clustered')
+    outputName = Output('cluster_density')
+    outputShapes = Output('cluster_shapes')
     
+    IDName = CStr('dbscanClumpID')
+    clusterSizeName = CStr('dbscanClumpSize')
+    alpha = Float(0.02)
+
+    def run(self, inputLocalisations):
+
+        ids = inputLocalisations[self.IDName]
+        uids = np.unique(ids)
+        sizes = inputLocalisations[self.clusterSizeName] # really needed?
+
+        # stddevs
+        sx = np.zeros_like(ids,dtype=float)
+        sy = np.zeros_like(ids,dtype=float)
+        sz = np.zeros_like(ids,dtype=float)
+
+        # centroids
+        cx = np.zeros_like(ids,dtype=float)
+        cy = np.zeros_like(ids,dtype=float)
+        cz = np.zeros_like(ids,dtype=float)
+
+        area = np.zeros_like(ids,dtype=float)
+        vol = np.zeros_like(ids,dtype=float)
+        dens = np.zeros_like(ids,dtype=float)
+        nlabel = np.zeros_like(ids,dtype=float)
+
+        polx = np.empty((0))
+        poly = np.empty((0))
+        polz = np.empty((0))
+        polarea = np.empty((0))
+        polid = np.empty((0),int)
+        polstdz = np.empty((0))
+        
+        for id in uids:
+            roi = ids==id
+
+            roix = inputLocalisations['x'][roi]
+            roiy = inputLocalisations['y'][roi]
+            roiz = inputLocalisations['z'][roi]
+            roi3d=np.stack((roix,roiy,roiz),axis=1)
+
+            arear,volr,nlabelr,polxr,polyr = shape_measure(roi3d, self.alpha)
+            
+            #alpha_shape = ashp.alphashape(roi3d[:,0:2], self.alpha)
+            #alpha_vol = ashp.alphashape(roi3d, self.alpha)
+
+            sxr = np.std(roix)
+            syr = np.std(roiy)
+            szr = np.std(roiz)
+            sx[roi] = sxr
+            sy[roi] = syr
+            sz[roi] = szr
+
+            cxr = np.mean(roix)
+            cyr = np.mean(roiy)
+            czr = np.mean(roiz)
+            #stdy.append(syr)
+            #stdz.append(szr)
+            cx[roi] = cxr
+            cy[roi] = cyr
+            cz[roi] = czr
+
+            area[roi] = arear
+            vol[roi] = volr
+            nlabel[roi] = nlabelr
+            dens[roi] = nlabelr/(arear/1e6)
+
+            # some code to process the polygons
+            # add here
+            polx = np.append(polx,polxr)
+            poly = np.append(poly,polyr)
+            polz = np.append(polz,np.full_like(polxr,czr))
+            polid = np.append(polid,np.full_like(polxr,id,dtype=int))
+            polarea = np.append(polarea,np.full_like(polxr,arear))
+            polstdz = np.append(polstdz,np.full_like(polxr,szr))
+
+        mapped_ds = tabular.MappingFilter(inputLocalisations)
+        mapped_ds.addColumn('clst_cx', cx)
+        mapped_ds.addColumn('clst_cy', cy)
+        mapped_ds.addColumn('clst_cz', cz)
+
+        mapped_ds.addColumn('clst_stdx', sx)
+        mapped_ds.addColumn('clst_stdy', sy)
+        mapped_ds.addColumn('clst_stdz', sz)
+
+        mapped_ds.addColumn('clst_area', area)
+        mapped_ds.addColumn('clst_vol', vol)
+        mapped_ds.addColumn('clst_size', nlabel)
+        mapped_ds.addColumn('clst_density', dens)
+
+        from PYME.IO.tabular import DictSource
+        dspoly = DictSource(dict(x=polx,
+                                 y=poly,
+                                 z=polz,
+                                 polyIndex=polid,
+                                 polyArea=polarea,
+                                 stdz=polstdz))
+        
+        return dict(outputName=mapped_ds,outputShapes=dspoly)
