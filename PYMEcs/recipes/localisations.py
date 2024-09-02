@@ -1588,14 +1588,20 @@ def shape_measure(points,alpha=0.01):
 
     nlabel = points.shape[0]
 
-    if alpha_shape.geom_type != 'Polygon':
-        raise RuntimeError("Got alpha shape that is not bounded by a single poygon, got geom type %s with alpha = %.2f" %
+    if alpha_shape.geom_type == 'MultiPolygon':
+        polys = []
+        for geom in alpha_shape.geoms:
+            pc = []
+            for point in geom.exterior.coords:
+                pc.append(point)
+            polys.append(np.array(pc))        
+    elif alpha_shape.geom_type == 'Polygon':
+        polys = [np.array(alpha_shape.boundary.coords)]
+    else:
+        raise RuntimeError("Got alpha shape that is bounded by unknown geometry, got geom type %s with alpha = %.2f" %
                            (alpha_shape.geom_type,alpha))
 
-    polx = np.array(alpha_shape.boundary.coords.xy[0])
-    poly = np.array(alpha_shape.boundary.coords.xy[1])
-
-    return (area,vol,nlabel,polx,poly)
+    return (area,vol,nlabel,polys)
 
 @register_module('SiteDensity')
 class SiteDensity(ModuleBase):
@@ -1606,7 +1612,7 @@ class SiteDensity(ModuleBase):
     
     IDName = CStr('dbscanClumpID')
     clusterSizeName = CStr('dbscanClumpSize')
-    alpha = Float(0.02)
+    alpha = Float(0.01) # trying to ensure wqe stay with single polygon boundaries by default
 
     def run(self, inputLocalisations):
 
@@ -1633,9 +1639,11 @@ class SiteDensity(ModuleBase):
         poly = np.empty((0))
         polz = np.empty((0))
         polarea = np.empty((0))
+        clusterid = np.empty((0),int)
         polid = np.empty((0),int)
         polstdz = np.empty((0))
-        
+
+        polidcur = 1 # we keep our own list of poly ids since we can get multiple polygons per cluster
         for id in uids:
             roi = ids==id
 
@@ -1644,7 +1652,7 @@ class SiteDensity(ModuleBase):
             roiz = inputLocalisations['z'][roi]
             roi3d=np.stack((roix,roiy,roiz),axis=1)
 
-            arear,volr,nlabelr,polxr,polyr = shape_measure(roi3d, self.alpha)
+            arear,volr,nlabelr,polys = shape_measure(roi3d, self.alpha)
             
             #alpha_shape = ashp.alphashape(roi3d[:,0:2], self.alpha)
             #alpha_vol = ashp.alphashape(roi3d, self.alpha)
@@ -1671,13 +1679,16 @@ class SiteDensity(ModuleBase):
             dens[roi] = nlabelr/(arear/1e6)
 
             # some code to process the polygons
-            # add here
-            polx = np.append(polx,polxr)
-            poly = np.append(poly,polyr)
-            polz = np.append(polz,np.full_like(polxr,czr))
-            polid = np.append(polid,np.full_like(polxr,id,dtype=int))
-            polarea = np.append(polarea,np.full_like(polxr,arear))
-            polstdz = np.append(polstdz,np.full_like(polxr,szr))
+            for pol in polys:
+                polxr = pol[:,0]
+                polx = np.append(polx,polxr)
+                poly = np.append(poly,pol[:,1])
+                polz = np.append(polz,np.full_like(polxr,czr))
+                polid = np.append(polid,np.full_like(polxr,polidcur,dtype=int))
+                clusterid = np.append(clusterid,np.full_like(polxr,id,dtype=int))
+                polarea = np.append(polarea,np.full_like(polxr,arear))
+                polstdz = np.append(polstdz,np.full_like(polxr,szr))
+                polidcur += 1
 
         mapped_ds = tabular.MappingFilter(inputLocalisations)
         mapped_ds.addColumn('clst_cx', cx)
@@ -1699,6 +1710,7 @@ class SiteDensity(ModuleBase):
                                  z=polz,
                                  polyIndex=polid,
                                  polyArea=polarea,
+                                 clusterID=clusterid,
                                  stdz=polstdz))
         
         return dict(outputName=mapped_ds,outputShapes=dspoly)
