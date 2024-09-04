@@ -1575,11 +1575,10 @@ try:
     import alphashape
 except ImportError:
     has_ashape = False
-    raise RuntimeError("Cannot import alphashape module, giving up") # in future fall back to convex hull
 else:
     has_ashape = True
 
-def shape_measure(points,alpha=0.01):
+def shape_measure_alpha(points,alpha=0.01):
     alpha_shape = alphashape.alphashape(points[:,0:2], alpha)
     alpha_vol = alphashape.alphashape(points, alpha)
 
@@ -1602,6 +1601,24 @@ def shape_measure(points,alpha=0.01):
                            (alpha_shape.geom_type,alpha))
 
     return (area,vol,nlabel,polys)
+
+from scipy.spatial import ConvexHull
+def shape_measure_convex_hull(points):
+    shape2d = ConvexHull(points[:,0:2])
+    area = shape2d.volume
+    poly0 = points[shape2d.vertices,0:2]
+    polys = [np.append(poly0,poly0[0,None,:],axis=0)] # close the polygon
+    shape3d = ConvexHull(points[:,0:3])
+    vol = shape3d.volume
+    nlabel = points.shape[0]
+
+    return (area,vol,nlabel,polys)
+
+def shape_measure(points,alpha=0.01):
+    if has_ashape:
+        return shape_measure_alpha(points,alpha=alpha)
+    else:
+        return shape_measure_convex_hull(points)
 
 @register_module('SiteDensity')
 class SiteDensity(ModuleBase):
