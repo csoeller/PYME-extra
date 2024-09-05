@@ -1141,6 +1141,8 @@ class ModuleBaseMDHmod(ModuleBase):
         self._params_to_metadata(mdh)
 
         for v in out.values():
+            if v is None:
+                continue
             if getattr(v, 'mdh', None) is None:
                 v.mdh = MetaDataHandler.DictMDHandler()
 
@@ -1547,7 +1549,8 @@ class MBMcorrection(ModuleBaseMDHmod):
                         outputTracksCorr=mbmtrack_dscorr, mdh=MBMmdh)
             # mapped_ds.mbm = mbm # attach mbm object to the output
 
-        return mapped_ds
+        return dict(output=mapped_ds, outputTracks=None,
+                        outputTracksCorr=None, mdh=None)
     
     @property
     def default_view(self):
