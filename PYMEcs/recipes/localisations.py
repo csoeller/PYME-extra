@@ -1581,13 +1581,15 @@ except ImportError:
 else:
     has_ashape = True
 
+from scipy.spatial import ConvexHull
+
 def shape_measure_alpha(points,alpha=0.01):
     alpha_shape = alphashape.alphashape(points[:,0:2], alpha)
-    alpha_vol = alphashape.alphashape(points, alpha)
+    # alpha_vol = alphashape.alphashape(points, 1e-3) # errors with 3D shapes occasionally; try to fix this to convex_hull_like
 
     area = alpha_shape.area
-    vol = alpha_vol.volume
-
+    # vol = alpha_vol.volume
+    vol = ConvexHull(points[:,0:3]).volume # we fal back to convex hull to avoid issues
     nlabel = points.shape[0]
 
     if alpha_shape.geom_type == 'MultiPolygon':
@@ -1605,7 +1607,6 @@ def shape_measure_alpha(points,alpha=0.01):
 
     return (area,vol,nlabel,polys)
 
-from scipy.spatial import ConvexHull
 def shape_measure_convex_hull(points):
     shape2d = ConvexHull(points[:,0:2])
     area = shape2d.volume
@@ -1617,8 +1618,9 @@ def shape_measure_convex_hull(points):
 
     return (area,vol,nlabel,polys)
 
-def shape_measure(points,alpha=0.01):
-    if has_ashape:
+import PYME.config
+def shape_measure(points,alpha=0.01,useAlphaShapes=True):
+    if has_ashape and useAlphaShapes:
         return shape_measure_alpha(points,alpha=alpha)
     else:
         return shape_measure_convex_hull(points)
@@ -1633,6 +1635,8 @@ class SiteDensity(ModuleBase):
     IDName = CStr('dbscanClumpID')
     clusterSizeName = CStr('dbscanClumpSize')
     alpha = Float(0.01) # trying to ensure wqe stay with single polygon boundaries by default
+    use_alpha_shapes = Bool(True,
+                            desc="use alpha shapes IF available, use convex hull if false (on systems without alphashape module falls back to convex hull in any case)")
 
     def run(self, inputLocalisations):
 
@@ -1672,7 +1676,7 @@ class SiteDensity(ModuleBase):
             roiz = inputLocalisations['z'][roi]
             roi3d=np.stack((roix,roiy,roiz),axis=1)
 
-            arear,volr,nlabelr,polys = shape_measure(roi3d, self.alpha)
+            arear,volr,nlabelr,polys = shape_measure(roi3d, self.alpha, useAlphaShapes=self.use_alpha_shapes)
             
             #alpha_shape = ashp.alphashape(roi3d[:,0:2], self.alpha)
             #alpha_vol = ashp.alphashape(roi3d, self.alpha)

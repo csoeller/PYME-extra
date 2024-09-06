@@ -398,7 +398,13 @@ def plot_density_stats(ds,objectID='dbscanClumpID',scatter=False):
             # get position data for median line
             x, y = line.get_xydata()[0] # top of median line
             # overlay median value
-            ax0[0].text(x-0.25, y, '%.0f' % y,
+            ax0[0].text(x-0.25, 1.05*y, '%.0f' % y,
+                        horizontalalignment='center') # draw above, centered
+        for line in bp_dict['medians']:
+            # get position data for median line
+            x, y = line.get_xydata()[0] # top of median line
+            # overlay median value
+            ax0[0].text(x-0.25, 0.95*y, '%.0f' % y,
                         horizontalalignment='center') # draw above, centered
         ax0[1].scattered_boxplot(area,labels=['Area'],showmeans=True)
         ax1[0].scattered_boxplot(vol/1e6,labels=['Volume'],showmeans=True)
