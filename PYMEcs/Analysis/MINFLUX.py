@@ -3,6 +3,80 @@ from PYMEcs.IO.MINFLUX import get_stddev_property
 import numpy as np
 import matplotlib.pyplot as plt
 
+def propcheck_density_stats(ds,warning=True):
+    for prop in ['clst_area','clst_vol','clst_density','clst_stdz']:
+        if prop not in ds.keys():
+            if warning:
+                warn("required property %s not in data source" % prop)
+            return False
+    return True
+            
+def density_stats(ds,objectID='dbscanClumpID'):    
+    uids, idx = np.unique(ds[objectID],return_index=True)
+    area = ds['clst_area'][idx]
+    vol = ds['clst_vol'][idx]
+    dens = ds['clst_density'][idx]
+    sz = ds['clst_stdz'][idx]
+
+    return area, vol, dens, sz
+
+def plot_density_stats(ds,objectID='dbscanClumpID',scatter=False):
+    if not propcheck_density_stats(ds):
+        return
+    area, vol, dens, sz = density_stats(ds,objectID=objectID)
+    fig, (ax0,ax1) = plt.subplots(2,2)
+    if not scatter:
+        ax0[0].boxplot(dens,labels=['Density'])
+        ax0[1].boxplot(area,labels=['Area'])
+        ax1[0].boxplot(vol/1e6,labels=['Volume'])
+        ax1[1].boxplot(sz,labels=['Stddev Z'])
+    else:
+        bp_dict = ax0[0].scattered_boxplot(dens,labels=['Density'],showmeans=True)
+        for line in bp_dict['means']:
+            # get position data for median line
+            x, y = line.get_xydata()[0] # top of median line
+            # overlay median value
+            ax0[0].text(x-0.25, 1.05*y, '%.0f' % y,
+                        horizontalalignment='center') # draw above, centered
+        for line in bp_dict['medians']:
+            # get position data for median line
+            x, y = line.get_xydata()[0] # top of median line
+            # overlay median value
+            ax0[0].text(x-0.25, 0.95*y, '%.0f' % y,
+                        horizontalalignment='center',
+                        verticalalignment='center') # draw above, centered
+        ax0[1].scattered_boxplot(area,labels=['Area'],showmeans=True)
+        ax1[0].scattered_boxplot(vol/1e6,labels=['Volume'],showmeans=True)
+        ax1[1].scattered_boxplot(sz,labels=['Stddev Z'],showmeans=True)
+    plt.tight_layout()
+
+import pandas as pd
+from PYMEcs.misc.matplotlib import boxswarmplot
+def plot_density_stats_sns(ds,objectID='dbscanClumpID'):
+    if not propcheck_density_stats(ds):
+        return
+    area, vol, dens, sz = density_stats(ds,objectID=objectID)
+    dfdens = pd.DataFrame.from_dict(dict(density=dens))
+    dfarea = pd.DataFrame.from_dict(dict(area=area))
+    dfvol = pd.DataFrame.from_dict(dict(volume=vol/1e6))
+    dfstdz = pd.DataFrame.from_dict(dict(std_z=sz))
+    
+    fig, (ax0,ax1) = plt.subplots(2,2)
+    kwargs = dict(swarmsize=5,width=0.2,annotate_means=True,annotate_medians=True,swarmalpha=0.4)
+    boxswarmplot(dfdens,ax=ax0[0],format="%.0f",**kwargs)
+    ax0[0].set_ylim(0,1.2*dens.max())
+    ax0[0].set_ylabel("#/um^2")
+    boxswarmplot(dfarea,ax=ax0[1],format="%.0f",**kwargs)
+    ax0[1].set_ylabel("nm^2")
+    boxswarmplot(dfvol,ax=ax1[0],format="%.2f",**kwargs)
+    ax1[0].set_ylabel("10^-3 um^3")
+    boxswarmplot(dfstdz,ax=ax1[1],format="%.1f",**kwargs)
+    ax1[1].set_ylabel("nm")
+    fig.suptitle('Density stats for %d clusters' % dens.size)
+    plt.tight_layout()
+
+    return dens
+
 def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, times,
                        showTimeAverages=False, dsKey=None, areaString=None):
     

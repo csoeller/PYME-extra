@@ -2,6 +2,32 @@ import matplotlib.pyplot as plt
 import numpy as np
 from numbers import Number
 
+def boxswarmplot(df,width=0.4,annotate_means=False,annotate_medians=False,showmeans=True,
+                 meanprops=None,ax=None,swarmsize=7,swarmalpha=None,format="%.1f"):
+    import seaborn as sns
+    if meanprops is None:
+        meanprops={'marker':'o',
+                    'markerfacecolor':'white', 
+                    'markeredgecolor':'black',
+                    'markersize':'8'}
+    flierprops = dict(marker='.', markerfacecolor='none', markersize=0, linestyle='none')
+    colours = ['#72a4cdff'] * df.shape[1]
+    bp = sns.boxplot(df,boxprops={'facecolor': 'none'},width=width,showmeans=showmeans,meanprops=meanprops,ax=ax,flierprops=flierprops)
+    sns.swarmplot(df,size=swarmsize,palette=colours,ax=ax,alpha=swarmalpha)
+    meds = df.median().values
+    means = df.mean().values
+    if annotate_medians:
+        for i,xtick in enumerate(bp.get_xticks()):
+            bp.text(xtick-0.5*width-0.1,meds[i],format % meds[i], 
+                    horizontalalignment='center',verticalalignment='center',
+                    size='x-small',color='black',weight='semibold')
+    if annotate_means:
+        for i,xtick in enumerate(bp.get_xticks()):
+            bp.text(xtick+0.5*width+0.1,means[i],format % means[i], 
+                    horizontalalignment='center',verticalalignment='center',
+                    size='x-small',color='g',weight='semibold')
+    return bp
+
 def scattered_boxplot(ax, x, notch=None, sym=None, vert=None, whis=None, positions=None,
                       widths=None, patch_artist=None, bootstrap=None, usermedians=None, conf_intervals=None,
                       meanline=None, showmeans=None, showcaps=None, showbox=None,

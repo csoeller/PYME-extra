@@ -1443,6 +1443,7 @@ def get_bead_dict_from_mbm(mbm):
 
     return dict(x=x,y=y,z=z,t=t,tim=tim,beadID=beadID,tid=tid,A=A,good=good,objectID=objectID)
 
+# remove this once sessionpath PR is accepted!!
 try:
     from PYME.LMVis.sessionpaths import register_path_modulechecks
     register_path_modulechecks('PYMEcs.MBMcorrection','mbmfile','mbmsettings')
@@ -1550,7 +1551,7 @@ class MBMcorrection(ModuleBaseMDHmod):
             # mapped_ds.mbm = mbm # attach mbm object to the output
 
         return dict(output=mapped_ds, outputTracks=None,
-                        outputTracksCorr=None, mdh=None)
+                        outputTracksCorr=None, mdh=None)  # return empty slots for outputs etc in this case
     
     @property
     def default_view(self):
