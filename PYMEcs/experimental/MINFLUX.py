@@ -46,27 +46,39 @@ def plot_errors(pipeline):
     plt.tight_layout()
     pipeline.selectDataSource(curds)
     
-
+from PYMEcs.misc.matplotlib import boxswarmplot
+import pandas as pd
 def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', **kwargs):
-    plt.figure()
+    fig = plt.figure()
     plt.subplot(221)
-    h = plt.hist(cts,**kwargs)
+    h = plt.hist(cts,**kwargs,log=True)
     plt.xlabel(xlabel)
     plt.plot([np.mean(cts),np.mean(cts)],[0,h[0].max()])
     plt.plot([np.median(cts),np.median(cts)],[0,h[0].max()],'--')
     plt.subplot(222)
-    h = plt.hist(ctsgt1,**kwargs)
+    h = plt.hist(ctsgt1,**kwargs,log=True)
     plt.xlabel('%s ( > 1)' % xlabel)
     plt.plot([np.mean(ctsgt1),np.mean(ctsgt1)],[0,h[0].max()])
     plt.plot([np.median(ctsgt1),np.median(ctsgt1)],[0,h[0].max()],'--')
     plt.subplot(223)
-    bp_dict = plt.boxplot([cts,ctsgt1],labels=['cluster size','clusters > 1'], showmeans=True)
-    for line in bp_dict['means']:
-        # get position data for median line
-        x, y = line.get_xydata()[0] # top of median line
-        # overlay median value
-        plt.text(x-0.25, y, '%.1f' % y,
-                 horizontalalignment='center') # draw above, centered    
+    dfcs = pd.DataFrame.from_dict(dict(clusterSize=cts))
+    boxswarmplot(dfcs,format="%.1f",swarmsize=5,width=0.2,annotate_means=True,annotate_medians=True,swarmalpha=0.15,strip=True)
+    plt.subplot(224)
+    dfcsgt1 = pd.DataFrame.from_dict(dict(clusterSizeGT1=ctsgt1))
+    boxswarmplot(dfcsgt1,format="%.1f",swarmsize=5,width=0.2,annotate_means=True,annotate_medians=True,swarmalpha=0.15,strip=True)
+
+    largest = cts[np.argsort(cts)][-3:]
+    fraction = largest.sum(dtype=float) / cts.sum()
+    msg = "3 largest Cs (%s) make up %.1f %% of SUs" %(largest,100.0*fraction)
+    fig.suptitle(msg)
+    
+    # bp_dict = plt.boxplot([cts,ctsgt1],labels=['cluster size','clusters > 1'], showmeans=True)
+    # for line in bp_dict['means']:
+    #     # get position data for median line
+    #     x, y = line.get_xydata()[0] # top of median line
+    #     # overlay median value
+    #     plt.text(x-0.25, y, '%.1f' % y,
+    #              horizontalalignment='center') # draw above, centered    
     plt.tight_layout()
 
 def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True, return_means=False, psu=None, bins=15, **kwargs):

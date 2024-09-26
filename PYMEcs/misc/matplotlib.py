@@ -3,7 +3,7 @@ import numpy as np
 from numbers import Number
 
 def boxswarmplot(df,width=0.4,annotate_means=False,annotate_medians=False,showmeans=True,
-                 meanprops=None,ax=None,swarmsize=7,swarmalpha=None,format="%.1f"):
+                 meanprops=None,ax=None,swarmsize=7,swarmalpha=None,format="%.1f",strip=False):
     import seaborn as sns
     if meanprops is None:
         meanprops={'marker':'o',
@@ -13,7 +13,10 @@ def boxswarmplot(df,width=0.4,annotate_means=False,annotate_medians=False,showme
     flierprops = dict(marker='.', markerfacecolor='none', markersize=0, linestyle='none')
     colours = ['#72a4cdff'] * df.shape[1]
     bp = sns.boxplot(df,boxprops={'facecolor': 'none'},width=width,showmeans=showmeans,meanprops=meanprops,ax=ax,flierprops=flierprops)
-    sns.swarmplot(df,size=swarmsize,palette=colours,ax=ax,alpha=swarmalpha)
+    if strip:
+        sns.stripplot(df,size=swarmsize,palette=colours,ax=ax,alpha=swarmalpha)
+    else:
+        sns.swarmplot(df,size=swarmsize,palette=colours,ax=ax,alpha=swarmalpha)
     meds = df.median().values
     means = df.mean().values
     if annotate_medians:
