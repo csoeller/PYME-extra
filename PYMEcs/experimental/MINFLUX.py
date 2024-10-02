@@ -48,7 +48,7 @@ def plot_errors(pipeline):
     
 from PYMEcs.misc.matplotlib import boxswarmplot
 import pandas as pd
-def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', **kwargs):
+def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', wintitle=None, **kwargs):
     fig = plt.figure()
     plt.subplot(221)
     h = plt.hist(cts,**kwargs,log=True)
@@ -81,6 +81,9 @@ def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', **kwargs):
     #              horizontalalignment='center') # draw above, centered    
     plt.tight_layout()
 
+    if wintitle is not None:
+        fig.canvas.manager.set_window_title(wintitle)
+
 def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True, return_means=False, psu=None, bins=15, **kwargs):
     if not ds in pipeline.dataSources:
         warn('no data source named "%s" - check recipe and ensure this is MINFLUX data' % ds)
@@ -91,13 +94,14 @@ def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True, return_m
     uids, cts = np.unique(p['dbscanClumpID'], return_counts=True)
     ctsgt1 = cts[cts > 1.1]
     pipeline.selectDataSource(curds)
+    timestamp = pipeline.mdh.get('MINFLUX.TimeStamp')
     if showPlot:
         if psu is not None:
-            _plot_clustersize_counts(cts, ctsgt1,bins=bins,xlabel='# subunits',**kwargs)
+            _plot_clustersize_counts(cts, ctsgt1,bins=bins,xlabel='# subunits',wintitle=timestamp,**kwargs)
         else:
-            _plot_clustersize_counts(cts, ctsgt1,bins=bins,**kwargs)
+            _plot_clustersize_counts(cts, ctsgt1,bins=bins,wintitle=timestamp,**kwargs)
         if psu is not None:
-            _plot_clustersize_counts(cts/4.0/psu, ctsgt1/4.0/psu, xlabel='# RyRs, corrected', bins=bins,**kwargs)
+            _plot_clustersize_counts(cts/4.0/psu, ctsgt1/4.0/psu, xlabel='# RyRs, corrected', bins=bins,wintitle=timestamp,**kwargs)
     
     csm = cts.mean()
     csgt1m = ctsgt1.mean()
