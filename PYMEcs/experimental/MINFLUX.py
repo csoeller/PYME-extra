@@ -473,6 +473,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX', "Manually create Colour panel", self.OnMINFLUXColour)
         visFr.AddMenuItem('MINFLUX>Util', "Plot temperature record matching current data series",self.OnMINFLUXplotTempData)
         visFr.AddMenuItem('MINFLUX>Util', "Set MINFLUX temperature file location", self.OnMINFLUXsetTempDataFile)
+        visFr.AddMenuItem('MINFLUX>Util', "Check if clumpIndex contiguous", self.OnClumpIndexContig)
         visFr.AddMenuItem('MINFLUX>MBM', "Plot mean MBM info (and if present origami info)", self.OnMBMplot)
         visFr.AddMenuItem('MINFLUX>MBM', "Show MBM tracks", self.OnMBMtracks)
         visFr.AddMenuItem('MINFLUX>MBM', "Add MBM track labels to view", self.OnMBMaddTrackLabels)
@@ -674,6 +675,25 @@ class MINFLUXanalyser():
 
     def OnCluster2D(self, event):
         plot_cluster_analysis(self.visFr.pipeline, ds='dbscan2D')
+
+    def OnClumpIndexContig(self, event):
+        pipeline = self.visFr.pipeline
+        curds = pipeline.selectedDataSourceKey
+        pipeline.selectDataSource(self.analysisSettings.defaultDatasourceForAnalysis)
+        if not 'clumpIndex' in pipeline.keys():
+            Error(self.visFr,'no property called "clumpIndex", cannot check')
+            pipeline.selectDataSource(curds)
+            return
+        uids = np.unique(pipeline['clumpIndex'])
+        maxgap = np.max(uids[1:]-uids[:-1])
+        pipeline.selectDataSource(curds)
+
+        if maxgap > 1:
+            msg = "clumpIndex not contiguous, maximal gap is %d\nCI 0..9 %s" % (maxgap,uids[0:10])
+        else:
+            msg = "clumpIndex is contiguous\nCI 0..9 %s" % uids[0:10]
+
+        warn(msg)
 
     def OnLocalisationRate(self, event):
         pipeline = self.visFr.pipeline

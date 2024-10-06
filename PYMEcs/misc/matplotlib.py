@@ -2,6 +2,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 from numbers import Number
 
+def figuredefaults(fontsize=10,linewidth=1.5):
+    plt.rcParams['axes.linewidth'] = linewidth
+    plt.rcParams['xtick.major.width'] = linewidth
+    plt.rcParams['ytick.major.width'] = linewidth
+    plt.rcParams['font.family']='arial'
+    plt.rcParams['font.size'] = fontsize
+    plt.rcParams['svg.fonttype'] = 'none'
+
 def boxswarmplot(df,width=0.4,annotate_means=False,annotate_medians=False,showmeans=True,
                  meanprops=None,ax=None,swarmsize=7,swarmalpha=None,format="%.1f",strip=False):
     import seaborn as sns
