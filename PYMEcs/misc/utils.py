@@ -62,10 +62,12 @@ def get_timestamp_from_filename(fname):
         warn("no timestamp match found in %s" % basename)
         return None
 
-def parse_timestamp_from_filename(fname):
-    
+def timestamp_to_datetime(ts):
+    t0 = pd.to_datetime(ts,format="%y%m%d-%H%M%S")
+    return t0
+
+def parse_timestamp_from_filename(fname):   
     timestamp = get_timestamp_from_filename(fname)
     if timestamp is None:
         return None
-    t0 = pd.to_datetime(timestamp,format="%y%m%d-%H%M%S")
-    return t0
+    t0 = timestamp_to_datetime(timestamp)

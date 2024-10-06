@@ -183,8 +183,14 @@ def analyse_locrate(data,datasource='Localizations',showTimeAverages=True):
     curds = data.selectedDataSourceKey
     data.selectDataSource(datasource)
     bins = np.arange(int(data['clumpIndex'].max())+1) + 0.5
+    counts, bin_edges, binnumber = binned_statistic(data['clumpIndex'],data['tim'],statistic='count', bins=bins)
     starts, bin_edges, binnumber = binned_statistic(data['clumpIndex'],data['tim'],statistic='min', bins=bins)
+    # for some reason we seem to get empty counts, i.e. the original clumpIndices are non-consecutive
+    # NOTE: investigate IO of NPY MINFLUX data why this can happen!
+    starts = starts[counts > 0]
     ends, bin_edges, binnumber = binned_statistic(data['clumpIndex'],data['tim'],statistic='max', bins=bins)
+    ends = ends[counts > 0]
+    
     durations = ends - starts
     deltas = starts[1:]-ends[:-1]
     tdiff = data['tim'][1:]-data['tim'][:-1]
@@ -205,3 +211,4 @@ def analyse_locrate(data,datasource='Localizations',showTimeAverages=True):
     else:
         plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, data['efo'], None, dsKey = datasource, areaString=area_string)
 
+    return (starts,deltas)

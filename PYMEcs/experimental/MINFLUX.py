@@ -48,7 +48,7 @@ def plot_errors(pipeline):
     
 from PYMEcs.misc.matplotlib import boxswarmplot
 import pandas as pd
-def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', wintitle=None, **kwargs):
+def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', wintitle=None, bigCfraction=None, **kwargs):
     fig = plt.figure()
     plt.subplot(221)
     h = plt.hist(cts,**kwargs,log=True)
@@ -82,7 +82,13 @@ def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', wintitle=None, 
     plt.tight_layout()
 
     if wintitle is not None:
-        fig.canvas.manager.set_window_title(wintitle)
+        figtitle = "%s" % wintitle
+    else:
+        figtitle = ''
+    if bigCfraction is not None:
+        figtitle = figtitle + " bigC fraction %.1f %%" % (100*bigCfraction)
+        
+    fig.canvas.manager.set_window_title(figtitle)
 
 def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True, return_means=False, psu=None, bins=15, **kwargs):
     if not ds in pipeline.dataSources:
@@ -92,16 +98,22 @@ def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True, return_m
     pipeline.selectDataSource(ds)
     p = pipeline
     uids, cts = np.unique(p['dbscanClumpID'], return_counts=True)
+    nall = p['x'].size
+    if 'bigCs' in p.dataSources:
+        fraction = p.dataSources['bigCs']['x'].size/float(nall)
+    else:
+        fraction=None
     ctsgt1 = cts[cts > 1.1]
     pipeline.selectDataSource(curds)
     timestamp = pipeline.mdh.get('MINFLUX.TimeStamp')
     if showPlot:
         if psu is not None:
-            _plot_clustersize_counts(cts, ctsgt1,bins=bins,xlabel='# subunits',wintitle=timestamp,**kwargs)
+            _plot_clustersize_counts(cts, ctsgt1,bins=bins,xlabel='# subunits',wintitle=timestamp,bigCfraction=fraction,**kwargs)
         else:
-            _plot_clustersize_counts(cts, ctsgt1,bins=bins,wintitle=timestamp,**kwargs)
+            _plot_clustersize_counts(cts, ctsgt1,bins=bins,wintitle=timestamp,bigCfraction=fraction,**kwargs)
         if psu is not None:
-            _plot_clustersize_counts(cts/4.0/psu, ctsgt1/4.0/psu, xlabel='# RyRs, corrected', bins=bins,wintitle=timestamp,**kwargs)
+            _plot_clustersize_counts(cts/4.0/psu, ctsgt1/4.0/psu, xlabel='# RyRs, corrected', bins=bins,wintitle=timestamp,
+                                     bigCfraction=fraction,**kwargs)
     
     csm = cts.mean()
     csgt1m = ctsgt1.mean()
@@ -624,26 +636,16 @@ class MINFLUXanalyser():
         if config.get('MINFLUX-temperature_file') is None:
             warn("Need to set Temperature file location first")
             return
-        from PYMEcs.misc.utils import read_temp_csv, set_diff, parse_timestamp_from_filename
+        from PYMEcs.misc.utils import read_temp_csv, set_diff, timestamp_to_datetime
         mtemps = read_temp_csv(config.get('MINFLUX-temperature_file'))
         if len(self.visFr.pipeline.dataSources) == 0:
             warn("no datasources, this is probably an empty pipeline, have you loaded any data?")
             return
-        try:
-            fname = self.visFr.pipeline.filename
-        except AttributeError:
-            warn("no filename associated with pipeline, returning")
-            return
-        t0 = parse_timestamp_from_filename(fname)
+        t0 = self.visFr.pipeline.mdh.get('MINFLUX.TimeStamp')
         if t0 is None:
-            if not self.dstring.configure_traits(kind='modal'):
-                return
-            else:
-                t0 = parse_timestamp_from_filename(self.dstring.TimeStampString)
-                if t0 is None:
-                    warn("entered time stamp '%s' does not parse, giving up" % self.dstring.TimeStampString)
-                    return
-        set_diff(mtemps,t0)
+            warn("no MINFLUX TimeStamp in metadata, giving up")
+            return
+        set_diff(mtemps,timestamp_to_datetime(t0))
         p = self.visFr.pipeline
         range = (1e-3*p['t'].min(),1e-3*p['t'].max())
         sertemps = mtemps[mtemps['tdiff_s'].between(range[0],range[1])]
