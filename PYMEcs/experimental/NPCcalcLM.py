@@ -79,6 +79,7 @@ class NPCsettings(HasTraits):
                      desc='the used zrange from the (estimated) center of the NPC, from (-zclip..+zclip) in 3D fitting')
     OffsetMode_3D = Enum(['median','mean'],label='Method to estimate NPC center',
                          desc="Method to estimate the likely 3D center of an NPC; median seems more robust against outliners (say in z)")
+    SkipEmptyTopOrBottom_3D = Bool(False,desc="if true skip NPCs with empty top or bottom ring")
 
 
 # this should be a backwards compatible way to access the main filename associated with the pipeline/datasource
@@ -198,7 +199,10 @@ class NPCcalc():
                                  dr=self.NPCsettings.RadiusUncertainty_3D,
                                  rotlocked=self.NPCsettings.RotationLocked_3D,
                                  zrange=self.NPCsettings.Zclip_3D)
-            npcs.measurements.append([nt,nb])
+            if self.NPCsettings.SkipEmptyTopOrBottom_3D and (nt == 0 or nb == 0):
+                pass # we skip NPCs with empty rings in this case
+            else:
+                npcs.measurements.append([nt,nb])
             (keepGoing, skip) = progress.Update(i+1)
             if not keepGoing:
                 logger.info('OnAnalyse3DNPCsByID: progress cancelled, aborting NPC analysis')
