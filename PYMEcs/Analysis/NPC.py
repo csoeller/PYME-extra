@@ -168,7 +168,7 @@ def estimate_nlabeled(x,y,r0=None,nthresh=10,dr=30.0,rotation=None,
                     phibinedges_deg[i],    # theta1 (in degrees)
                     phibinedges_deg[i+1],  # theta2
                     color="r", alpha=0.1))
-        axs[0].set_title('NPC Segments = %d, r0 = %.1f nm\nEvent threshold = %d, mode = %s' % (Nlabeled,r0,nthresh,fitmode))
+        axs[0].set_title('NPC Segments = %d, r0 = %.1f nm\nEvent threshold = %d, mode = %s, rot= %.2f rad' % (Nlabeled,r0,nthresh,fitmode,radrot))
         axs[0].invert_yaxis() # the y axis direction seems inverted WRT PYMEVisualise, so try to make equal
                 
         # second suplot
@@ -649,6 +649,7 @@ class NPC3D(object):
                 rotation=None
         else:
             rotation=None
+        self.rotation = rotation # remember rotation
         self.filter('z',0,zrangeabs)
         if self.filtered_pts.size > 0:
             # self.plot_points('filtered')

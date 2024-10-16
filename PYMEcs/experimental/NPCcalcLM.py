@@ -79,7 +79,9 @@ class NPCsettings(HasTraits):
                      desc='the used zrange from the (estimated) center of the NPC, from (-zclip..+zclip) in 3D fitting')
     OffsetMode_3D = Enum(['median','mean'],label='Method to estimate NPC center',
                          desc="Method to estimate the likely 3D center of an NPC; median seems more robust against outliners (say in z)")
-    SkipEmptyTopOrBottom_3D = Bool(False,desc="if true skip NPCs with empty top or bottom ring")
+    SkipEmptyTopOrBottom_3D = Bool(False,desc="if to skip NPCs with empty top or bottom ring")
+    NegativeRotationAngleDirection = Bool(False,desc="if rotation applied in negative angle direction")
+    TopOverBottom = Bool(True,desc="if top and bottom NPC parts on top of each other")
 
 
 # this should be a backwards compatible way to access the main filename associated with the pipeline/datasource
@@ -110,6 +112,7 @@ class NPCcalc():
         visFr.AddMenuItem('Experimental>NPC3D', "Show NPC geometry statistics",self.OnNPC3DGeometryStats)
         visFr.AddMenuItem('Experimental>NPC2D', 'NPC Analysis settings', self.OnNPCsettings)
         visFr.AddMenuItem('Experimental>NPC3D', 'NPC Analysis settings', self.OnNPCsettings)
+        visFr.AddMenuItem('Experimental>NPC3D', 'Add NPC Gallery', self.On3DNPCaddGallery)
 
         self._npcsettings = None
 
@@ -219,6 +222,86 @@ class NPCcalc():
         pipeline.npcs = npcs # overwriting with the same object should be fine if pipeline.npcs already existed
         npcs.plot_labeleff(thresh=self.NPCsettings.SegmentThreshold_3D)
 
+
+    def On3DNPCaddGallery(self, event=None):
+        pipeline = self.visFr.pipeline
+        if 'npcs' not in dir(pipeline) or 'measurements' not in dir(pipeline.npcs):
+            warn('no valid NPC measurements found, therefore cannot add gallery...')
+            return
+        npcs = pipeline.npcs
+
+        if 'NPCgallery' in pipeline.dataSources.keys():
+            # TODO: we may need to relax this
+            warn("dataSource 'NPCgallery' already exists, currently we do not support recalculating a new gallery")
+            return
+
+        x = np.empty((0))
+        y = np.empty((0))
+        z = np.empty((0))
+        objectID = np.empty((0),int)
+
+        if self.NPCsettings.TopOverBottom:
+            gspx = 180
+            gspy = 180
+            gsdx = 0
+            rowlength = 10
+        else:   
+            gspx = 400
+            gspy = 180
+            gsdx = 180
+            rowlength = 5
+        
+        for i,npc in enumerate(npcs.npcs):
+            if not npc.fitted:
+                warn("NPC not yet fitted, please call only after fitting")
+                return
+
+            gxt = (i % rowlength) * gspx
+            gxb = gxt + gsdx
+            gy = (i // rowlength) * gspy
+            
+            npc.filter('z',0,self.NPCsettings.Zclip_3D)
+            ptst = npc.filtered_pts
+            npc.filter('z',-self.NPCsettings.Zclip_3D,0)
+            ptsb = npc.filtered_pts
+
+            from scipy.spatial.transform import Rotation as R
+            if npc.rotation is not None:
+                if self.NPCsettings.NegativeRotationAngleDirection:
+                    factor = -1.0
+                else:
+                    factor = 1.0
+                ptst = R.from_euler('z', factor*npc.rotation, degrees=False).apply(ptst)
+                ptsb = R.from_euler('z', factor*npc.rotation, degrees=False).apply(ptsb)
+            
+            x = np.append(x,ptst[:,0] + gxt)
+            y = np.append(y,ptst[:,1] + gy)
+            z = np.append(z,ptst[:,2])
+
+            x = np.append(x,ptsb[:,0] + gxb)
+            y = np.append(y,ptsb[:,1] + gy)
+            z = np.append(z,ptsb[:,2])
+
+            objectID = np.append(objectID,np.full_like(ptst[:,0],npc.objectID,dtype=int))
+            objectID = np.append(objectID,np.full_like(ptsb[:,0],npc.objectID,dtype=int))
+
+        t = np.arange(x.size)
+        A = np.full_like(x,10.0,dtype='f')
+        error_x = np.full_like(x,1.0,dtype='f')
+        error_y = np.full_like(x,1.0,dtype='f')
+        error_z = np.full_like(x,1.0,dtype='f')
+
+        dsdict = dict(x=x,y=y,z=z,
+                      objectID=objectID,t=t,A=A,
+                      error_x=error_x,error_y=error_y,error_z=error_z)
+        
+        from PYME.IO.tabular import DictSource
+        pipeline.addDataSource('NPCgallery',DictSource(dsdict),False) # should check if already exists!
+        pipeline.Rebuild() # check, is this the right way when add a new non-module based dataSource?
+
+        from PYME.LMVis.layers.pointcloud import PointCloudRenderLayer
+        layer = PointCloudRenderLayer(pipeline, dsname='NPCgallery', method='pointsprites', cmap='plasma', point_size=4.0, alpha=0.5, vertexColour='z')
+        self.visFr.add_layer(layer)
 
     def On3DNPCaddTemplates(self, event=None):
         pipeline = self.visFr.pipeline

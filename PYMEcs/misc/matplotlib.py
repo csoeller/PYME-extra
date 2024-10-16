@@ -39,7 +39,8 @@ def boxswarmplot(df,width=0.4,annotate_means=False,annotate_medians=False,showme
                     size='x-small',color='g',weight='semibold')
     return bp
 
-def scattered_boxplot(ax, x, notch=None, sym=None, vert=None, whis=None, positions=None,
+# deprecated
+def _scattered_boxplot(ax, x, notch=None, sym=None, vert=None, whis=None, positions=None,
                       widths=None, patch_artist=None, bootstrap=None, usermedians=None, conf_intervals=None,
                       meanline=None, showmeans=None, showcaps=None, showbox=None,
                       showfliers="unif", hide_points_within_whiskers=False,
@@ -103,4 +104,4 @@ def scattered_boxplot(ax, x, notch=None, sym=None, vert=None, whis=None, positio
 
     return bp_dict
 
-setattr(plt.Axes, "scattered_boxplot", scattered_boxplot)
+# setattr(plt.Axes, "scattered_boxplot", scattered_boxplot)
