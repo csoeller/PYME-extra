@@ -80,8 +80,10 @@ class NPCsettings(HasTraits):
     OffsetMode_3D = Enum(['median','mean'],label='Method to estimate NPC center',
                          desc="Method to estimate the likely 3D center of an NPC; median seems more robust against outliners (say in z)")
     SkipEmptyTopOrBottom_3D = Bool(False,desc="if to skip NPCs with empty top or bottom ring")
-    NegativeRotationAngleDirection = Bool(False,desc="if rotation applied in negative angle direction")
+    NPCRotationAngle = Enum(['positive','negative','zero'],desc="way to treat rotation for NPC gallery")
     TopOverBottom = Bool(True,desc="if top and bottom NPC parts on top of each other")
+    NoRotationForSingleNPCFit = Bool(False,desc="if rotation is disabled for single NPC fit")
+    IncludeSegmentLinesWithGallery = Bool(True,desc="if 3D segement lines are generated when NPC 3D gallery is created")
 
 
 # this should be a backwards compatible way to access the main filename associated with the pipeline/datasource
@@ -142,7 +144,11 @@ class NPCcalc():
             warn('x or y bounding box > %d nm (%d,%d) - check if single NPC' % (maxextent_nm,xExtent,yExtent))
             return
 
-        estimate_nlabeled(pipeline['x'],pipeline['y'],nthresh=self.NPCsettings.SegmentThreshold_2D,
+        if self.NPCsettings.NoRotationForSingleNPCFit:
+            rot = 0
+        else:
+            rot = None
+        estimate_nlabeled(pipeline['x'],pipeline['y'],nthresh=self.NPCsettings.SegmentThreshold_2D,rotation=rot,
                           do_plot=True,secondpass=self.NPCsettings.SecondPass_2D,fitmode=self.NPCsettings.FitMode)
         
 
@@ -250,6 +256,30 @@ class NPCcalc():
             gspy = 180
             gsdx = 180
             rowlength = 5
+
+        xtr = np.empty((0))
+        ytr = np.empty((0))
+        ztr = np.empty((0))
+        objectIDtr = np.empty((0),int)
+        polyidtr = np.empty((0),int)
+        
+        xg = []
+        yg = []
+        dphi = np.pi/4
+        radius = 65.0
+        pi_base = []
+        
+        for i in range(8):
+            xg.extend([0,radius*np.sin(i*dphi)])
+            yg.extend([0,radius*np.cos(i*dphi)])
+            pi_base.extend([i+1,i+1])
+
+        zt = np.full((16),25.0)
+        zb = -np.full((16),25.0)
+
+        polyidx = np.array(pi_base,dtype='i')
+        xga = np.array(xg)
+        yga = np.array(yg)
         
         for i,npc in enumerate(npcs.npcs):
             if not npc.fitted:
@@ -267,10 +297,12 @@ class NPCcalc():
 
             from scipy.spatial.transform import Rotation as R
             if npc.rotation is not None:
-                if self.NPCsettings.NegativeRotationAngleDirection:
+                if self.NPCsettings.NPCRotationAngle == 'negative':
                     factor = -1.0
-                else:
+                elif self.NPCsettings.NPCRotationAngle == 'positive':
                     factor = 1.0
+                else:
+                    factor = 0.0
                 ptst = R.from_euler('z', factor*npc.rotation, degrees=False).apply(ptst)
                 ptsb = R.from_euler('z', factor*npc.rotation, degrees=False).apply(ptsb)
             
@@ -285,6 +317,22 @@ class NPCcalc():
             objectID = np.append(objectID,np.full_like(ptst[:,0],npc.objectID,dtype=int))
             objectID = np.append(objectID,np.full_like(ptsb[:,0],npc.objectID,dtype=int))
 
+            xtr = np.append(xtr,xga + gxt)
+            ytr = np.append(ytr,yga + gy)
+            ztr = np.append(ztr,zt)
+
+            objectIDtr = np.append(objectIDtr, np.full_like(xga,npc.objectID,dtype=int))
+            polyidtr = np.append(polyidtr, polyidx)
+            polyidx += 8
+
+            xtr = np.append(xtr,xga + gxb)
+            ytr = np.append(ytr,yga + gy)
+            ztr = np.append(ztr,zb)
+
+            objectIDtr = np.append(objectIDtr, np.full_like(xga,npc.objectID,dtype=int))
+            polyidtr = np.append(polyidtr, polyidx)
+            polyidx += 8            
+
         t = np.arange(x.size)
         A = np.full_like(x,10.0,dtype='f')
         error_x = np.full_like(x,1.0,dtype='f')
@@ -294,14 +342,25 @@ class NPCcalc():
         dsdict = dict(x=x,y=y,z=z,
                       objectID=objectID,t=t,A=A,
                       error_x=error_x,error_y=error_y,error_z=error_z)
+
+        trdict = dict(x=xtr,y=ytr,z=ztr,
+                      objectID=objectIDtr,polyIndex=polyidtr)
         
         from PYME.IO.tabular import DictSource
         pipeline.addDataSource('NPCgallery',DictSource(dsdict),False) # should check if already exists!
+        if self.NPCsettings.IncludeSegmentLinesWithGallery:
+            pipeline.addDataSource('NPCgallerySegments',DictSource(trdict),False)
         pipeline.Rebuild() # check, is this the right way when add a new non-module based dataSource?
 
         from PYME.LMVis.layers.pointcloud import PointCloudRenderLayer
         layer = PointCloudRenderLayer(pipeline, dsname='NPCgallery', method='pointsprites', cmap='plasma', point_size=4.0, alpha=0.5, vertexColour='z')
         self.visFr.add_layer(layer)
+
+        if self.NPCsettings.IncludeSegmentLinesWithGallery:
+            from PYME.LMVis.layers.tracks import TrackRenderLayer
+            layer = TrackRenderLayer(pipeline, dsname='NPCgallerySegments', method='tracks', clump_key='polyIndex', line_width=2.0,
+                                     alpha=0.5,cmap='SolidWhite')
+            self.visFr.add_layer(layer)
 
     def On3DNPCaddTemplates(self, event=None):
         pipeline = self.visFr.pipeline

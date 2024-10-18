@@ -3,52 +3,31 @@ import numpy as np
 
 piover4 = np.pi/4.0
 
-from circle_fit import taubinSVD
-def fitcirc(x,y,sigma=None):
-    pcs = np.vstack((x,y)).T
-    xc, yc, r, sigma = taubinSVD(pcs)
-    return (xc, yc, r, sigma)
+# from circle_fit import taubinSVD
+# def fitcirc(x,y,sigma=None):
+#     pcs = np.vstack((x,y)).T
+#     xc, yc, r, sigma = taubinSVD(pcs)
+#     return (xc, yc, r, sigma)
 
-def centreshift(x,y,xc,yc):
-    return (x-xc,y-yc)
+# def centreshift(x,y,xc,yc):
+#     return (x-xc,y-yc)
 
-def plot_segments(rad,rotang=0):
-    for i in range(8):
-        ang = i * np.pi / 4.0
-        plt.plot([0,rad*np.cos(ang+rotang)],[0,rad*np.sin(ang+rotang)],'b')
+# def plot_segments(rad,rotang=0):
+#     for i in range(8):
+#         ang = i * np.pi / 4.0
+#         plt.plot([0,rad*np.cos(ang+rotang)],[0,rad*np.sin(ang+rotang)],'b')
 
-def phi_from_coords(xn,yn):
-    phis = np.arctan2(yn,xn)
-    return phis
+# def phi_from_coords(xn,yn):
+#     phis = np.arctan2(yn,xn)
+#     return phis
 
-def estimate_rotation(xn,yn,spacing=1.0,mode='abs',do_plot=False):
-    n_ang = int(45.0/spacing)
-    rotrad = np.arange(n_ang)*piover4/n_ang
-    phis = phi_from_coords(xn,yn)
-    frac, integ = np.modf((np.pi+phis)/piover4)
-    if mode == 'abs':
-        sqdiff = [ np.sum(np.abs(rd - frac*piover4)) for rd in rotrad]
-    elif mode == 'square':
-        sqdiff = [ np.sum((rd - frac*piover4)**2) for rd in rotrad]
-    else:
-        raise RuntimeError("unknown estimation mode %s" % mode)
-        
-    if do_plot:
-        plt.figure()
-        plt.scatter(np.degrees(rotrad),sqdiff)
-
-    indmin = np.argmin(sqdiff)
-    radmin = rotrad[indmin]
+# def rot_coords(xn,yn,ang):
+#     c, s = np.cos(ang), np.sin(ang)
+#     R = np.array(((c, -s), (s, c)))
+#     pcs = np.vstack((xn,yn))
+#     crot = R @ pcs
     
-    return piover4/2.0-radmin
-
-def rot_coords(xn,yn,ang):
-    c, s = np.cos(ang), np.sin(ang)
-    R = np.array(((c, -s), (s, c)))
-    pcs = np.vstack((xn,yn))
-    crot = R @ pcs
-    
-    return (crot.T[:,0],crot.T[:,1])
+#     return (crot.T[:,0],crot.T[:,1])
 
 piover4 = np.pi/4.0
 
@@ -72,10 +51,16 @@ def phi_from_coords(xn,yn):
     phis = np.arctan2(yn,xn)
     return phis
 
-def estimate_rotation(xn,yn,spacing=1.0,mode='abs',do_plot=False):
+def r_from_coords(xn,yn):
+    r = np.sqrt(yn*yn+xn*xn)
+    return r
+
+# this implementation seems broken; retire for now
+def estimate_rotation(xn,yn,spacing=1.0,mode='abs',do_plot=False,secondpass=False):
     n_ang = int(45.0/spacing)
     rotrad = np.arange(n_ang)*piover4/n_ang
     phis = phi_from_coords(xn,yn)
+    r = r_from_coords(xn,yn)
     frac, integ = np.modf((np.pi+phis)/piover4)
     if mode == 'abs':
         sqdiff = [ np.sum(np.abs(rd - frac*piover4)) for rd in rotrad]
@@ -85,13 +70,58 @@ def estimate_rotation(xn,yn,spacing=1.0,mode='abs',do_plot=False):
         raise RuntimeError("unknown estimation mode %s" % mode)
         
     if do_plot:
-        plt.figure()
-        plt.scatter(np.degrees(rotrad),sqdiff)
+        fig,ax = plt.subplots(2,1)
+        ax[0].scatter(np.degrees(rotrad),sqdiff)
+        ax[1].scatter(np.degrees(phis),r,alpha=0.4)
 
     indmin = np.argmin(sqdiff)
     radmin = rotrad[indmin]
+    radrot = piover4/2.0-radmin
+
+    if secondpass:
+        xn2, yn2 = rot_coords(xn,yn,radrot)
+        radrot2 = estimate_rotation(xn2,yn2,spacing=spacing,mode=mode,do_plot=do_plot,secondpass=False)
+        radrot = radrot+radrot2
     
-    return piover4/2.0-radmin
+    return radrot
+
+# FIXED up optimal rotation estimator
+# we calculate a metric that looks at angles of events and is designed to have the smallest penalty (zero)
+# at the center of a pi/4 (45 deg) segment and increases linearly or squarely towards the edges of the
+# segments
+# we do this by calculating the fractional part of the angle modulo pi/4 and subtract 0.5 so that the center
+# gets a value of 0 and edges go to +- 0.5; we then take abs or squares of this "angle penalty" and sum these up
+# we do this by rotating angles by a range of 0..pi/4 and then find the rotation angle that minimises the total penalty
+# NOTE: important property of a well working routine: if we rotate the data the determined "optimal rotation"
+# should shift linearly with this external rotation
+def estimate_rotation2(xn,yn,spacing=1.0,mode='abs',do_plot=False):
+    n_ang = int(45.0/spacing)
+    rotrad = np.arange(n_ang)*piover4/n_ang
+    phis = phi_from_coords(xn,yn)
+    r = r_from_coords(xn,yn)
+
+    sqdiff = []
+    if mode == 'abs':
+        for rd in rotrad:
+            frac, integ = np.modf((np.pi+phis+rd)/piover4)
+            sqdiff.append(np.sum(np.abs(frac-0.5)))
+    elif mode == 'square':
+        for rd in rotrad:
+            frac, integ = np.modf((np.pi+phis+rd)/piover4)
+            sqdiff.append(np.sum((frac-0.5)**2))
+    else:
+        raise RuntimeError("unknown estimation mode %s" % mode)
+        
+    if do_plot:
+        fig,ax = plt.subplots(2,1)
+        ax[0].scatter(np.degrees(rotrad),sqdiff)
+        ax[1].scatter(np.degrees(phis),r,alpha=0.4)
+        ax[1].set_ylim(0,80)
+
+    indmin = np.argmin(sqdiff)
+    radmin = rotrad[indmin]
+
+    return radmin
 
 def rot_coords(xn,yn,ang):
     c, s = np.cos(ang), np.sin(ang)
@@ -113,7 +143,7 @@ def estimate_nlabeled(x,y,r0=None,nthresh=10,dr=30.0,rotation=None,
         xc, yc, r0, sigma = fitcirc(x,y)
         xn, yn = centreshift(x, y, xc, yc)
         if rotation is None:
-            radrot = estimate_rotation(xn,yn,mode=fitmode)
+            radrot = estimate_rotation2(xn,yn,mode=fitmode)
         else:
             radrot = rotation
         xr1,yr1 = rot_coords(xn,yn,radrot)
@@ -122,13 +152,13 @@ def estimate_nlabeled(x,y,r0=None,nthresh=10,dr=30.0,rotation=None,
             xc2, yc2, r0, sigma = fitcirc(xr,yr)
             xn, yn = centreshift(xr, yr, xc2, yc2)
             if rotation is None:
-                radrot = estimate_rotation(xn,yn,mode=fitmode)
+                radrot = estimate_rotation2(xn,yn,mode=fitmode)
             else:
                 radrot = rotation
             xr,yr = rot_coords(xn,yn,radrot)
     else:
         if rotation is None:
-            radrot = estimate_rotation(x,y,mode=fitmode)
+            radrot = estimate_rotation2(x,y,mode=fitmode)
         else:
             radrot = rotation
         xr1,yr1 = rot_coords(x,y,radrot)
@@ -639,34 +669,45 @@ class NPC3D(object):
         return ax
         
 
-    def nlabeled(self,nthresh=1,r0=50.0,dr=25.0,do_plot=False,rotlocked=True,zrange=150.0):
+    def nlabeled(self,nthresh=1,r0=50.0,dr=25.0,do_plot=False,rotlocked=True,zrange=150.0,analysis2d=False):
         zrangeabs = abs(zrange)
         if rotlocked:
             self.filter('z',-zrangeabs,zrangeabs)
             if self.filtered_pts.size > 0:
-                rotation = estimate_rotation(self.filtered_pts[:,0],self.filtered_pts[:,1])
+                rotation = estimate_rotation2(self.filtered_pts[:,0],self.filtered_pts[:,1])
             else:
                 rotation=None
         else:
             rotation=None
         self.rotation = rotation # remember rotation
-        self.filter('z',0,zrangeabs)
-        if self.filtered_pts.size > 0:
-            # self.plot_points('filtered')
+
+        if analysis2d:
+            self.filter('z',-zrangeabs,zrangeabs)
             x=self.filtered_pts[:,0]
             y=self.filtered_pts[:,1]
-            self.n_top = estimate_nlabeled(x,y,r0=r0,dr=dr,nthresh=nthresh,do_plot=do_plot,rotation=rotation)
+            if self.filtered_pts.size > 0:
+                self.n = estimate_nlabeled(x,y,r0=r0,dr=dr,nthresh=nthresh,do_plot=do_plot,rotation=rotation)
+            else:
+                self.n = 0
+            return self.n
         else:
-            self.n_top = 0
-        self.filter('z',-zrangeabs,0)
-        if self.filtered_pts.size > 0:
-            # self.plot_points('filtered')
-            x=self.filtered_pts[:,0]
-            y=self.filtered_pts[:,1]
-            self.n_bot = estimate_nlabeled(x,y,r0=r0,dr=dr,nthresh=nthresh,do_plot=do_plot,rotation=rotation)
-        else:
-            self.n_bot = 0
-        return (self.n_top,self.n_bot)
+            self.filter('z',0,zrangeabs)
+            if self.filtered_pts.size > 0:
+                # self.plot_points('filtered')
+                x=self.filtered_pts[:,0]
+                y=self.filtered_pts[:,1]
+                self.n_top = estimate_nlabeled(x,y,r0=r0,dr=dr,nthresh=nthresh,do_plot=do_plot,rotation=rotation)
+            else:
+                self.n_top = 0
+            self.filter('z',-zrangeabs,0)
+            if self.filtered_pts.size > 0:
+                # self.plot_points('filtered')
+                x=self.filtered_pts[:,0]
+                y=self.filtered_pts[:,1]
+                self.n_bot = estimate_nlabeled(x,y,r0=r0,dr=dr,nthresh=nthresh,do_plot=do_plot,rotation=rotation)
+            else:
+                self.n_bot = 0
+            return (self.n_top,self.n_bot)
 
 class NPC3DSet(object):
     def __init__(self,filename=None,zclip=75.0,offset_mode='median',NPCdiam=100.0,NPCheight=70.0,foreshortening=1.0):
