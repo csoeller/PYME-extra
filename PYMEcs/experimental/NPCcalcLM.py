@@ -81,7 +81,7 @@ class NPCsettings(HasTraits):
                          desc="Method to estimate the likely 3D center of an NPC; median seems more robust against outliners (say in z)")
     SkipEmptyTopOrBottom_3D = Bool(False,desc="if to skip NPCs with empty top or bottom ring")
     NPCRotationAngle = Enum(['positive','negative','zero'],desc="way to treat rotation for NPC gallery")
-    TopOverBottom = Bool(True,desc="if top and bottom NPC parts on top of each other")
+    NPCGalleryArrangement = Enum(['TopOverBottom','TopBesideBottom','SingleAverage','SingleAverageSBS'],desc="how to arrange 3D NPC parts in NPC gallery; SBS = SideBySide top and bottom")
     NoRotationForSingleNPCFit = Bool(False,desc="if rotation is disabled for single NPC fit")
     IncludeSegmentLinesWithGallery = Bool(True,desc="if 3D segement lines are generated when NPC 3D gallery is created")
 
@@ -246,15 +246,27 @@ class NPCcalc():
         z = np.empty((0))
         objectID = np.empty((0),int)
 
-        if self.NPCsettings.TopOverBottom:
+        if self.NPCsettings.NPCGalleryArrangement == 'TopOverBottom':
             gspx = 180
             gspy = 180
             gsdx = 0
             rowlength = 10
-        else:   
+        elif self.NPCsettings.NPCGalleryArrangement == 'TopBesideBottom':
             gspx = 400
             gspy = 180
             gsdx = 180
+            rowlength = 5
+
+        elif self.NPCsettings.NPCGalleryArrangement == 'SingleAverageSBS':
+            gspx = 0
+            gspy = 0
+            gsdx = 180
+            rowlength = 5
+
+        else:
+            gspx = 0
+            gspy = 0
+            gsdx = 0
             rowlength = 5
 
         xtr = np.empty((0))
