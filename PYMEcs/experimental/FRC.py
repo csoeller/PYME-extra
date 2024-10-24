@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import signal
 from scipy import stats
-
+import wx
 
 ##################
 # FRC.py
@@ -211,6 +211,19 @@ def frc_plot(freqs,frc1,smoothed,fhb,f7,halfbit,chanNames=['block0','block1'],
     plt.title("FRC for channels %s and %s" % (chanNames[0],chanNames[1]), y=1.08)
     plt.show()
 
+
+def save_vol_mrc(data, grid_spacing, outfilename, origin=None, overwrite=False):
+    import mrcfile # will bomb unless this is installed
+    
+    data = data.astype('float32') 
+    with mrcfile.new(outfilename, overwrite=overwrite) as mrc:
+        mrc.set_data(data)
+        mrc.voxel_size = grid_spacing
+        if origin is not None:
+            mrc.header.origin = origin
+        mrc.update_header_from_data()
+        mrc.update_header_stats()
+
 import PYMEcs.Analysis.zerocross as zc
 from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float, Bool
 
@@ -225,6 +238,7 @@ class FRCplotter:
         self.dsviewer = dsviewer
         dsviewer.AddMenuItem('Experimental>Analysis', 'FRC of image pair', self.OnFRC)
         dsviewer.AddMenuItem('Experimental>Analysis', 'adjust FRC settings', self.OnFRCSettings)
+        dsviewer.AddMenuItem('Experimental>Analysis', 'save MRC volumes for FSC', self.OnFSCsave_as_MRC)
         self.frcSettings = FRCsettings()
 
     def OnFRCSettings(self, event=None):
@@ -239,13 +253,13 @@ class FRCplotter:
         try:
             names = image.mdh.getEntry('ChannelNames')
         except:
-            names = ['Channel %d' % n for n in range(image.data.shape[3])]
+            names = ['Channel %d' % n for n in range(image.data_xytc.shape[3])]
 
-        dlg = ColocSettingsDialog(self.dsviewer, voxelsize[0], names, show_bins=False)
-        dlg.ShowModal()
+        with ColocSettingsDialog(self.dsviewer, voxelsize[0], names, show_bins=False) as dlg:
+            if dlg.ShowModal() != wx.ID_OK:
+                return
+            chans = dlg.GetChans()
 
-        chans = dlg.GetChans()
-        dlg.Destroy()
         chanNames = [names[chans[0]],names[chans[1]]]
 
         freqs,frc1,smoothed,fhb,f7,halfbit = frc_from_image(image,chans,muwidth=2,
@@ -255,8 +269,42 @@ class FRCplotter:
                  showHalfbitThreshold=self.frcSettings.ShowHalfbitThreshold,
                  showGrid=self.frcSettings.ShowGrid)
         
-        
+    def OnFSCsave_as_MRC(self, event=None):
+        from PYME.DSView.modules.coloc import ColocSettingsDialog
+        im = self.dsviewer.image
+        try:
+            names = im.mdh.getEntry('ChannelNames')
+        except:
+            names = ['Channel %d' % n for n in range(im.data_xyztc.shape[4])]
 
+        with ColocSettingsDialog(self.dsviewer, im.mdh.voxelsize.x, names, show_bins=False) as dlg:
+            if dlg.ShowModal() != wx.ID_OK:
+                return
+            chans = dlg.GetChans()
+
+        chanNames = [names[chans[0]],names[chans[1]]]
+
+        vol1 = im.data_xyztc[:,:,:,0,chans[0]].squeeze()
+        vol2 = im.data_xyztc[:,:,:,0,chans[1]].squeeze()
+
+        MINFLUXts = im.mdh.get('Source.MINFLUX.TimeStamp')
+        if MINFLUXts is not None:
+            defaultFiles = ["%s-%s.mrc" % (MINFLUXts,names[chans[0]]),
+                            "%s-%s.mrc" % (MINFLUXts,names[chans[1]])]
+        else:
+            defaultFiles = ['','']
+
+        for i,vol in enumerate([vol1,vol2]):
+            fdialog = wx.FileDialog(self.dsviewer, 'Save channel %d as ...' % i,
+                                    wildcard='MRC (*.mrc)|*.mrc',
+                                    defaultFile=defaultFiles[i],
+                                    style=wx.FD_SAVE)
+            if fdialog.ShowModal() != wx.ID_OK:
+                return
+            fpath = fdialog.GetPath()
+            save_vol_mrc(vol.T,im.mdh.voxelsize_nm.x,fpath)
+ 
+        
 def Plug(dsviewer):
     """Plugs this module into the gui"""
     dsviewer.frcplt = FRCplotter(dsviewer)
