@@ -318,6 +318,9 @@ class MBMCollectionDF(object): # collection based on dataframe objects
 
             self.name = name
 
+    def to_JSON(self): # this is a dummy mostly to get the object to convert without error in metadata output
+        return "Dummy for MBMCollectionDF object"
+        
     def populate_df_from_npz(self,filename):
         # this is a MBM bead file with raw bead tracks
         self.name=filename

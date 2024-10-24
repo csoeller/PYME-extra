@@ -303,7 +303,12 @@ class FRCplotter:
                 return
             fpath = fdialog.GetPath()
             save_vol_mrc(vol.T,im.mdh.voxelsize_nm.x,fpath)
- 
+
+        # we also write a JSON file of the metadata so that we can be sure about voxelsizes etc
+        # currently just the stem of the second MRC file name with json extension
+        from pathlib import Path
+        p = Path(fpath)
+        p.with_suffix('.json').write_text(im.mdh.to_JSON())
         
 def Plug(dsviewer):
     """Plugs this module into the gui"""
