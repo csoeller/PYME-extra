@@ -71,3 +71,4 @@ def parse_timestamp_from_filename(fname):
     if timestamp is None:
         return None
     t0 = timestamp_to_datetime(timestamp)
+    return t0
