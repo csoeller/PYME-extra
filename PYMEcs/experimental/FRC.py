@@ -295,13 +295,13 @@ class FRCplotter:
             defaultFiles = ['','']
 
         for i,vol in enumerate([vol1,vol2]):
-            fdialog = wx.FileDialog(self.dsviewer, 'Save channel %d as ...' % i,
+            with wx.FileDialog(self.dsviewer, 'Save channel %d as ...' % i,
                                     wildcard='MRC (*.mrc)|*.mrc',
                                     defaultFile=defaultFiles[i],
-                                    style=wx.FD_SAVE)
-            if fdialog.ShowModal() != wx.ID_OK:
-                return
-            fpath = fdialog.GetPath()
+                                    style=wx.FD_SAVE) as fdialog:
+                if fdialog.ShowModal() != wx.ID_OK:
+                    return
+                fpath = fdialog.GetPath()
             save_vol_mrc(vol.T,im.mdh.voxelsize_nm.x,fpath)
 
         # we also write a JSON file of the metadata so that we can be sure about voxelsizes etc
