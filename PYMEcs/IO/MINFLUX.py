@@ -109,7 +109,7 @@ def minflux_npy2pyme_original(data,return_original_array=False,make_clump_index=
         is_3D = False
         iterno_loc = 4
         iterno_other = 4
-        iterno_cfr = 4
+        iterno_cfr = 3
 
     # NOTE CS 3/2024: latest data with MBM active seems to generate an "empty" iteration (at position 0)
     # that has NaNs or zeros in the relevant properties
@@ -220,7 +220,9 @@ def minflux_npy2pyme_new(data,return_original_array=False,make_clump_index=True,
         #iterno_cfr = 6
     else:
         is_3D = False
-        wherecfr = wherelast # in 2D we do use the last iteration
+        wherecfr = wherelast - 1 # in 2D we do use the last but one iteration (iteration 3)
+        if not np.all(data[wherecfr]['itr'] == 3):
+            raise RuntimeError('CFR check_2D: 2D detected but some "cfr iterations" have an index different from 3, giving up')
         #iterno_loc = 4
         #iterno_other = 4
         #iterno_cfr = 4
@@ -264,14 +266,14 @@ def minflux_npy2pyme_new(data,return_original_array=False,make_clump_index=True,
         pymedct.update({'z':posnm[:,2], 'error_z' : stdz})
 
     if with_cfr_std: # we also compute on request a cfr std dev across a trace ID (=clump in PYME)
-        pymedct.update({'cfr_std':get_stddev_property(ids,data[wherecfr]['cfr'])}) # TODO: note for 3D we may need to look at earlier iterations
+        pymedct.update({'cfr_std':get_stddev_property(ids,data[wherecfr]['cfr'])})
         
     pymedct.update({'x' : posnm[:,0],
                     'y': posnm[:,1],
                     # for t we use time to ms precision (without rounding); this is a reasonably close
                     # correspondence to frame numbers as time coordinates in SMLM data
                     't': (1e3*dfin['tim']).astype('i'),
-                    'cfr':data[wherecfr]['cfr'], # TODO: note for 3D we may need to look at earlier iterations
+                    'cfr':data[wherecfr]['cfr'],
                     'efo':dfin['efo'],
                     'dcr':dfin['dcr'][:,0], # TODO: these are now arrays with up to elements; for now just forst element
                     'error_x' : stdx,
