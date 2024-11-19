@@ -204,6 +204,16 @@ def minflux_npy2pyme_original(data,return_original_array=False,make_clump_index=
     else:
         return pymepd
 
+def mk_evids(data):
+    indexlast = data['fnl'] == True
+    evtuid = np.arange(1,indexlast.sum()+1,dtype='i')
+    evtidwnans = np.full(data.shape[0],np.nan)
+    evtidwnans[indexlast] = evtuid
+    dfidnan = pd.DataFrame({'evtid':evtidwnans}) # we use pandas to carry out the bfill
+    evtid = dfidnan.bfill().to_numpy(dtype='i').squeeze()
+
+    return evtid
+    
 # this one should be able to deal both with 2d and 3D
 def minflux_npy2pyme_new(data,return_original_array=False,make_clump_index=True,with_cfr_std=False):
     lastits = data['fnl'] == True
@@ -215,17 +225,11 @@ def minflux_npy2pyme_new(data,return_original_array=False,make_clump_index=True,
         wherecfr = wherelast - 3
         if not np.all(data[wherecfr]['itr'] == 6):
             raise RuntimeError('CFR check_3D: 3D detected but some "cfr iterations" have an index different from 6, giving up')
-        #iterno_loc = 9 # we pick up the most precise localisation from this iteration, also fbg
-        #iterno_other = 9 # we pick up dcr, efo from this iteration
-        #iterno_cfr = 6
     else:
         is_3D = False
         wherecfr = wherelast - 1 # in 2D we do use the last but one iteration (iteration 3)
         if not np.all(data[wherecfr]['itr'] == 3):
             raise RuntimeError('CFR check_2D: 2D detected but some "cfr iterations" have an index different from 3, giving up')
-        #iterno_loc = 4
-        #iterno_other = 4
-        #iterno_cfr = 4
 
     posnm = 1e9*dfin['loc'] # we keep all distances in units of nm
     posnm[:,2] *= foreshortening
@@ -264,6 +268,9 @@ def minflux_npy2pyme_new(data,return_original_array=False,make_clump_index=True,
         stdz = get_stddev_property(ids,posnm[:,2])
         stdz[stdz < 1e-3] = 100.0
         pymedct.update({'z':posnm[:,2], 'error_z' : stdz})
+    
+    evtid = mk_evids(data) # we give every event a unique id to allow summing up the photons
+    nphotons_all = get_stddev_property(evtid,data['eco'],statistic='sum')
 
     if with_cfr_std: # we also compute on request a cfr std dev across a trace ID (=clump in PYME)
         pymedct.update({'cfr_std':get_stddev_property(ids,data[wherecfr]['cfr'])})
@@ -285,7 +292,8 @@ def minflux_npy2pyme_new(data,return_original_array=False,make_clump_index=True,
                     # NOTE CS 3/2024: there seems to be an extra iteration in the newer files with MBM
                     #  in some properties these are NAN, for eco this seems 0, so ok to still use sum along whole axis
                     # 'nPhotons' : data['itr']['eco'].sum(axis=1), # TODO: we need to fix the nPhoton code for the new style format
-                    'tim': dfin['tim'], # we also keep the original float time index, units are [s]                  
+                    'tim': dfin['tim'], # we also keep the original float time index, units are [s]
+                    'nPhotons': nphotons_all[wherelast],
                     })
 
     if has_lnc:
@@ -306,8 +314,6 @@ def minflux_npy2pyme_new(data,return_original_array=False,make_clump_index=True,
         return (pymepd,data)
     else:
         return pymepd
-
-    # raise RuntimeError("not yet implemented")
     
 # convenience function                           
 def save_minflux_as_csv(pd_data, fname):
