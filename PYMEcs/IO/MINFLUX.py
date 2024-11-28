@@ -213,7 +213,42 @@ def mk_evids(data):
     evtid = dfidnan.bfill().to_numpy(dtype='i').squeeze()
 
     return evtid
-    
+
+# below is code to generate sequence IDs for all sequences present in the mfx data
+# goal is to use only fast vectorized expressions
+
+# this one uses "final iteration" as end of sequence marker
+# we noticed later that this can lead to issues with "incomplete sequences",
+#  i.e. sequences that are not terminated by a valid final localisation
+def mk_seqids(data):
+    indexlast = data['fnl'] == True
+    seq_uid = np.arange(1,indexlast.sum()+1,dtype='i')
+    seqidwnans = np.full(data.shape[0],np.nan)
+    seqidwnans[indexlast] = seq_uid
+    dfidnan = pd.DataFrame({'seqid':seqidwnans})
+    seqid = dfidnan.bfill().to_numpy(dtype='i').squeeze() # we use pandas fast backfill to mark the other events that are part of this sequence
+    return seqid
+
+# this one uses "change to a lower (or equal) sequence number" as end of sequence marker
+# this seems safer than looking for an iteration with the 'fnl' marker as there can be incomplete sequences, see below
+# note we now also look for "<=" in the idxmax computation which should only happen if a valid itr 0 is followed directly by another valid itr 0
+# we also return a list (actually numpy array) of seqids of incomplete sequences
+def mk_seqids_maxpos(data):
+    idxmax = np.nonzero((data['itr'][1:]-data['itr'][0:-1]) <= 0)[0]
+    seq_uid = np.arange(1,idxmax.size+1,dtype='i')
+    seqidwnans = np.full(data.shape[0],np.nan)
+    seqidwnans[idxmax] = seq_uid
+    if np.isnan(seqidwnans[-1]):
+        seqidwnans[-1] = seq_uid.max()+1 # we may need to marke the last event with a unique id
+    dfidnan = pd.DataFrame({'seqid':seqidwnans})
+    seqid = dfidnan.bfill().to_numpy(dtype='i').squeeze() # we use pandas fast backfill to mark the other events that are part of this sequence
+    # also mark incomplete sequences for weeding out
+    idxincp = idxmax[data['fnl'][idxmax] != 1] # incomplete sequences end with an event that is not marked as 'fnl'
+    incomplete_seqs = seqid[idxincp]
+    if data['fnl'][-1] != 1:
+        incomplete_seqs = np.append(incomplete_seqs,seqid[-1])
+    return seqid, incomplete_seqs
+
 # this one should be able to deal both with 2d and 3D
 def minflux_npy2pyme_new(data,return_original_array=False,make_clump_index=True,with_cfr_std=False):
     lastits = data['fnl'] == True
@@ -268,9 +303,12 @@ def minflux_npy2pyme_new(data,return_original_array=False,make_clump_index=True,
         stdz = get_stddev_property(ids,posnm[:,2])
         stdz[stdz < 1e-3] = 100.0
         pymedct.update({'z':posnm[:,2], 'error_z' : stdz})
-    
-    evtid = mk_evids(data) # we give every event a unique id to allow summing up the photons
-    nphotons_all = get_stddev_property(evtid,data['eco'],statistic='sum')
+
+    # we are currently not using the info on incomplete sequences
+    seqid,incomplete_seqid  = mk_seqids_maxpos(data) # we give every sequence a unique id to allow summing up the photons
+    # we assume for now the counts at offset can be used to sum up
+    # and get the total photons harvested in a sequence
+    nphotons_all = get_stddev_property(seqid,data['eco'],statistic='sum')
 
     if with_cfr_std: # we also compute on request a cfr std dev across a trace ID (=clump in PYME)
         pymedct.update({'cfr_std':get_stddev_property(ids,data[wherecfr]['cfr'])})
@@ -286,12 +324,9 @@ def minflux_npy2pyme_new(data,return_original_array=False,make_clump_index=True,
                     'error_x' : stdx,
                     'error_y' : stdy,
                     'fbg': dfin['fbg'],
-                    # we assume for now the offset counts can be used to sum up
-                    # and get the total photons harvested
                     # check with abberior
                     # NOTE CS 3/2024: there seems to be an extra iteration in the newer files with MBM
                     #  in some properties these are NAN, for eco this seems 0, so ok to still use sum along whole axis
-                    # 'nPhotons' : data['itr']['eco'].sum(axis=1), # TODO: we need to fix the nPhoton code for the new style format
                     'tim': dfin['tim'], # we also keep the original float time index, units are [s]
                     'nPhotons': nphotons_all[wherelast],
                     })
