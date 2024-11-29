@@ -59,8 +59,12 @@ def npy_is_minflux_data(filename, warning=False, return_msg=False):
 def minflux_npy_new_format(data):
     return 'fnl' in data.dtype.fields
 
+##################
+### LEGACY IO ####
+##################
+
 # here we check for size either 5 (2D) or 10 (3D); any other size raises an error
-def minflux_npy_detect_3D_original(data):
+def minflux_npy_detect_3D_legacy(data):
     if data['itr'].shape[1] == 10 or data['itr'].shape[1] == 11:
         return True # 3D
     elif data['itr'].shape[1] == 5 or data['itr'].shape[1] == 6:
@@ -83,7 +87,7 @@ def minflux_npy_detect_3D_new(data):
         raise RuntimeError('unknown number of final iteration, neither 4 (2D) nor 9 (3D), is actually: %d' %
                             (dfin['itr'][0]))
 
-def minflux_npy_has_extra_iter_original(data):
+def minflux_npy_has_extra_iter_legacy(data):
     if data['itr'].shape[1] == 6 or data['itr'].shape[1] == 11:
         return True # has a spare empty starting position
     else:
@@ -93,14 +97,22 @@ def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,wit
     data = np.load(fname)
     
     if minflux_npy_new_format(data):
-        return minflux_npy2pyme_new(data,return_original_array=return_original_array,make_clump_index=make_clump_index,with_cfr_std=with_cfr_std)
+        pymedf = minflux_npy2pyme_new(data,
+                                    make_clump_index=make_clump_index,with_cfr_std=with_cfr_std)
     else:
-        return minflux_npy2pyme_original(data,return_original_array=return_original_array,make_clump_index=make_clump_index,with_cfr_std=with_cfr_std)
+        pymedf = minflux_npy2pyme_legacy(data,
+                                         make_clump_index=make_clump_index,with_cfr_std=with_cfr_std)
 
-# this one should be able to deal both with 2d and 3D
-def minflux_npy2pyme_original(data,return_original_array=False,make_clump_index=True,with_cfr_std=False):
+    pymeds = pymedf.to_records(index=False) # convert into NUMPY recarray
+    if return_original_array:
+        return (pymeds,data)
+    else:
+        return pymeds
     
-    if minflux_npy_detect_3D_original(data):
+# this one should be able to deal both with 2d and 3D
+def minflux_npy2pyme_legacy(data,make_clump_index=True,with_cfr_std=False):
+    
+    if minflux_npy_detect_3D_legacy(data):
         is_3D = True
         iterno_loc = 9 # we pick up the most precise localisation from this iteration, also fbg
         iterno_other = 9 # we pick up dcr, efo from this iteration
@@ -115,7 +127,7 @@ def minflux_npy2pyme_original(data,return_original_array=False,make_clump_index=
     # that has NaNs or zeros in the relevant properties
     # we seem to be able to deal with this by just moving our pointers into the iteration just one position up
     # this is subject to confirmation
-    if minflux_npy_has_extra_iter_original(data):
+    if minflux_npy_has_extra_iter_legacy(data):
         has_extra_iter = True
         iterno_loc += 1
         iterno_other += 1
@@ -199,20 +211,11 @@ def minflux_npy2pyme_original(data,return_original_array=False,make_clump_index=
     # TODO: think this through - we don't really need a dataframe here,
     # could return a record array, or at least make that optional
     pymepd = pd.DataFrame.from_dict(pymedct)
-    if return_original_array:
-        return (pymepd,data)
-    else:
-        return pymepd
+    return pymepd
 
-def mk_evids(data):
-    indexlast = data['fnl'] == True
-    evtuid = np.arange(1,indexlast.sum()+1,dtype='i')
-    evtidwnans = np.full(data.shape[0],np.nan)
-    evtidwnans[indexlast] = evtuid
-    dfidnan = pd.DataFrame({'evtid':evtidwnans}) # we use pandas to carry out the bfill
-    evtid = dfidnan.bfill().to_numpy(dtype='i').squeeze()
-
-    return evtid
+#########################
+### RevAutumn2024 IO ####
+#########################
 
 # below is code to generate sequence IDs for all sequences present in the mfx data
 # goal is to use only fast vectorized expressions
@@ -250,7 +253,7 @@ def mk_seqids_maxpos(data):
     return seqid, incomplete_seqs
 
 # this one should be able to deal both with 2d and 3D
-def minflux_npy2pyme_new(data,return_original_array=False,make_clump_index=True,with_cfr_std=False):
+def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
     lastits = data['fnl'] == True
     wherelast = np.nonzero(lastits)[0]
     dfin = data[lastits]
@@ -309,7 +312,8 @@ def minflux_npy2pyme_new(data,return_original_array=False,make_clump_index=True,
     # we assume for now the counts at offset can be used to sum up
     # and get the total photons harvested in a sequence
     nphotons_all = get_stddev_property(seqid,data['eco'],statistic='sum')
-
+    niterations_all = get_stddev_property(seqid,data['eco'],statistic='count') # we also count how many iterations were done, to see complete vs partial sequences
+    
     if with_cfr_std: # we also compute on request a cfr std dev across a trace ID (=clump in PYME)
         pymedct.update({'cfr_std':get_stddev_property(ids,data[wherecfr]['cfr'])})
         
@@ -329,6 +333,7 @@ def minflux_npy2pyme_new(data,return_original_array=False,make_clump_index=True,
                     #  in some properties these are NAN, for eco this seems 0, so ok to still use sum along whole axis
                     'tim': dfin['tim'], # we also keep the original float time index, units are [s]
                     'nPhotons': nphotons_all[wherelast],
+                    'nIters': niterations_all[wherelast]
                     })
 
     if has_lnc:
@@ -345,13 +350,11 @@ def minflux_npy2pyme_new(data,return_original_array=False,make_clump_index=True,
     # TODO: think this through - we don't really need a dataframe here,
     # could return a record array, or at least make that optional
     pymepd = pd.DataFrame.from_dict(pymedct)
-    if return_original_array:
-        return (pymepd,data)
-    else:
-        return pymepd
-    
+    return pymepd
+
+# deprecated
 # convenience function                           
-def save_minflux_as_csv(pd_data, fname):
+def _save_minflux_as_csv(pd_data, fname):
     pd_data.to_csv(fname,index=False)
 
 # we are monkeypatching pipeline and VisGUIFrame methods to sneak MINFLUX npy IO in;
@@ -398,12 +401,12 @@ def monkeypatch_npy_io(visFr):
 
         from pathlib import Path
         if minflux_npy_new_format(data):
-            ds.mdh['MINFLUX.Format'] = 'Rev1Autumn2024'
+            ds.mdh['MINFLUX.Format'] = 'RevAutumn2024'
             ds.mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_new(data)
         else:
-            ds.mdh['MINFLUX.Format'] = 'Original'
-            ds.mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_original(data)
-            ds.mdh['MINFLUX.ExtraIteration'] = minflux_npy_has_extra_iter_original(data)
+            ds.mdh['MINFLUX.Format'] = 'Legacy'
+            ds.mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_legacy(data)
+            ds.mdh['MINFLUX.ExtraIteration'] = minflux_npy_has_extra_iter_legacy(data)
 
         ds.mdh['MINFLUX.Filename'] = Path(filename).name # the MINFLUX filename holds some metadata
         ds.mdh['MINFLUX.Foreshortening'] = foreshortening
@@ -505,8 +508,8 @@ class Pipeline(pipeline.Pipeline):
                 ds.mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_new(data)
             else:
                 ds.mdh['MINFLUX.Format'] = 'classic'
-                ds.mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_original(data)
-                ds.mdh['MINFLUX.ExtraIteration'] = minflux_npy_has_extra_iter_original(data)
+                ds.mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_legacy(data)
+                ds.mdh['MINFLUX.ExtraIteration'] = minflux_npy_has_extra_iter_legacy(data)
 
             return ds
         else:

@@ -11,6 +11,8 @@ def tabularFromCSV(csvname):
 
 from PYME.IO.tabular import TabularBase
 from PYMEcs.IO.MINFLUX import minflux_npy2pyme
+
+# closely modeled on RecArraySource
 class MinfluxNpySource(TabularBase):
     _name = "MINFLUX NPY File Source"
     def __init__(self, filename):
@@ -26,7 +28,6 @@ class MinfluxNpySource(TabularBase):
         if np.any(self.res['vld'] < 1):
             self.res = self.res[self.res['vld'] >= 1]
 
-        self.res = self.res.to_records(index=False) # convert into NUMPY recarray
         self._keys = list(self.res.dtype.names)
        
 
