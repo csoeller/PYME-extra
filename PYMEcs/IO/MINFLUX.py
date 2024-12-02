@@ -59,6 +59,23 @@ def npy_is_minflux_data(filename, warning=False, return_msg=False):
 def minflux_npy_new_format(data):
     return 'fnl' in data.dtype.fields
 
+# wrapper around legacy vs new format IO
+def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,with_cfr_std=False):
+    data = np.load(fname)
+    
+    if minflux_npy_new_format(data):
+        pymedf = minflux_npy2pyme_new(data,
+                                    make_clump_index=make_clump_index,with_cfr_std=with_cfr_std)
+    else:
+        pymedf = minflux_npy2pyme_legacy(data,
+                                         make_clump_index=make_clump_index,with_cfr_std=with_cfr_std)
+
+    pyme_recArray = pymedf.to_records(index=False) # convert into NUMPY recarray
+    if return_original_array:
+        return (pyme_recArray,data)
+    else:
+        return pyme_recArray
+
 ##################
 ### LEGACY IO ####
 ##################
@@ -92,22 +109,6 @@ def minflux_npy_has_extra_iter_legacy(data):
         return True # has a spare empty starting position
     else:
         return False
-
-def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,with_cfr_std=False):
-    data = np.load(fname)
-    
-    if minflux_npy_new_format(data):
-        pymedf = minflux_npy2pyme_new(data,
-                                    make_clump_index=make_clump_index,with_cfr_std=with_cfr_std)
-    else:
-        pymedf = minflux_npy2pyme_legacy(data,
-                                         make_clump_index=make_clump_index,with_cfr_std=with_cfr_std)
-
-    pymeds = pymedf.to_records(index=False) # convert into NUMPY recarray
-    if return_original_array:
-        return (pymeds,data)
-    else:
-        return pymeds
     
 # this one should be able to deal both with 2d and 3D
 def minflux_npy2pyme_legacy(data,make_clump_index=True,with_cfr_std=False):
@@ -352,10 +353,16 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
     pymepd = pd.DataFrame.from_dict(pymedct)
     return pymepd
 
+
 # deprecated
 # convenience function                           
 def _save_minflux_as_csv(pd_data, fname):
     pd_data.to_csv(fname,index=False)
+
+    
+##############################
+### Register IO with PYME ####
+##############################
 
 # we are monkeypatching pipeline and VisGUIFrame methods to sneak MINFLUX npy IO in;
 # this gets called from the MINFLUX plugin in the Plug routine;
@@ -391,33 +398,39 @@ def monkeypatch_npy_io(visFr):
     visFr._populate_open_args_original = visFr._populate_open_args
     visFr._populate_open_args = types.MethodType(_populate_open_args_npy,visFr)
 
+    def _get_mdh(data,filename):
+        from pathlib import Path
+        mdh = MetaDataHandler.NestedClassMDHandler()
+
+        if minflux_npy_new_format(data):
+            mdh['MINFLUX.Format'] = 'RevAutumn2024'
+            mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_new(data)
+        else:
+            mdh['MINFLUX.Format'] = 'Legacy'
+            mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_legacy(data)
+            mdh['MINFLUX.ExtraIteration'] = minflux_npy_has_extra_iter_legacy(data)
+
+        mdh['MINFLUX.Filename'] = Path(filename).name # the MINFLUX filename holds some metadata
+        mdh['MINFLUX.Foreshortening'] = foreshortening
+        from PYMEcs.misc.utils import get_timestamp_from_filename, parse_timestamp_from_filename
+        ts = get_timestamp_from_filename(filename)
+        if ts is not None:
+            mdh['MINFLUX.TimeStamp'] = ts
+            # we add the zero to defeat the regexp that checks for names ending with 'time$'
+            # this falls foul of the comparison with an int (epoch time) in the metadata repr function
+            # because our time stamp is a pandas time stamp and comparison with int fails
+            mdh['MINFLUX.StartTime0'] = parse_timestamp_from_filename(filename)
+
+        return mdh
+        
     def _load_ds_npy(filename):
         from PYMEcs.IO.tabular import MinfluxNpySource
         ds = MinfluxNpySource(filename)
         ds.filename = filename
-            
-        ds.mdh = MetaDataHandler.NestedClassMDHandler()
+        
         data = np.load(filename)
+        ds.mdh = _get_mdh(data,filename)
 
-        from pathlib import Path
-        if minflux_npy_new_format(data):
-            ds.mdh['MINFLUX.Format'] = 'RevAutumn2024'
-            ds.mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_new(data)
-        else:
-            ds.mdh['MINFLUX.Format'] = 'Legacy'
-            ds.mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_legacy(data)
-            ds.mdh['MINFLUX.ExtraIteration'] = minflux_npy_has_extra_iter_legacy(data)
-
-        ds.mdh['MINFLUX.Filename'] = Path(filename).name # the MINFLUX filename holds some metadata
-        ds.mdh['MINFLUX.Foreshortening'] = foreshortening
-        from PYMEcs.misc.utils import get_timestamp_from_filename, parse_timestamp_from_filename
-        ts = get_timestamp_from_filename(filename)
-        if ts is not None:
-            ds.mdh['MINFLUX.TimeStamp'] = ts
-            # we add the zero to defeat the regexp that checks for names ending with 'time$'
-            # this falls foul of the comparison with an int (epoch time) in the metadata repr function
-            # because our time stamp is a pandas time stamp and comparison with int fails
-            ds.mdh['MINFLUX.StartTime0'] = parse_timestamp_from_filename(filename)
         return ds
     
     def _ds_from_file_npy(self, filename, **kwargs):
@@ -501,15 +514,8 @@ class Pipeline(pipeline.Pipeline):
                 raise RuntimeError("can't read pipeline data from NPY file - not a MINFLUX data set")
             from PYMEcs.IO.tabular import MinfluxNpySource
             ds = MinfluxNpySource(filename)
-            ds.mdh = MetaDataHandler.NestedClassMDHandler()
             data = np.load(filename)
-            if minflux_npy_new_format(data):
-                ds.mdh['MINFLUX.Format'] = 'new'
-                ds.mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_new(data)
-            else:
-                ds.mdh['MINFLUX.Format'] = 'classic'
-                ds.mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_legacy(data)
-                ds.mdh['MINFLUX.ExtraIteration'] = minflux_npy_has_extra_iter_legacy(data)
+            ds.mdh =  _get_mdh(data,filename)
 
             return ds
         else:
