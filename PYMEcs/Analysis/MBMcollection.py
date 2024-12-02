@@ -463,7 +463,7 @@ class MBMCollectionDF(object): # collection based on dataframe objects
                 fig.update_yaxes(range = (0,np.max([10.0,dfplotg.max().max()])))
             fig.show()
         
-    def plot_tracks_matplotlib(self,axis,unaligned=False,tmin=None,tmax=None,ax=None):
+    def plot_tracks_matplotlib(self,axis,unaligned=False,tmin=None,tmax=None,ax=None,goodalpha=1.0):
         if tmin is None:
             tmin=self._trange[0]
         if tmax is None:
@@ -495,10 +495,10 @@ class MBMCollectionDF(object): # collection based on dataframe objects
 
             if has_bads:
                 ax = dfplotb.plot(legend = True,alpha=0.2,ax=ax)
-                dfplotg.plot(legend = True,ax = ax)
+                dfplotg.plot(legend = True,ax = ax,alpha=goodalpha)
             else:
-                ax = dfplotg.plot(legend = True,ax=ax)
-            ax.plot(self.t, dfplotg.mean(axis=1),label='mean') # add the mean
+                ax = dfplotg.plot(legend = True,ax=ax,alpha=goodalpha)
+            ax.plot(self.t, dfplotg.mean(axis=1),label='mean',alpha=goodalpha) # add the mean
             ax.legend()
             ax.set_title("MBM for %s axis" % axis)
             ax.set_xlabel("time (s)")
@@ -515,7 +515,7 @@ class MBMCollectionDF(object): # collection based on dataframe objects
             dfplot = startdf
             dfplotg = dfplot[[bead for bead in self.beadisgood if self.beadisgood[bead]]]
 
-            ax = dfplotg.plot(legend = True)
+            ax = dfplotg.plot(legend = True,alpha=goodalpha)
             ax.set_title(title)
             ax.set_xlabel("time (s)")
             ax.set_ylabel(yaxis_title)

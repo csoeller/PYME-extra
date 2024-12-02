@@ -560,7 +560,44 @@ class MINFLUXanalyser():
                 ax.set_xlabel('time (s)')
                 ax.set_ylabel('drift in %s (nm)' % caxis)
                 ax.legend(loc="upper left")
-            fig.tight_layout()        
+            fig.tight_layout()
+        if has_mbm: # also plot a third figure with all MBM tracks
+            fig, axs = plt.subplots(nrows=3)
+            for caxis, ax in zip(['x','y','z'],axs):
+                if has_drift:
+                    if has_drift_ori:
+                        ax.plot(t_s,p['drift%s' % caxis]+p['drift%s_ori' % caxis], label='origami 2nd pass')
+                        ax.plot(t_s,p['drift%s_ori' % caxis],'--', label='origami 1st pass')
+                    else:
+                        ax.plot(t_s,p['drift%s' % caxis], label='origami 1st pass')
+                if has_mbm:
+                    #ax.plot(mbm.t,mbm_mean[caxis],':',label='MBM mean')
+                    ax.plot(mbm.t,mbm_meansm[caxis],'r-.',label='MBM lowess (lf=%.2f)' % MBM_lowess_fraction)
+                    mbm.plot_tracks_matplotlib(caxis,ax=ax,goodalpha=0.4)
+                ax.set_xlabel('time (s)')
+                ax.set_ylabel('drift in %s (nm)' % caxis)
+                ax.legend(loc="upper left")
+            fig.tight_layout()
+        if has_mbm and has_drift: # also plot a fourth figure with a difference track for all axes
+            tnew = 1e-3*p['t']
+            mbmcorr = {}
+            for axis in ['x','y','z']:
+                axis_interp_msm = np.interp(tnew,mbm.t,mbm_meansm[axis])          
+                mbmcorr[axis] = axis_interp_msm
+ 
+            fig, axs = plt.subplots(nrows=3)
+            for caxis, ax in zip(['x','y','z'],axs):
+                if has_drift:
+                    if has_drift_ori:
+                        ax.plot(t_s,p['drift%s' % caxis]+p['drift%s_ori' % caxis]-mbmcorr[caxis], label='diff to origami 2nd pass')
+                    else:
+                        ax.plot(t_s,p['drift%s' % caxis]-mbmcorr[caxis], label='diff to origami 1st pass')
+                ax.plot([t_s.min(),t_s.max()],[0,0],'r-.')
+                ax.set_xlabel('time (s)')
+                ax.set_ylabel('differential drift in %s (nm)' % caxis)
+                ax.legend(loc="upper left")
+            fig.tight_layout()
+
 
     def OnMBMtracks(self, event):
         pipeline = self.visFr.pipeline
