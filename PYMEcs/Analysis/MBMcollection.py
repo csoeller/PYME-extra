@@ -311,7 +311,7 @@ class MBMCollectionDF(object): # collection based on dataframe objects
         
         if filename is not None:
             self.filename = filename
-            self.populate_df_from_npz(filename)
+            self.populate_df_from_file(filename)
             if name is None:
                 from pathlib import Path
                 name = Path(filename).stem # should really be just the basename; also may want to protect against filename being a file IO object
@@ -321,10 +321,29 @@ class MBMCollectionDF(object): # collection based on dataframe objects
     def to_JSON(self): # this is a dummy mostly to get the object to convert without error in metadata output
         return "Dummy for MBMCollectionDF object"
         
-    def populate_df_from_npz(self,filename):
+    def populate_df_from_file(self,filename):
+        import os
         # this is a MBM bead file with raw bead tracks
         self.name=filename
-        self._raw_beads = np.load(filename)
+        if os.path.splitext(filename)[1] == '.npz':
+            self._raw_beads = np.load(filename)
+        elif os.path.splitext(filename)[1] == '.zip':
+            import zarr
+            arch = zarr.open(filename)
+            mbm_data = arch['grd']['mbm']['points'][:] # the indexing imports this as an np.array
+            mbm_attrs = arch['grd']['mbm'].points.attrs['points_by_gri']
+            rawbeads = {}
+            for gri_id in np.unique(mbm_data['gri']):
+                gri_str = str(gri_id)
+                bead = mbm_attrs[gri_str]['name']
+                print("%d - name %s" % (gri_id,bead))
+                dbead = mbm_data[mbm_data['gri'] == gri_id]
+                dbead.dtype.names = ('gri', 'pos', 'tim', 'str')
+                rawbeads[bead] = dbead
+            self._raw_beads = rawbeads
+        else:
+            raise RuntimeError('unknown MBM file format, file name is "%s"' % filename)
+        
         for bead in self._raw_beads:
             self._raw_beads[bead]['pos'][:,2] *= self.foreshortening
         self.beads = df_from_interp_beads(self._raw_beads)

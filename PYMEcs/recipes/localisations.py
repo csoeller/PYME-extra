@@ -1412,7 +1412,11 @@ def get_bead_dict_from_mbm(mbm):
         beads[bead]['A'] = raw_beads[bead]['str']
         beads[bead]['t'] = np.asarray(1e3*raw_beads[bead]['tim'],dtype=int)
         beads[bead]['tim'] = raw_beads[bead]['tim']
-        beads[bead]['tid'] = raw_beads[bead]['tid']
+        if 'tid' in raw_beads[bead].dtype.fields:
+            beads[bead]['tid'] = raw_beads[bead]['tid']
+        if 'gri' in raw_beads[bead].dtype.fields:
+            beads[bead]['tid'] = raw_beads[bead]['gri']
+            
 
     x = np.empty((0))
     y = np.empty((0))
@@ -1441,7 +1445,8 @@ def get_bead_dict_from_mbm(mbm):
         objectID = np.append(objectID,np.full_like(beads[bead]['x'],beadid+1,dtype=int))
         good = np.append(good,np.full_like(beads[bead]['x'],beadisgood,dtype=int))
 
-    return dict(x=x,y=y,z=z,t=t,tim=tim,beadID=beadID,tid=tid,A=A,good=good,objectID=objectID)
+    return dict(x=x,y=y,z=z,t=t,tim=tim,beadID=beadID,tid=tid,
+                A=A,good=good,objectID=objectID)
 
 # remove this once sessionpath PR is accepted!!
 try:
@@ -1486,12 +1491,13 @@ class MBMcorrection(ModuleBaseMDHmod):
                 mbm = MBMCollectionDF(name=Path(self.mbmfile).stem,filename=self.mbmfile,
                                       foreshortening=foreshortening)
                 self._mbm_allbeads = list(mbm.beadisgood.keys())
+                self.MBM_beads = self._mbm_allbeads
                 self._mbm_cache[mbmkey] = mbm
             else:
                 mbm = self._mbm_cache[mbmkey]
 
             mbmsettingskey = self.mbmsettings
-            if mbmsettingskey not in self._mbm_cache.keys():
+            if mbmsettingskey != '' and mbmsettingskey not in self._mbm_cache.keys():
                 s = unifiedIO.read(self.mbmsettings)
                 mbmconf = json.loads(s)
 
@@ -1525,8 +1531,10 @@ class MBMcorrection(ModuleBaseMDHmod):
                     mbmtrack_corr[axis] = np.interp(bead_ds_dict['tim'],t_g,axismean_g)
 
             for axis in ['x','y','z']:
+                axis_nc = "%s_nc" % axis
                 mapped_ds.addColumn('mbm%s' % axis, mbmcorr[axis])
-                mapped_ds.addColumn(axis,inputLocalizations["%s_nc" % axis] - mbmcorr[axis])
+                if axis_nc in inputLocalizations.keys():
+                    mapped_ds.addColumn(axis,inputLocalizations[axis_nc] - mbmcorr[axis])
 
             if self.mbmfilename_checks:
                 if not check_mbm_name(self.mbmfile,inputLocalizations.mdh.get('MINFLUX.TimeStamp')):
