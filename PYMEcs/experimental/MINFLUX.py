@@ -480,6 +480,9 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>RyRs', "Plot corner info", self.OnCornerplot)
         visFr.AddMenuItem('MINFLUX>RyRs', "Plot density stats", self.OnDensityStats)
         visFr.AddMenuItem('MINFLUX>RyRs', "Show cluster alpha shapes", self.OnAlphaShapes)
+        visFr.AddMenuItem('MINFLUX>Zarr', "Show MBM attributes", self.OnMBMAttributes)
+        visFr.AddMenuItem('MINFLUX>Zarr', "Show MFX attributes", self.OnMFXAttributes)
+        
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
         # and are populated from the customrecipes folder in the PYME config directories
@@ -492,6 +495,41 @@ class MINFLUXanalyser():
                 ID = visFr.AddMenuItem('MINFLUX>Recipes', r, self.OnLoadCustom).GetId()
                 self.minfluxRIDs[ID] = minfluxRecipes[r]
 
+    def OnMBMAttributes(self, event):
+        from  wx.lib.dialogs import ScrolledMessageDialog
+        fres = self.visFr.pipeline.dataSources['FitResults']
+        if 'zarr' in dir(fres):
+            try:
+                mbm_attrs = fres.zarr['grd']['mbm'].points.attrs['points_by_gri']
+            except AttributeError:
+                warn("could not access MBM attributes - do we have MBM data in zarr?")
+                return
+            import pprint
+            mbm_attr_str = pprint.pformat(mbm_attrs,indent=4)
+            with ScrolledMessageDialog(self.visFr, mbm_attr_str, "MBM attributes", size=(900,400),
+                                        style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE ) as dlg:
+                dlg.ShowModal()
+        else:
+            warn("could not find zarr attribute - is this a MFX zarr file?")
+        
+    def OnMFXAttributes(self, event):
+        from  wx.lib.dialogs import ScrolledMessageDialog
+        fres = self.visFr.pipeline.dataSources['FitResults']
+        if 'zarr' in dir(fres):
+            try:
+                mfx_attrs = fres.zarr['mfx'].attrs.asdict()
+            except AttributeError:
+                warn("could not access MFX attributes - do we have MFX data in zarr?")
+                return
+            import pprint
+            mfx_attr_str = pprint.pformat(mfx_attrs,indent=4)
+            with ScrolledMessageDialog(self.visFr, mfx_attr_str, "MFX attributes", size=(900,400),
+                                        style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE ) as dlg:
+                dlg.ShowModal()
+        else:
+            warn("could not find zarr attribute - is this a MFX zarr file?")
+
+    
     def OnDensityStats(self, event):
         from PYMEcs.Analysis.MINFLUX import plot_density_stats_sns
         plot_density_stats_sns(self.visFr.pipeline)
