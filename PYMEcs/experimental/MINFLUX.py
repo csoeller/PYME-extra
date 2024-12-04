@@ -905,7 +905,7 @@ def Plug(visFr):
     # we are trying to monkeypatch pipeline and VisGUIFrame methods to sneak MINFLUX npy IO in;
     # in future we will ask for a way to get this considered by David B for a proper hook
     # in the IO code
-    from PYMEcs.IO.MINFLUX import monkeypatch_npy_io
-    monkeypatch_npy_io(visFr)
+    from PYMEcs.IO.MINFLUX import monkeypatch_npyorzarr_io
+    monkeypatch_npyorzarr_io(visFr)
         
     return MINFLUXanalyser(visFr)

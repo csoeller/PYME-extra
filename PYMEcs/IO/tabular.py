@@ -10,14 +10,13 @@ def tabularFromCSV(csvname):
     return tb
 
 from PYME.IO.tabular import TabularBase
-from PYMEcs.IO.MINFLUX import minflux_npy2pyme
+from PYMEcs.IO.MINFLUX import minflux_npy2pyme, minflux_zarr2pyme
 
 # closely modeled on RecArraySource
 class MinfluxNpySource(TabularBase):
     _name = "MINFLUX NPY File Source"
     def __init__(self, filename):
         """ Input filter for use with NPY data exported from MINFLUX data (typically residing in MSR files)."""
-
 
         self.res = minflux_npy2pyme(filename)
 
@@ -46,3 +45,19 @@ class MinfluxNpySource(TabularBase):
     
     def getInfo(self):
         return 'MINFLUX NPY Data Source\n\n %d points' % len(self.res['x'])
+
+class MinfluxZarrSource(MinfluxNpySource):
+    _name = "MINFLUX zarr File Source"
+    def __init__(self, filename):
+        """ Input filter for use with ZARR data exported from MINFLUX data (originally residing in MSR files)."""
+        import zarr
+        archz = zarr.open(filename)
+        self.zarr = archz
+        self._own_file = True
+
+        # NOTE: no further 'locations valid' check should be necessary - we filter already in the conversion function
+        self.res = minflux_zarr2pyme(archz)
+        
+        self._keys = list(self.res.dtype.names)
+
+        # note: aparently, closing an open zarr archive is not required; accordingly no delete and close methods necessary

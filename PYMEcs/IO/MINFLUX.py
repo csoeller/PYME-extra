@@ -55,6 +55,18 @@ def npy_is_minflux_data(filename, warning=False, return_msg=False):
     else:
         return valid
 
+def zip_is_minflux_zarr_data(filename, warning=False, return_msg=False): # currently just placeholder
+    valid = True
+    msg = None
+
+    if not valid and warning:
+        if not msg is None:
+                warn(msg)
+
+    if return_msg:
+        return (valid,msg)
+    else:
+        return valid
 
 def minflux_npy_new_format(data):
     return 'fnl' in data.dtype.fields
@@ -75,6 +87,22 @@ def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,wit
         return (pyme_recArray,data)
     else:
         return pyme_recArray
+
+def minflux_zarr2pyme(archz,return_original_array=False,make_clump_index=True,with_cfr_std=False):
+    # make data array
+    mfx = archz['mfx']
+    mfxv = mfx[:][mfx['vld'] == 1]
+    seqidsm, incseqs = mk_seqids_maxpos(mfxv)
+    data = mfxv[np.logical_not(np.isin(seqidsm,incseqs))] # remove any incomplete sequences
+    pymedf = minflux_npy2pyme_new(data,
+                                  make_clump_index=make_clump_index,with_cfr_std=with_cfr_std)
+
+    pyme_recArray = pymedf.to_records(index=False) # convert into NUMPY recarray
+    if return_original_array:
+        return (pyme_recArray,data)
+    else:
+        return pyme_recArray
+
 
 ##################
 ### LEGACY IO ####
@@ -371,7 +399,7 @@ def _save_minflux_as_csv(pd_data, fname):
 #
 # in future we will ask for a way to get this considered by David B for a proper hook
 # in the file loading code and possibly allow registering file load hooks for new formats
-def monkeypatch_npy_io(visFr):
+def monkeypatch_npyorzarr_io(visFr):
     import types
     import logging
     import os
@@ -381,7 +409,7 @@ def monkeypatch_npy_io(visFr):
 
     logger = logging.getLogger(__name__)
     logger.info("MINFLUX monkeypatching IO")
-    def _populate_open_args_npy(self, filename):
+    def _populate_open_args_npyorzarr(self, filename):
         # this is currently just the minmal functionality for .npy,
         # we should really check a few things before going any further
         # .mat and CSV files give examples...
@@ -392,11 +420,18 @@ def monkeypatch_npy_io(visFr):
                      % (os.path.basename(filename),warnmsg))
                 return # this is not MINFLUX NPY data - we give up
             return {} # all good, just return empty args
+        elif  os.path.splitext(filename)[1] == '.zip':
+            valid, warnmsg = zip_is_minflux_zarr_data(filename,warning=False,return_msg=True)
+            if not valid:
+                warn('file "%s" does not look like a valid MINFLUX zarr file:\n"%s"\n\nOPENING ABORTED'
+                     % (os.path.basename(filename),warnmsg))
+                return # this is not MINFLUX zarr data - we give up
+            return {} # all good, just return empty args
         else:
             return self._populate_open_args_original(filename)
 
     visFr._populate_open_args_original = visFr._populate_open_args
-    visFr._populate_open_args = types.MethodType(_populate_open_args_npy,visFr)
+    visFr._populate_open_args = types.MethodType(_populate_open_args_npyorzarr,visFr)
 
     def _get_mdh(data,filename):
         from pathlib import Path
@@ -422,7 +457,30 @@ def monkeypatch_npy_io(visFr):
             mdh['MINFLUX.StartTime0'] = parse_timestamp_from_filename(filename)
 
         return mdh
-        
+
+    def _get_mdh_zarr(filename,arch):
+        from pathlib import Path
+        mdh = MetaDataHandler.NestedClassMDHandler()
+
+        mdh['MINFLUX.Filename'] = Path(filename).name # the MINFLUX filename holds some metadata
+        mdh['MINFLUX.Foreshortening'] = foreshortening
+        from PYMEcs.misc.utils import get_timestamp_from_filename, parse_timestamp_from_filename
+        ts = get_timestamp_from_filename(filename)
+        if ts is not None:
+            mdh['MINFLUX.TimeStamp'] = ts
+            # we add the zero to defeat the regexp that checks for names ending with 'time$'
+            # this falls foul of the comparison with an int (epoch time) in the metadata repr function
+            # because our time stamp is a pandas time stamp and comparison with int fails
+            mdh['MINFLUX.StartTime0'] = parse_timestamp_from_filename(filename)
+
+        mfx_attrs = arch['mfx'].attrs.asdict()
+        if not '_legacy' in mfx_attrs:
+            mdh['MINFLUX.AcquisitionDate'] = mfx_attrs['acquisition_date']
+            mdh['MINFLUX.DataID'] = mfx_attrs['did']
+            mdh['MINFLUX.Is3D'] = mfx_attrs['measurement']['dimensionality'] > 2
+
+        return mdh
+
     def _load_ds_npy(filename):
         from PYMEcs.IO.tabular import MinfluxNpySource
         ds = MinfluxNpySource(filename)
@@ -432,21 +490,33 @@ def monkeypatch_npy_io(visFr):
         ds.mdh = _get_mdh(data,filename)
 
         return ds
+
+    def _load_ds_zarrzip(filename):
+        from PYMEcs.IO.tabular import MinfluxZarrSource
+        ds = MinfluxZarrSource(filename)
+        ds.filename = filename
+        
+        ds.mdh = _get_mdh_zarr(filename,ds.zarr)
+
+        return ds
     
-    def _ds_from_file_npy(self, filename, **kwargs):
+    def _ds_from_file_npyorzarr(self, filename, **kwargs):
         if os.path.splitext(filename)[1] == '.npy': # MINFLUX NPY file
             logger.info('.npy file, trying to load as MINFLUX npy ...')
             return _load_ds_npy(filename)
+        elif os.path.splitext(filename)[1] == '.zip': # MINFLUX ZARR file in zip format
+            logger.info('.zip file, trying to load as MINFLUX zarr ...')
+            return _load_ds_zarrzip(filename)
         else:
             return self._ds_from_file_original(filename, **kwargs)
 
     visFr.pipeline._ds_from_file_original = visFr.pipeline._ds_from_file
-    visFr.pipeline._ds_from_file = types.MethodType(_ds_from_file_npy,visFr.pipeline)
+    visFr.pipeline._ds_from_file = types.MethodType(_ds_from_file_npyorzarr,visFr.pipeline)
 
 
     ### we now also need to monkey_patch the _load_input method of the pipeline recipe
     ### this should allow session loading to succeed
-    def _load_input_npy(self, filename, key='input', metadata_defaults={}, cache={}, default_to_image=True, args={}):
+    def _load_input_npyorzarr(self, filename, key='input', metadata_defaults={}, cache={}, default_to_image=True, args={}):
         """
         Load input data from a file and inject into namespace
         """
@@ -459,33 +529,37 @@ def monkeypatch_npy_io(visFr):
         if os.path.splitext(filename)[1] == '.npy': # MINFLUX NPY file
             logger.info('.npy file, trying to load as MINFLUX npy ...')
             self.namespace[key] = _load_ds_npy(filename)
+        elif os.path.splitext(filename)[1] == '.zip': # MINFLUX NPY file
+            logger.info('.npy file, trying to load as MINFLUX zarr ...')
+            self.namespace[key] = _load_ds_zarrzip(filename)
         else:
             self._load_input_original(filename,key=key,metadata_defaults=metadata_defaults,
                                       cache=cache,default_to_image=default_to_image,args=args)
 
     if '_load_input' in dir(visFr.pipeline.recipe):
         visFr.pipeline.recipe._load_input_original = visFr.pipeline.recipe._load_input
-        visFr.pipeline.recipe._load_input = types.MethodType(_load_input_npy,visFr.pipeline.recipe)
+        visFr.pipeline.recipe._load_input = types.MethodType(_load_input_npyorzarr,visFr.pipeline.recipe)
  
     # we install this as new Menu item as File>Open is already assigned
     # however the new File>Open MINFLUX NPY entry can also open all other allowed file types
-    def OnOpenFileNPY(self, event):
+    def OnOpenFileNPYorZARR(self, event):
         filename = wx.FileSelector("Choose a file to open", 
                                    nameUtils.genResultDirectoryPath(), 
-                                   wildcard='|'.join(['All supported formats|*.h5r;*.txt;*.mat;*.csv;*.hdf;*.3d;*.3dlp;*.npy',
+                                   wildcard='|'.join(['All supported formats|*.h5r;*.txt;*.mat;*.csv;*.hdf;*.3d;*.3dlp;*.npy;*.zip',
                                                       'PYME Results Files (*.h5r)|*.h5r',
                                                       'Tab Formatted Text (*.txt)|*.txt',
                                                       'Matlab data (*.mat)|*.mat',
                                                       'Comma separated values (*.csv)|*.csv',
                                                       'HDF Tabular (*.hdf)|*.hdf',
-                                                      'MINFLUX NPY (*.npy)|*.npy']))
+                                                      'MINFLUX NPY (*.npy)|*.npy',
+                                                      'MINFLUX ZARR (*.zip)|*.zip']))
 
         if not filename == '':
             self.OpenFile(filename)
 
     
-    visFr.OnOpenFileNPY = types.MethodType(OnOpenFileNPY,visFr)
-    visFr.AddMenuItem('File', "Open MINFLUX NPY", visFr.OnOpenFileNPY)
+    visFr.OnOpenFileNPYorZARR = types.MethodType(OnOpenFileNPYorZARR,visFr)
+    visFr.AddMenuItem('File', "Open MINFLUX NPY or zarr", visFr.OnOpenFileNPYorZARR)
     
     logger.info("MINFLUX monkeypatching IO completed")
 
