@@ -482,6 +482,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>RyRs', "Show cluster alpha shapes", self.OnAlphaShapes)
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MBM attributes", self.OnMBMAttributes)
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MFX attributes", self.OnMFXAttributes)
+        visFr.AddMenuItem('MINFLUX>Zarr', "Show power info (experimental)", self.OnMFXPowerInfo)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -505,7 +506,7 @@ class MINFLUXanalyser():
                 warn("could not access MBM attributes - do we have MBM data in zarr?")
                 return
             import pprint
-            mbm_attr_str = pprint.pformat(mbm_attrs,indent=4)
+            mbm_attr_str = pprint.pformat(mbm_attrs,indent=4,width=120)
             with ScrolledMessageDialog(self.visFr, mbm_attr_str, "MBM attributes", size=(900,400),
                                         style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE ) as dlg:
                 dlg.ShowModal()
@@ -522,13 +523,41 @@ class MINFLUXanalyser():
                 warn("could not access MFX attributes - do we have MFX data in zarr?")
                 return
             import pprint
-            mfx_attr_str = pprint.pformat(mfx_attrs,indent=4)
+            mfx_attr_str = pprint.pformat(mfx_attrs,indent=4,width=120)
             with ScrolledMessageDialog(self.visFr, mfx_attr_str, "MFX attributes", size=(900,400),
                                         style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE ) as dlg:
                 dlg.ShowModal()
         else:
             warn("could not find zarr attribute - is this a MFX zarr file?")
 
+    def OnMFXPowerInfo(self, event):
+        import io
+        from  wx.lib.dialogs import ScrolledMessageDialog
+        fres = self.visFr.pipeline.dataSources['FitResults']
+        if 'zarr' not in dir(fres):
+            warn("could not find zarr attribute - is this a MFX zarr file?")
+            return
+        else:
+            try:
+                mfx_attrs = fres.zarr['mfx'].attrs.asdict()
+            except AttributeError:
+                warn("could not access MFX attributes - do we have MFX data in zarr?")
+                return
+            if '_legacy' in mfx_attrs:
+                warn("legacy data detected - no metadata in legacy data")
+                return
+            with io.StringIO() as output:
+                for thread in mfx_attrs['measurement']['threads']:
+                    print("Thread grid: %s" % (thread['grid']),file=output)
+                    for seq in thread['sequences']:
+                        # print("Sequence keys %s" % (','.join(seq.keys())))
+                        print("\tSequence ID: %s" % seq['id'],file=output)
+                        for i,itr in enumerate(seq['Itr']):
+                            print("\t\tIter %d, power: %.1f" % (i,itr['_excitation']['power']),file=output)
+                power_info_str = output.getvalue()
+            with ScrolledMessageDialog(self.visFr, power_info_str, "MFX power info (tentative)", size=(900,400),
+                                        style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE ) as dlg:
+                dlg.ShowModal()            
     
     def OnDensityStats(self, event):
         from PYMEcs.Analysis.MINFLUX import plot_density_stats_sns
