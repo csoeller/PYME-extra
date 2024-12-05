@@ -553,7 +553,8 @@ class MINFLUXanalyser():
                         # print("Sequence keys %s" % (','.join(seq.keys())))
                         print("\tSequence ID: %s" % seq['id'],file=output)
                         for i,itr in enumerate(seq['Itr']):
-                            print("\t\tIter %d, power: %.1f" % (i,itr['_excitation']['power']),file=output)
+                            print("\t\tIter %d, power: %.1f, laser: %s" %
+                                  (i,itr['_excitation']['power'],itr['_excitation']['laser']),file=output)
                 power_info_str = output.getvalue()
             with ScrolledMessageDialog(self.visFr, power_info_str, "MFX power info (tentative)", size=(900,400),
                                         style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE ) as dlg:

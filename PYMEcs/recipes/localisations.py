@@ -1490,7 +1490,7 @@ class MBMcorrection(ModuleBaseMDHmod):
                 from PYMEcs.IO.MINFLUX import foreshortening
                 mbm = MBMCollectionDF(name=Path(self.mbmfile).stem,filename=self.mbmfile,
                                       foreshortening=foreshortening)
-                self._mbm_allbeads = list(mbm.beadisgood.keys())
+                self._mbm_allbeads = [bead for bead in mbm.beadisgood if np.sum(np.logical_not(np.isnan(mbm.beads['x'][bead]))) > 1] # exclude "empty" trajectories
                 self.MBM_beads = self._mbm_allbeads
                 self._mbm_cache[mbmkey] = mbm
             else:
