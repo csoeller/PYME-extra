@@ -1503,7 +1503,7 @@ class MBMcorrection(ModuleBaseMDHmod):
 
                 for bead in mbmconf['beads']:
                     mbm.beadisgood[bead] =  mbmconf['beads'][bead]
-                self.MBM_beads = [bead for bead in mbmconf['beads'].keys() if mbmconf['beads'][bead]]
+                self.MBM_beads = [bead for bead in mbmconf['beads'].keys() if mbmconf['beads'][bead] and bead in self._mbm_allbeads]
                 self._mbm_cache[mbmsettingskey] = mbmconf
             else:
                 for bead in self._mbm_allbeads:

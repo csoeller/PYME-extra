@@ -506,6 +506,8 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>MBM', "Plot mean MBM info (and if present origami info)", self.OnMBMplot)
         visFr.AddMenuItem('MINFLUX>MBM', "Show MBM tracks", self.OnMBMtracks)
         visFr.AddMenuItem('MINFLUX>MBM', "Add MBM track labels to view", self.OnMBMaddTrackLabels)
+        visFr.AddMenuItem('MINFLUX>MBM', "Save MBM bead trajectories to npz file", self.OnMBMSave)
+        visFr.AddMenuItem('MINFLUX>MBM', "Save MBM bead settings to json file", self.OnMBMSettingsSave)
         visFr.AddMenuItem('MINFLUX>RyRs', "Plot corner info", self.OnCornerplot)
         visFr.AddMenuItem('MINFLUX>RyRs', "Plot density stats", self.OnDensityStats)
         visFr.AddMenuItem('MINFLUX>RyRs', "Show cluster alpha shapes", self.OnAlphaShapes)
@@ -599,6 +601,58 @@ class MINFLUXanalyser():
 
     def OnLoadCustom(self, event):
         self.visFr._recipe_manager.LoadRecipe(self.minfluxRIDs[event.GetId()])
+
+
+    def OnMBMSave(self,event):
+        from pathlib import Path
+        pipeline = self.visFr.pipeline
+        mbm = findmbm(pipeline)
+        if mbm is None:
+            return
+        defaultFile = None
+        MINFLUXts = pipeline.mdh.get('MINFLUX.TimeStamp')
+        if MINFLUXts is not None:
+            defaultFile = "%s__MBM-beads.npz" % MINFLUXts
+        fdialog = wx.FileDialog(self.visFr, 'Save MBM beads as ...',
+                                wildcard='NPZ (*.npz)|*.npz',
+                                defaultFile=defaultFile,
+                                style=wx.FD_SAVE)
+        if fdialog.ShowModal() != wx.ID_OK:
+            return
+
+        fpath = fdialog.GetPath()
+        np.savez(fpath,**mbm._raw_beads)
+
+    def OnMBMSettingsSave(self,event):
+        import json
+        pipeline = self.visFr.pipeline
+        mbm = findmbm(pipeline)
+        if mbm is None:
+            return
+        mod = findmbm(pipeline,return_mod=True)
+        settings = {}
+        beadisgood = {}
+        for bead in mbm.beadisgood:
+            beadisgood[bead] = mbm.beadisgood[bead] and bead in mod._mbm_allbeads
+        settings['beads'] = beadisgood
+        settings['Median_window'] = mod.Median_window
+        settings['Lowess_fraction'] = mod.MBM_lowess_fraction
+        settings['Filename'] = mbm.name
+        defaultFile = None
+        MINFLUXts = pipeline.mdh.get('MINFLUX.TimeStamp')
+        if MINFLUXts is not None:
+            defaultFile = "%s__MBM-beads.npz-settings.json" % MINFLUXts
+        fdialog = wx.FileDialog(self.visFr, 'Save MBM Settings as ...',
+                                wildcard='JSON (*.json)|*.json',
+                                defaultFile=defaultFile,
+                                style=wx.FD_SAVE)
+        if fdialog.ShowModal() != wx.ID_OK:
+            return
+
+        fpath = fdialog.GetPath()
+
+        with open(fpath, 'w') as f:
+            json.dump(settings, f, indent=4)
 
     def OnMBMplot(self,event):
         p = self.visFr.pipeline
