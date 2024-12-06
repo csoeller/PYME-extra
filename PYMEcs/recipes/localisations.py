@@ -1399,7 +1399,7 @@ def check_mbm_name(mbmfilename,timestamp,endswith='__MBM-beads'):
     mbmp = Path(mbmfilename)
     
     # should return False if warning is necessary
-    return mbmp.stem.startswith(timestamp) and mbmp.stem.endswith(endswith)
+    return mbmp.stem.startswith(timestamp) and (mbmp.stem.endswith(endswith) or mbmp.suffix.endswith('.zip'))
 
 def get_bead_dict_from_mbm(mbm):
     beads = {}
@@ -1540,7 +1540,7 @@ class MBMcorrection(ModuleBaseMDHmod):
                 if not check_mbm_name(self.mbmfile,inputLocalizations.mdh.get('MINFLUX.TimeStamp')):
                     warn("check MBM filename (%s) vs Series timestamp (%s)" %
                          (Path(self.mbmfile).name,inputLocalizations.mdh.get('MINFLUX.TimeStamp')))
-                if not check_mbm_name(self.mbmsettings,inputLocalizations.mdh.get('MINFLUX.TimeStamp'),endswith='npz-settings'):
+                if mbmsettingskey != '' and not check_mbm_name(self.mbmsettings,inputLocalizations.mdh.get('MINFLUX.TimeStamp'),endswith='npz-settings'):
                     warn("check MBM settings filename (%s) vs Series timestamp (%s)" %
                          (Path(self.mbmsettings).name,inputLocalizations.mdh.get('MINFLUX.TimeStamp')))
 

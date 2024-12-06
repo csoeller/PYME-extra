@@ -422,6 +422,35 @@ def findmbm(pipeline,warnings=True,return_mod=False):
         return mbm
 
 
+def get_metadata_from_mfx_attrs(mfx_attrs):
+    mfx_itrs = mfx_attrs['measurement']['threads'][0]['sequences'][0]['Itr']
+    md_by_itrs = pd.DataFrame(columns=['IterationNumber','PinholeAU','ActivationLaser', 'ExcitationLaser',
+                                       'ExcitationWavelength_nm', 'ExcitationPower_percent', 'ExcitationDAC',
+                                       'DetectionChannel01','DetectionChannel02','BackgroundThreshold',
+                                       'PhotonLimit', 'CCRLimit', 'DwellTime_ms',
+                                       'PatternGeoFactor','PatternRepeat', 'PatternGeometry','Strategy'],
+                              index=range(len(mfx_itrs)))
+    for i, itr in enumerate(mfx_itrs):
+        md_by_itrs.loc[i].IterationNumber = i
+        md_by_itrs.loc[i].PinholeAU = itr['Mode']['phDiaAU']
+        md_by_itrs.loc[i].ActivationLaser = itr['_activation']['laser'] if itr['_activation']['laser'] != '' else 'not used'
+        md_by_itrs.loc[i].ExcitationLaser = itr['_excitation']['laser']
+        md_by_itrs.loc[i].ExcitationWavelength_nm = 1e9*itr['_excitation']['wavelength']
+        md_by_itrs.loc[i].ExcitationPower_percent = itr['_excitation']['power']
+        md_by_itrs.loc[i].ExcitationDAC = itr['_excitation']['dac']
+        md_by_itrs.loc[i].DetectionChannel01 = itr['_detection']['channels'][0]
+        md_by_itrs.loc[i].DetectionChannel02 = itr['_detection']['channels'][1] if len(itr['_detection']['channels']) >1 else 'NA'
+        md_by_itrs.loc[i].BackgroundThreshold = itr['bgcThreshold']
+        md_by_itrs.loc[i].PhotonLimit = itr['phtLimit']
+        md_by_itrs.loc[i].CCRLimit = itr['ccrLimit']
+        md_by_itrs.loc[i].DwellTime_ms = 1e3*itr['patDwellTime']
+        md_by_itrs.loc[i].PatternGeoFactor = itr['patGeoFactor']
+        md_by_itrs.loc[i].PatternRepeat = itr['patRepeat']
+        md_by_itrs.loc[i].PatternGeometry = itr['Mode']['pattern']
+        md_by_itrs.loc[i].Strategy = itr['Mode']['strategy']
+
+    return md_by_itrs
+
 from PYME.recipes.traits import HasTraits, Float, Enum, CStr, Bool, Int, List
 import PYME.config
 
@@ -482,7 +511,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>RyRs', "Show cluster alpha shapes", self.OnAlphaShapes)
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MBM attributes", self.OnMBMAttributes)
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MFX attributes", self.OnMFXAttributes)
-        visFr.AddMenuItem('MINFLUX>Zarr', "Show power info (experimental)", self.OnMFXPowerInfo)
+        visFr.AddMenuItem('MINFLUX>Zarr', "Show MFX metadata info (experimental)", self.OnMFXInfo)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -530,7 +559,7 @@ class MINFLUXanalyser():
         else:
             warn("could not find zarr attribute - is this a MFX zarr file?")
 
-    def OnMFXPowerInfo(self, event):
+    def OnMFXInfo(self, event):
         import io
         from  wx.lib.dialogs import ScrolledMessageDialog
         fres = self.visFr.pipeline.dataSources['FitResults']
@@ -544,19 +573,13 @@ class MINFLUXanalyser():
                 warn("could not access MFX attributes - do we have MFX data in zarr?")
                 return
             if '_legacy' in mfx_attrs:
-                warn("legacy data detected - no metadata in legacy data")
+                warn("legacy data detected - no useful MFX metadata in legacy data")
                 return
+            md_info = get_metadata_from_mfx_attrs(mfx_attrs)
             with io.StringIO() as output:
-                for thread in mfx_attrs['measurement']['threads']:
-                    print("Thread grid: %s" % (thread['grid']),file=output)
-                    for seq in thread['sequences']:
-                        # print("Sequence keys %s" % (','.join(seq.keys())))
-                        print("\tSequence ID: %s" % seq['id'],file=output)
-                        for i,itr in enumerate(seq['Itr']):
-                            print("\t\tIter %d, power: %.1f, laser: %s" %
-                                  (i,itr['_excitation']['power'],itr['_excitation']['laser']),file=output)
-                power_info_str = output.getvalue()
-            with ScrolledMessageDialog(self.visFr, power_info_str, "MFX power info (tentative)", size=(900,400),
+                print(md_info.to_string(show_dimensions=False,index=True,line_width=80),file=output)
+                mfx_info_str = output.getvalue()
+            with ScrolledMessageDialog(self.visFr, mfx_info_str, "MFX info (tentative)", size=(900,400),
                                         style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE ) as dlg:
                 dlg.ShowModal()            
     
@@ -604,8 +627,11 @@ class MINFLUXanalyser():
                 mbm_mean[caxis] = mbm.mean(caxis)
                 ax.plot(mbm.t,mbm_mean[caxis],':',label='MBM mean')
                 from statsmodels.nonparametric.smoothers_lowess import lowess
-                mbm_meansm[caxis] = lowess(mbm_mean[caxis], mbm.t, frac=MBM_lowess_fraction,
-                                       return_sorted=False)
+                if MBM_lowess_fraction > 1e-5:
+                    mbm_meansm[caxis] = lowess(mbm_mean[caxis], mbm.t, frac=MBM_lowess_fraction,
+                                               return_sorted=False)
+                else:
+                    mbm_meansm[caxis] = mbm_mean[caxis]
                 ax.plot(mbm.t,mbm_meansm[caxis],'-.',label='MBM lowess (lf=%.2f)' % MBM_lowess_fraction)
             if has_mbm2:
                 ax.plot(t_s,p['mbm%s' % caxis], label='MBM from module')
