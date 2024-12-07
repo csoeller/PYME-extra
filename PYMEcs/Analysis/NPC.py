@@ -710,7 +710,7 @@ class NPC3D(object):
             return (self.n_top,self.n_bot)
 
 class NPC3DSet(object):
-    def __init__(self,filename=None,zclip=75.0,offset_mode='median',NPCdiam=100.0,NPCheight=70.0,foreshortening=1.0):
+    def __init__(self,filename=None,zclip=75.0,offset_mode='median',NPCdiam=100.0,NPCheight=70.0,foreshortening=1.0, known_number=-1):
         self.filename=filename
         self.zclip = zclip
         self.offset_mode = offset_mode
@@ -721,6 +721,7 @@ class NPC3DSet(object):
         # TODO: expose llm parameters to this init method as needed in practice!
         self.llm = LLmaximizerNPC3D([self.npcdiam,self.npcheight],eps=15.0,sigma=7.0,bgprob=1e-9,extent_nm=300.0)
         self.measurements = []
+        self.known_number = known_number # only considered if > 0
 
     def registerNPC(self,npc):
         self.npcs.append(npc)
@@ -747,6 +748,10 @@ class NPC3DSet(object):
                                len(self.measurements))
         meas = np.array(self.measurements)
         nlab = meas.sum(axis=1)
+        # fill with trailing zeros if we have a known number of NPCs but have fewer measurements
+        # the "missing NPCs" typically represent NPCs with no events
+        if int(self.known_number) > 0 and nlab.shape[0] < int(self.known_number):
+            nlab = np.pad(nlab,((0,int(self.known_number)-nlab.shape[0])))
 
         plt.figure()
         plotcdf_npc3d(nlab,timestamp=get_timestamp_from_filename(self.filename),thresh=thresh)

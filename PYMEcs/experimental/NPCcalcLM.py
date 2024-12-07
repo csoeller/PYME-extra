@@ -80,6 +80,7 @@ class NPCsettings(HasTraits):
     OffsetMode_3D = Enum(['median','mean'],label='Method to estimate NPC center',
                          desc="Method to estimate the likely 3D center of an NPC; median seems more robust against outliners (say in z)")
     SkipEmptyTopOrBottom_3D = Bool(False,desc="if to skip NPCs with empty top or bottom ring")
+    KnownNumber_3D = Int(-1, desc="if a known number of NPCs are present but some have 0 events use this to set; only considered if value >0")
     NPCRotationAngle = Enum(['positive','negative','zero'],desc="way to treat rotation for NPC gallery")
     NPCGalleryArrangement = Enum(['TopOverBottom','TopBesideBottom','SingleAverage','SingleAverageSBS'],desc="how to arrange 3D NPC parts in NPC gallery; SBS = SideBySide top and bottom")
     NoRotationForSingleNPCFit = Bool(False,desc="if rotation is disabled for single NPC fit")
@@ -183,7 +184,8 @@ class NPCcalc():
                             offset_mode=self.NPCsettings.OffsetMode_3D,
                             NPCdiam=self.NPCsettings.StartDiam_3D,
                             NPCheight=self.NPCsettings.StartHeight_3D,
-                            foreshortening=pipeline.mdh.get('MINFLUX.Foreshortening',1.0))
+                            foreshortening=pipeline.mdh.get('MINFLUX.Foreshortening',1.0),
+                            known_number=self.NPCsettings.KnownNumber_3D)
             do_plot = True
             for oid in np.unique(pipeline['objectID']):
                 npcs.addNPCfromPipeline(pipeline,oid)
