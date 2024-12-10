@@ -424,6 +424,8 @@ def findmbm(pipeline,warnings=True,return_mod=False):
 
 def get_metadata_from_mfx_attrs(mfx_attrs):
     mfx_itrs = mfx_attrs['measurement']['threads'][0]['sequences'][0]['Itr']
+    mfx_globals = mfx_attrs['measurement']['threads'][0]['sequences'][0]
+    
     md_by_itrs = pd.DataFrame(columns=['IterationNumber','PinholeAU','ActivationLaser', 'ExcitationLaser',
                                        'ExcitationWavelength_nm', 'ExcitationPower_percent', 'ExcitationDAC',
                                        'DetectionChannel01','DetectionChannel02','BackgroundThreshold',
@@ -449,7 +451,21 @@ def get_metadata_from_mfx_attrs(mfx_attrs):
         md_by_itrs.loc[i].PatternGeometry = itr['Mode']['pattern']
         md_by_itrs.loc[i].Strategy = itr['Mode']['strategy']
 
-    return md_by_itrs
+    mfx_global_pars = {}
+    
+    mfx_global_pars['BgcSense'] = mfx_globals['bgcSense']
+    mfx_global_pars['CtrDwellFactor'] = mfx_globals['ctrDwellFactor']
+    mfx_global_pars['Damping'] = mfx_globals['damping']
+    mfx_global_pars['Headstart'] = mfx_globals['headstart']
+    mfx_global_pars['ID'] = mfx_globals['id']
+    mfx_global_pars['Liveview'] = mfx_globals['liveview']['show']
+    mfx_global_pars['LocLimit'] = mfx_globals['locLimit']
+    mfx_global_pars['Stickiness'] = mfx_globals['stickiness']
+    mfx_global_pars['FieldAlgorithm'] = mfx_globals['field']['algo']
+    mfx_global_pars['FieldGeoFactor'] = mfx_globals['field']['fldGeoFactor']
+    mfx_global_pars['FieldStride'] = mfx_globals['field']['stride']
+
+    return (md_by_itrs,mfx_global_pars)
 
 from PYME.recipes.traits import HasTraits, Float, Enum, CStr, Bool, Int, List
 import PYME.config
@@ -577,9 +593,12 @@ class MINFLUXanalyser():
             if '_legacy' in mfx_attrs:
                 warn("legacy data detected - no useful MFX metadata in legacy data")
                 return
-            md_info = get_metadata_from_mfx_attrs(mfx_attrs)
+            md_itr_info, md_globals = get_metadata_from_mfx_attrs(mfx_attrs)
+            import pprint
             with io.StringIO() as output:
-                print(md_info.to_string(show_dimensions=False,index=True,line_width=80),file=output)
+                print(md_itr_info.to_string(show_dimensions=False,index=True,line_width=80),file=output)
+                print('\nMFX Globals:',file=output)
+                print(pprint.pformat(md_globals,indent=4),file=output)
                 mfx_info_str = output.getvalue()
             with ScrolledMessageDialog(self.visFr, mfx_info_str, "MFX info (tentative)", size=(900,400),
                                         style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE ) as dlg:

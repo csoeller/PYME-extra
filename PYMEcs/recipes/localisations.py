@@ -1474,6 +1474,7 @@ class MBMcorrection(ModuleBaseMDHmod):
     _mbm_allbeads = List()
 
     _mbm_cache = {}
+    _lowess_cache = {'x':{},'y':{},'z':{}}
     
     def run(self,inputLocalizations):
         import json
@@ -1515,13 +1516,18 @@ class MBMcorrection(ModuleBaseMDHmod):
             tnew = 1e-3*inputLocalizations['t']
             mbmcorr = {}
             mbmtrack_corr = {}
+            cache_key = (mbm.median_window,self.mbmfile,str(mbm.beadisgood),self.MBM_lowess_fraction)
             for axis in ['x','y','z']:
                 axismean = mbm.mean(axis)
                 axismean_g = axismean[~np.isnan(axismean)]
                 t_g = mbm.t[~np.isnan(axismean)]
                 if self.MBM_lowess_fraction > 1e-5:
-                    axismean_sm = lowess(axismean_g, t_g, frac=self.MBM_lowess_fraction,
-                                         return_sorted=False)
+                    if cache_key in self._lowess_cache[axis]:
+                        axismean_sm = self._lowess_cache[axis][cache_key]
+                    else:
+                        axismean_sm = lowess(axismean_g, t_g, frac=self.MBM_lowess_fraction,
+                                             return_sorted=False)
+                        self._lowess_cache[axis][cache_key] = axismean_sm
                     axis_interp_msm = np.interp(tnew,t_g,axismean_sm)            
                     mbmcorr[axis] = axis_interp_msm
                     mbmtrack_corr[axis] = np.interp(bead_ds_dict['tim'],t_g,axismean_sm)
