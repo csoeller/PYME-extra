@@ -1476,7 +1476,8 @@ class MBMcorrection(ModuleBaseMDHmod):
     Median_window = Int(5)
     MBM_lowess_fraction = Float(0.1,label='lowess fraction for MBM smoothing',
                                 desc='lowess fraction used for smoothing of mean MBM trajectories (default 0.1); 0 = no smoothing')
-    MBM_beads = List()
+    MBM_beads = List() # this is a dummy to make sure older style PVS files are read ok - TODO: get rid off at some stage!!!
+    _MBM_beads = List() # this one does the real work and with the leading "_" is NOT treated as a parameter that "fires" the module! 
 
     _mbm_allbeads = List()
 
@@ -1553,7 +1554,7 @@ class MBMcorrection(ModuleBaseMDHmod):
                 mbm = MBMCollectionDF(name=Path(self.mbmfile).stem,filename=self.mbmfile,
                                       foreshortening=foreshortening)
                 self._mbm_allbeads = [bead for bead in mbm.beadisgood if np.sum(np.logical_not(np.isnan(mbm.beads['x'][bead]))) > 1] # exclude "empty" trajectories
-                self.MBM_beads = self._mbm_allbeads
+                self._MBM_beads = self._mbm_allbeads
                 self._mbm_cache[mbmkey] = mbm
             else:
                 mbm = self._mbm_cache[mbmkey]
@@ -1565,11 +1566,11 @@ class MBMcorrection(ModuleBaseMDHmod):
 
                 for bead in mbmconf['beads']:
                     mbm.beadisgood[bead] =  mbmconf['beads'][bead]
-                self.MBM_beads = [bead for bead in mbmconf['beads'].keys() if mbmconf['beads'][bead] and bead in self._mbm_allbeads]
+                self._MBM_beads = [bead for bead in mbmconf['beads'].keys() if mbmconf['beads'][bead] and bead in self._mbm_allbeads]
                 self._mbm_cache[mbmsettingskey] = mbmconf
-            # in a second pass (if just loaded from mbmconf) set beadisgood to the useful self.MBM_beads subset
+            # in a second pass (if just loaded from mbmconf) set beadisgood to the useful self._MBM_beads subset
             for bead in mbm.beadisgood:
-                mbm.beadisgood[bead] = bead in self.MBM_beads
+                mbm.beadisgood[bead] = bead in self._MBM_beads
 
             mbm.median_window = self.Median_window
 
@@ -1638,7 +1639,7 @@ class MBMcorrection(ModuleBaseMDHmod):
                     Item('mbmfile'),
                     Item('mbmsettings'),
                     Item('mbmfilename_checks'),
-                    Item('MBM_beads', editor=CheckListEditor(values=self._mbm_allbeads,cols=4),
+                    Item('_MBM_beads', editor=CheckListEditor(values=self._mbm_allbeads,cols=4),
                          style='custom',
                          ),
                     Item('Median_window'),
