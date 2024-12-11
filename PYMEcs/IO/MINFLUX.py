@@ -391,17 +391,17 @@ def get_metadata_from_mfx_attrs(mfx_attrs):
     mfx_itrs = mfx_attrs['measurement']['threads'][0]['sequences'][0]['Itr']
     mfx_globals = mfx_attrs['measurement']['threads'][0]['sequences'][0]
     
-    md_by_itrs = pd.DataFrame(columns=['IterationNumber','PinholeAU','ActivationLaser', 'ExcitationLaser',
+    md_by_itrs = pd.DataFrame(columns=['IterationNumber','PinholeAU','ActivationLaser', 'ExcitationLaserAbbrev',
                                        'ExcitationWavelength_nm', 'ExcitationPower_percent', 'ExcitationDAC',
                                        'DetectionChannel01','DetectionChannel02','BackgroundThreshold',
                                        'PhotonLimit', 'CCRLimit', 'DwellTime_ms',
-                                       'PatternGeoFactor','PatternRepeat', 'PatternGeometry','Strategy'],
+                                       'PatternGeoFactor','PatternRepeat', 'PatternGeometryAbbrev','Strategy'],
                               index=range(len(mfx_itrs)))
     for i, itr in enumerate(mfx_itrs):
         md_by_itrs.loc[i].IterationNumber = i
         md_by_itrs.loc[i].PinholeAU = itr['Mode']['phDiaAU']
         md_by_itrs.loc[i].ActivationLaser = itr['_activation']['laser'] if itr['_activation']['laser'] != '' else 'NA'
-        md_by_itrs.loc[i].ExcitationLaser = itr['_excitation']['laser']
+        md_by_itrs.loc[i].ExcitationLaserAbbrev = itr['_excitation']['laser'].replace('MINFLUX','M')
         md_by_itrs.loc[i].ExcitationWavelength_nm = np.rint(1e9*itr['_excitation']['wavelength'])
         md_by_itrs.loc[i].ExcitationPower_percent = itr['_excitation']['power']
         md_by_itrs.loc[i].ExcitationDAC = itr['_excitation']['dac']
@@ -413,7 +413,7 @@ def get_metadata_from_mfx_attrs(mfx_attrs):
         md_by_itrs.loc[i].DwellTime_ms = 1e3*itr['patDwellTime']
         md_by_itrs.loc[i].PatternGeoFactor = itr['patGeoFactor']
         md_by_itrs.loc[i].PatternRepeat = itr['patRepeat']
-        md_by_itrs.loc[i].PatternGeometry = itr['Mode']['pattern']
+        md_by_itrs.loc[i].PatternGeometryAbbrev = itr['Mode']['pattern'].replace('hexagon','hex').replace('zline','zl').replace('square','sq')
         md_by_itrs.loc[i].Strategy = itr['Mode']['strategy']
 
     mfx_global_pars = {}
