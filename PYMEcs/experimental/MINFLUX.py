@@ -422,51 +422,6 @@ def findmbm(pipeline,warnings=True,return_mod=False):
         return mbm
 
 
-def get_metadata_from_mfx_attrs(mfx_attrs):
-    mfx_itrs = mfx_attrs['measurement']['threads'][0]['sequences'][0]['Itr']
-    mfx_globals = mfx_attrs['measurement']['threads'][0]['sequences'][0]
-    
-    md_by_itrs = pd.DataFrame(columns=['IterationNumber','PinholeAU','ActivationLaser', 'ExcitationLaser',
-                                       'ExcitationWavelength_nm', 'ExcitationPower_percent', 'ExcitationDAC',
-                                       'DetectionChannel01','DetectionChannel02','BackgroundThreshold',
-                                       'PhotonLimit', 'CCRLimit', 'DwellTime_ms',
-                                       'PatternGeoFactor','PatternRepeat', 'PatternGeometry','Strategy'],
-                              index=range(len(mfx_itrs)))
-    for i, itr in enumerate(mfx_itrs):
-        md_by_itrs.loc[i].IterationNumber = i
-        md_by_itrs.loc[i].PinholeAU = itr['Mode']['phDiaAU']
-        md_by_itrs.loc[i].ActivationLaser = itr['_activation']['laser'] if itr['_activation']['laser'] != '' else 'not used'
-        md_by_itrs.loc[i].ExcitationLaser = itr['_excitation']['laser']
-        md_by_itrs.loc[i].ExcitationWavelength_nm = 1e9*itr['_excitation']['wavelength']
-        md_by_itrs.loc[i].ExcitationPower_percent = itr['_excitation']['power']
-        md_by_itrs.loc[i].ExcitationDAC = itr['_excitation']['dac']
-        md_by_itrs.loc[i].DetectionChannel01 = itr['_detection']['channels'][0]
-        md_by_itrs.loc[i].DetectionChannel02 = itr['_detection']['channels'][1] if len(itr['_detection']['channels']) >1 else 'NA'
-        md_by_itrs.loc[i].BackgroundThreshold = itr['bgcThreshold']
-        md_by_itrs.loc[i].PhotonLimit = itr['phtLimit']
-        md_by_itrs.loc[i].CCRLimit = itr['ccrLimit']
-        md_by_itrs.loc[i].DwellTime_ms = 1e3*itr['patDwellTime']
-        md_by_itrs.loc[i].PatternGeoFactor = itr['patGeoFactor']
-        md_by_itrs.loc[i].PatternRepeat = itr['patRepeat']
-        md_by_itrs.loc[i].PatternGeometry = itr['Mode']['pattern']
-        md_by_itrs.loc[i].Strategy = itr['Mode']['strategy']
-
-    mfx_global_pars = {}
-    
-    mfx_global_pars['BgcSense'] = mfx_globals['bgcSense']
-    mfx_global_pars['CtrDwellFactor'] = mfx_globals['ctrDwellFactor']
-    mfx_global_pars['Damping'] = mfx_globals['damping']
-    mfx_global_pars['Headstart'] = mfx_globals['headstart']
-    mfx_global_pars['ID'] = mfx_globals['id']
-    mfx_global_pars['Liveview'] = mfx_globals['liveview']['show']
-    mfx_global_pars['LocLimit'] = mfx_globals['locLimit']
-    mfx_global_pars['Stickiness'] = mfx_globals['stickiness']
-    mfx_global_pars['FieldAlgorithm'] = mfx_globals['field']['algo']
-    mfx_global_pars['FieldGeoFactor'] = mfx_globals['field']['fldGeoFactor']
-    mfx_global_pars['FieldStride'] = mfx_globals['field']['stride']
-
-    return (md_by_itrs,mfx_global_pars)
-
 from PYME.recipes.traits import HasTraits, Float, Enum, CStr, Bool, Int, List
 import PYME.config
 
@@ -524,6 +479,8 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>MBM', "Add MBM track labels to view", self.OnMBMaddTrackLabels)
         visFr.AddMenuItem('MINFLUX>MBM', "Save MBM bead trajectories to npz file", self.OnMBMSave)
         visFr.AddMenuItem('MINFLUX>MBM', "Save MBM bead settings to json file", self.OnMBMSettingsSave)
+        visFr.AddMenuItem('MINFLUX>MBM', "Save MBM lowess cache", self.OnMBMLowessCacheSave)
+        
         visFr.AddMenuItem('MINFLUX>RyRs', "Plot corner info", self.OnCornerplot)
         visFr.AddMenuItem('MINFLUX>RyRs', "Plot density stats", self.OnDensityStats)
         visFr.AddMenuItem('MINFLUX>RyRs', "Show cluster alpha shapes", self.OnAlphaShapes)
@@ -542,6 +499,13 @@ class MINFLUXanalyser():
             for r in minfluxRecipes:
                 ID = visFr.AddMenuItem('MINFLUX>Recipes', r, self.OnLoadCustom).GetId()
                 self.minfluxRIDs[ID] = minfluxRecipes[r]
+
+    def OnMBMLowessCacheSave(self,event):
+        pipeline = self.visFr.pipeline
+        mod = findmbm(pipeline,return_mod=True)
+        if mod is None:
+            return
+        mod.lowess_cachesave()
 
     def OnMBMAttributes(self, event):
         from  wx.lib.dialogs import ScrolledMessageDialog
@@ -593,6 +557,7 @@ class MINFLUXanalyser():
             if '_legacy' in mfx_attrs:
                 warn("legacy data detected - no useful MFX metadata in legacy data")
                 return
+            from PYMEcs.IO.MINFLUX import get_metadata_from_mfx_attrs
             md_itr_info, md_globals = get_metadata_from_mfx_attrs(mfx_attrs)
             import pprint
             with io.StringIO() as output:

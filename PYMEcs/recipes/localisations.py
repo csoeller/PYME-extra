@@ -1455,6 +1455,13 @@ try:
 except ImportError:
     pass
 
+# code on suggestion from https://blog.finxter.com/5-best-ways-to-compute-the-hash-of-a-python-tuple/
+import hashlib
+def tuple_hash(tuple_obj):
+  hasher = hashlib.sha256()
+  hasher.update(repr(tuple_obj).encode())
+  return hasher.hexdigest()
+
 @register_module('MBMcorrection')
 class MBMcorrection(ModuleBaseMDHmod):
     inputLocalizations = Input('localizations')
@@ -1474,8 +1481,62 @@ class MBMcorrection(ModuleBaseMDHmod):
     _mbm_allbeads = List()
 
     _mbm_cache = {}
-    _lowess_cache = {'x':{},'y':{},'z':{}}
+    _lowess_cache = {}
+
+    def lowess_cachetuple(self):
+        mbm = self.getmbm()
+        return (self.mbmfile,self.MBM_lowess_fraction,self.Median_window,str(mbm.beadisgood))
     
+    def lowess_cachekey(self):
+        return tuple_hash(self.lowess_cachetuple())
+
+    def lowess_cachehit(self):
+        cachekey = self.lowess_cachekey()
+        if cachekey in self._lowess_cache:
+            logger.debug("CACHEHIT from in-memory-cache")
+            return self._lowess_cache[cachekey]
+        elif self.lowess_chacheread():
+            logger.debug("CACHEHIT from file-cache")
+            return self._lowess_cache[cachekey]
+        else:
+            logger.debug("NO CACHEHIT!!! cache tuple: %s" % str(self.lowess_cachetuple()))
+            return None
+        
+    def lowess_cachestore(self,axis,value):
+        cachekey = self.lowess_cachekey()
+        if cachekey not in self._lowess_cache:
+            self._lowess_cache[cachekey] = {}
+        self._lowess_cache[cachekey][axis] = value
+
+    def lowess_cachesave(self):
+        cachehit = self.lowess_cachehit()
+        if cachehit is not None:
+            fpath = self.lowess_cachefilepath()
+            np.savez(str(fpath),**cachehit)
+
+    def lowess_chacheread(self):
+        cachekey = self.lowess_cachekey()
+        fpath = self.lowess_cachefilepath()
+        if fpath.exists():
+            self._lowess_cache[cachekey] = np.load(str(fpath))
+            return True
+        else:
+            return False
+
+    def lowess_cachefilepath(self):
+        cachekey = self.lowess_cachekey()
+        from pathlib import Path
+        fdir = Path(self.mbmfile).parent
+        fpath = fdir / (".mbm_lowess_%s.npz" % cachekey)
+        return fpath
+    
+    def getmbm(self):
+        mbmkey = self.mbmfile
+        if mbmkey in self._mbm_cache:
+            return self._mbm_cache[mbmkey]
+        else:
+            return None
+
     def run(self,inputLocalizations):
         import json
         from PYME.IO import unifiedIO
@@ -1506,9 +1567,9 @@ class MBMcorrection(ModuleBaseMDHmod):
                     mbm.beadisgood[bead] =  mbmconf['beads'][bead]
                 self.MBM_beads = [bead for bead in mbmconf['beads'].keys() if mbmconf['beads'][bead] and bead in self._mbm_allbeads]
                 self._mbm_cache[mbmsettingskey] = mbmconf
-            else:
-                for bead in self._mbm_allbeads:
-                    mbm.beadisgood[bead] = bead in self.MBM_beads
+            # in a second pass (if just loaded from mbmconf) set beadisgood to the useful self.MBM_beads subset
+            for bead in mbm.beadisgood:
+                mbm.beadisgood[bead] = bead in self.MBM_beads
 
             mbm.median_window = self.Median_window
 
@@ -1516,18 +1577,18 @@ class MBMcorrection(ModuleBaseMDHmod):
             tnew = 1e-3*inputLocalizations['t']
             mbmcorr = {}
             mbmtrack_corr = {}
-            cache_key = (mbm.median_window,self.mbmfile,str(mbm.beadisgood),self.MBM_lowess_fraction)
+            cachehit = self.lowess_cachehit() # LOWESS CACHE OP
             for axis in ['x','y','z']:
                 axismean = mbm.mean(axis)
                 axismean_g = axismean[~np.isnan(axismean)]
                 t_g = mbm.t[~np.isnan(axismean)]
                 if self.MBM_lowess_fraction > 1e-5:
-                    if cache_key in self._lowess_cache[axis]:
-                        axismean_sm = self._lowess_cache[axis][cache_key]
+                    if cachehit is not None:
+                        axismean_sm = cachehit[axis] # LOWESS CACHE OP
                     else:
                         axismean_sm = lowess(axismean_g, t_g, frac=self.MBM_lowess_fraction,
                                              return_sorted=False)
-                        self._lowess_cache[axis][cache_key] = axismean_sm
+                        self.lowess_cachestore(axis,axismean_sm) # LOWESS CACHE OP
                     axis_interp_msm = np.interp(tnew,t_g,axismean_sm)            
                     mbmcorr[axis] = axis_interp_msm
                     mbmtrack_corr[axis] = np.interp(bead_ds_dict['tim'],t_g,axismean_sm)

@@ -387,6 +387,51 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
 def _save_minflux_as_csv(pd_data, fname):
     pd_data.to_csv(fname,index=False)
 
+def get_metadata_from_mfx_attrs(mfx_attrs):
+    mfx_itrs = mfx_attrs['measurement']['threads'][0]['sequences'][0]['Itr']
+    mfx_globals = mfx_attrs['measurement']['threads'][0]['sequences'][0]
+    
+    md_by_itrs = pd.DataFrame(columns=['IterationNumber','PinholeAU','ActivationLaser', 'ExcitationLaser',
+                                       'ExcitationWavelength_nm', 'ExcitationPower_percent', 'ExcitationDAC',
+                                       'DetectionChannel01','DetectionChannel02','BackgroundThreshold',
+                                       'PhotonLimit', 'CCRLimit', 'DwellTime_ms',
+                                       'PatternGeoFactor','PatternRepeat', 'PatternGeometry','Strategy'],
+                              index=range(len(mfx_itrs)))
+    for i, itr in enumerate(mfx_itrs):
+        md_by_itrs.loc[i].IterationNumber = i
+        md_by_itrs.loc[i].PinholeAU = itr['Mode']['phDiaAU']
+        md_by_itrs.loc[i].ActivationLaser = itr['_activation']['laser'] if itr['_activation']['laser'] != '' else 'NA'
+        md_by_itrs.loc[i].ExcitationLaser = itr['_excitation']['laser']
+        md_by_itrs.loc[i].ExcitationWavelength_nm = np.rint(1e9*itr['_excitation']['wavelength'])
+        md_by_itrs.loc[i].ExcitationPower_percent = itr['_excitation']['power']
+        md_by_itrs.loc[i].ExcitationDAC = itr['_excitation']['dac']
+        md_by_itrs.loc[i].DetectionChannel01 = itr['_detection']['channels'][0]
+        md_by_itrs.loc[i].DetectionChannel02 = itr['_detection']['channels'][1] if len(itr['_detection']['channels']) >1 else 'NA'
+        md_by_itrs.loc[i].BackgroundThreshold = itr['bgcThreshold']
+        md_by_itrs.loc[i].PhotonLimit = itr['phtLimit']
+        md_by_itrs.loc[i].CCRLimit = itr['ccrLimit']
+        md_by_itrs.loc[i].DwellTime_ms = 1e3*itr['patDwellTime']
+        md_by_itrs.loc[i].PatternGeoFactor = itr['patGeoFactor']
+        md_by_itrs.loc[i].PatternRepeat = itr['patRepeat']
+        md_by_itrs.loc[i].PatternGeometry = itr['Mode']['pattern']
+        md_by_itrs.loc[i].Strategy = itr['Mode']['strategy']
+
+    mfx_global_pars = {}
+    
+    mfx_global_pars['BgcSense'] = mfx_globals['bgcSense']
+    mfx_global_pars['CtrDwellFactor'] = mfx_globals['ctrDwellFactor']
+    mfx_global_pars['Damping'] = mfx_globals['damping']
+    mfx_global_pars['Headstart'] = mfx_globals['headstart']
+    mfx_global_pars['ID'] = mfx_globals['id']
+    mfx_global_pars['Liveview'] = mfx_globals['liveview']['show']
+    mfx_global_pars['LocLimit'] = mfx_globals['locLimit']
+    mfx_global_pars['Stickiness'] = mfx_globals['stickiness']
+    mfx_global_pars['FieldAlgorithm'] = mfx_globals['field']['algo']
+    mfx_global_pars['FieldGeoFactor'] = mfx_globals['field']['fldGeoFactor']
+    mfx_global_pars['FieldStride'] = mfx_globals['field']['stride']
+
+    return (md_by_itrs,mfx_global_pars)
+
     
 ##############################
 ### Register IO with PYME ####
@@ -478,6 +523,12 @@ def monkeypatch_npyorzarr_io(visFr):
             mdh['MINFLUX.AcquisitionDate'] = mfx_attrs['acquisition_date']
             mdh['MINFLUX.DataID'] = mfx_attrs['did']
             mdh['MINFLUX.Is3D'] = mfx_attrs['measurement']['dimensionality'] > 2
+
+            md_by_itrs,mfx_global_par = get_metadata_from_mfx_attrs(mfx_attrs)
+            for par in mfx_global_par:
+                mdh['MINFLUX.Globals.%s' % par] = mfx_global_par[par]
+            for pars in md_by_itrs:
+                mdh['MINFLUX.ByItrs.%s' % pars] = md_by_itrs[pars].to_numpy()
 
         return mdh
 
