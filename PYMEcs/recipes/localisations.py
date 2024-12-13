@@ -1486,7 +1486,7 @@ class MBMcorrection(ModuleBaseMDHmod):
 
     def lowess_cachetuple(self):
         mbm = self.getmbm()
-        return (self.mbmfile,self.MBM_lowess_fraction,self.Median_window,str(mbm.beadisgood))
+        return (Path(self.mbmfile).name,self.MBM_lowess_fraction,self.Median_window,str(mbm.beadisgood))
     
     def lowess_cachekey(self):
         return tuple_hash(self.lowess_cachetuple())
