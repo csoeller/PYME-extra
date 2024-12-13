@@ -628,12 +628,21 @@ class MINFLUXanalyser():
         mbm_meansm = {} # for caching
         fig, axs = plt.subplots(nrows=3)
         for caxis, ax in zip(['x','y','z'],axs):
+            caxis_nc = "%s_nc" % caxis
+            caxis_ori = "%s_ori" % caxis
             if has_drift:
                 if has_drift_ori:
-                    ax.plot(t_s,p['drift%s' % caxis]+p['drift%s_ori' % caxis], label='origami 2nd pass')
-                    ax.plot(t_s,p['drift%s_ori' % caxis],'--', label='origami 1st pass')
+                    # note we have a driftaxis_ori hiding in -p[caxis_ori], so no need to explicitly add
+                    drift_2ndpass = p['drift%s' % caxis] - (p[caxis_ori]-p[caxis_nc])
+                    drift_1stpass = - (p[caxis_ori]-p[caxis_nc]) # again we have an implicit driftaxis_ori hiding in -p[caxis_ori]
                 else:
-                    ax.plot(t_s,p['drift%s' % caxis], label='origami 1st pass')
+                    drift_1stpass = p['drift%s' % caxis] - (p[caxis_ori]-p[caxis_nc]) 
+            if has_drift:
+                if has_drift_ori:
+                    ax.plot(t_s,drift_2ndpass, label='origami 2nd pass')
+                    ax.plot(t_s,drift_1stpass,'--', label='origami 1st pass')
+                else:
+                    ax.plot(t_s,drift_1stpass, label='origami 1st pass')
             if has_mbm:
                 mod = findmbm(p,warnings=False,return_mod=True)
                 MBM_lowess_fraction = mod.MBM_lowess_fraction
@@ -655,12 +664,20 @@ class MINFLUXanalyser():
         if has_mbm: # also plot a second figure without the non-smoothed MBM track
             fig, axs = plt.subplots(nrows=3)
             for caxis, ax in zip(['x','y','z'],axs):
+                caxis_nc = "%s_nc" % caxis
+                caxis_ori = "%s_ori" % caxis
                 if has_drift:
                     if has_drift_ori:
-                        ax.plot(t_s,p['drift%s' % caxis]+p['drift%s_ori' % caxis], label='origami 2nd pass')
-                        ax.plot(t_s,p['drift%s_ori' % caxis],'--', label='origami 1st pass')
+                        drift_2ndpass = p['drift%s' % caxis] - (p[caxis_ori]-p[caxis_nc])
+                        drift_1stpass = - (p[caxis_ori]-p[caxis_nc])
                     else:
-                        ax.plot(t_s,p['drift%s' % caxis], label='origami 1st pass')
+                        drift_1stpass = p['drift%s' % caxis] - (p[caxis_ori]-p[caxis_nc])
+                if has_drift:
+                    if has_drift_ori:
+                        ax.plot(t_s,drift_2ndpass, label='origami 2nd pass')
+                        ax.plot(t_s,drift_1stpass,'--', label='origami 1st pass')
+                    else:
+                        ax.plot(t_s,drift_1stpass, label='origami 1st pass')
                 if has_mbm:
                     #ax.plot(mbm.t,mbm_mean[caxis],':',label='MBM mean')
                     ax.plot(mbm.t,mbm_meansm[caxis],'r-.',label='MBM lowess (lf=%.2f)' % MBM_lowess_fraction)
@@ -671,12 +688,20 @@ class MINFLUXanalyser():
         if has_mbm: # also plot a third figure with all MBM tracks
             fig, axs = plt.subplots(nrows=3)
             for caxis, ax in zip(['x','y','z'],axs):
+                caxis_nc = "%s_nc" % caxis
+                caxis_ori = "%s_ori" % caxis
                 if has_drift:
                     if has_drift_ori:
-                        ax.plot(t_s,p['drift%s' % caxis]+p['drift%s_ori' % caxis], label='origami 2nd pass')
-                        ax.plot(t_s,p['drift%s_ori' % caxis],'--', label='origami 1st pass')
+                        drift_2ndpass = p['drift%s' % caxis] - (p[caxis_ori]-p[caxis_nc])
+                        drift_1stpass = - (p[caxis_ori]-p[caxis_nc])
                     else:
-                        ax.plot(t_s,p['drift%s' % caxis], label='origami 1st pass')
+                        drift_1stpass = p['drift%s' % caxis] - (p[caxis_ori]-p[caxis_nc])
+                if has_drift:
+                    if has_drift_ori:
+                        ax.plot(t_s,drift_2ndpass, label='origami 2nd pass')
+                        ax.plot(t_s,drift_1stpass,'--', label='origami 1st pass')
+                    else:
+                        ax.plot(t_s,drift_1stpass, label='origami 1st pass')
                 if has_mbm:
                     #ax.plot(mbm.t,mbm_mean[caxis],':',label='MBM mean')
                     ax.plot(mbm.t,mbm_meansm[caxis],'r-.',label='MBM lowess (lf=%.2f)' % MBM_lowess_fraction)
@@ -694,11 +719,20 @@ class MINFLUXanalyser():
  
             fig, axs = plt.subplots(nrows=3)
             for caxis, ax in zip(['x','y','z'],axs):
+                caxis_nc = "%s_nc" % caxis
+                caxis_ori = "%s_ori" % caxis
                 if has_drift:
                     if has_drift_ori:
-                        ax.plot(t_s,p['drift%s' % caxis]+p['drift%s_ori' % caxis]-mbmcorr[caxis], label='diff to origami 2nd pass')
+                        drift_2ndpass = p['drift%s' % caxis] - (p[caxis_ori]-p[caxis_nc])
+                        drift_1stpass = - (p[caxis_ori]-p[caxis_nc])
                     else:
-                        ax.plot(t_s,p['drift%s' % caxis]-mbmcorr[caxis], label='diff to origami 1st pass')
+                        drift_1stpass = p['drift%s' % caxis] - (p[caxis_ori]-p[caxis_nc])
+
+                if has_drift:
+                    if has_drift_ori:
+                        ax.plot(t_s,drift_2ndpass-mbmcorr[caxis], label='diff to origami 2nd pass')
+                    else:
+                        ax.plot(t_s,drift_1stpass-mbmcorr[caxis], label='diff to origami 1st pass')
                 ax.plot([t_s.min(),t_s.max()],[0,0],'r-.')
                 ax.set_xlabel('time (s)')
                 ax.set_ylabel('differential drift in %s (nm)' % caxis)
