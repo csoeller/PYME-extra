@@ -1538,12 +1538,30 @@ class MBMcorrection(ModuleBaseMDHmod):
         else:
             return None
 
+    # cached lowess calc with time coordinate retrieval
+    def lowess_calc(self,axis):
+        mbm = self.getmbm()
+        axismean = mbm.mean(axis)
+        axismean_g = axismean[~np.isnan(axismean)]
+        t_g = mbm.t[~np.isnan(axismean)]
+        cachehit = self.lowess_cachehit() # LOWESS CACHE OP
+        if self.MBM_lowess_fraction > 1e-5:
+            from statsmodels.nonparametric.smoothers_lowess import lowess
+            if cachehit is not None and axis in cachehit: # not all axes may have been calculated yet, so check for axis!
+                axismean_sm = cachehit[axis] # LOWESS CACHE OP
+            else:
+                axismean_sm = lowess(axismean_g, t_g, frac=self.MBM_lowess_fraction,
+                                     return_sorted=False)
+                self.lowess_cachestore(axis,axismean_sm) # LOWESS CACHE OP
+            return (t_g,axismean_sm)
+        else:
+            return (t_g,axismean_g)
+    
     def run(self,inputLocalizations):
         import json
         from PYME.IO import unifiedIO
         from pathlib import Path
         from PYMEcs.Analysis.MBMcollection import MBMCollectionDF
-        from statsmodels.nonparametric.smoothers_lowess import lowess
 
         mapped_ds = tabular.MappingFilter(inputLocalizations)
 
@@ -1578,27 +1596,11 @@ class MBMcorrection(ModuleBaseMDHmod):
             tnew = 1e-3*inputLocalizations['t']
             mbmcorr = {}
             mbmtrack_corr = {}
-            cachehit = self.lowess_cachehit() # LOWESS CACHE OP
             for axis in ['x','y','z']:
-                axismean = mbm.mean(axis)
-                axismean_g = axismean[~np.isnan(axismean)]
-                t_g = mbm.t[~np.isnan(axismean)]
-                if self.MBM_lowess_fraction > 1e-5:
-                    if cachehit is not None:
-                        axismean_sm = cachehit[axis] # LOWESS CACHE OP
-                    else:
-                        axismean_sm = lowess(axismean_g, t_g, frac=self.MBM_lowess_fraction,
-                                             return_sorted=False)
-                        self.lowess_cachestore(axis,axismean_sm) # LOWESS CACHE OP
-                    axis_interp_msm = np.interp(tnew,t_g,axismean_sm)            
-                    mbmcorr[axis] = axis_interp_msm
-                    mbmtrack_corr[axis] = np.interp(bead_ds_dict['tim'],t_g,axismean_sm)
-                else: # fraction 0 or close to zero implies no lowess smoothing
-                    axis_interp_g = np.interp(tnew,t_g,axismean_g)            
-                    mbmcorr[axis] = axis_interp_g
-                    mbmtrack_corr[axis] = np.interp(bead_ds_dict['tim'],t_g,axismean_g)
-
-            for axis in ['x','y','z']:
+                tsm, axismean_sm = self.lowess_calc(axis) # cache based lowess calculation
+                axis_interp = np.interp(tnew,tsm,axismean_sm)
+                mbmcorr[axis] = axis_interp
+                mbmtrack_corr[axis] = np.interp(bead_ds_dict['tim'],tsm,axismean_sm)
                 axis_nc = "%s_nc" % axis
                 mapped_ds.addColumn('mbm%s' % axis, mbmcorr[axis])
                 if axis_nc in inputLocalizations.keys():

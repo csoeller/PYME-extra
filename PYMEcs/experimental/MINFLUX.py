@@ -614,20 +614,9 @@ class MINFLUXanalyser():
             json.dump(settings, f, indent=4)
 
     def OnMBMplot(self,event):
-        p = self.visFr.pipeline
-        has_drift = 'driftx' in p.keys()
-        has_drift_ori = 'driftx_ori' in p.keys()
-        mbm = findmbm(p,warnings=False)
-        has_mbm = mbm is not None
-        has_mbm2 = 'mbmx' in p.keys()
-        
-        if not has_drift and not (has_mbm or has_mbm2):
-            warn("pipeline has neither drift info nor MBM info, aborting...")
-        t_s = 1e-3*p['t']
-        mbm_mean = {} # for caching
-        mbm_meansm = {} # for caching
-        fig, axs = plt.subplots(nrows=3)
-        for caxis, ax in zip(['x','y','z'],axs):
+        def drift_total(p,caxis):
+            has_drift = 'driftx' in p.keys()
+            has_drift_ori = 'driftx_ori' in p.keys()
             caxis_nc = "%s_nc" % caxis
             caxis_ori = "%s_ori" % caxis
             if has_drift:
@@ -636,103 +625,99 @@ class MINFLUXanalyser():
                     drift_2ndpass = p['drift%s' % caxis] - (p[caxis_ori]-p[caxis_nc])
                     drift_1stpass = - (p[caxis_ori]-p[caxis_nc]) # again we have an implicit driftaxis_ori hiding in -p[caxis_ori]
                 else:
-                    drift_1stpass = p['drift%s' % caxis] - (p[caxis_ori]-p[caxis_nc]) 
+                    drift_1stpass = p['drift%s' % caxis] - (p[caxis_ori]-p[caxis_nc])
+                    drift_2ndpass = None
+            return drift_1stpass, drift_2ndpass
+
+        def plot_drift(p,ax,drift_1stpass, drift_2ndpass):
+            has_drift = 'driftx' in p.keys()
+            has_drift_ori = 'driftx_ori' in p.keys()
             if has_drift:
                 if has_drift_ori:
-                    ax.plot(t_s,drift_2ndpass, label='origami 2nd pass')
-                    ax.plot(t_s,drift_1stpass,'--', label='origami 1st pass')
+                    ax.plot(t_s,drift_2ndpass, label='site-based 2nd pass')
+                    ax.plot(t_s,drift_1stpass,'--', label='site-based 1st pass')
                 else:
-                    ax.plot(t_s,drift_1stpass, label='origami 1st pass')
+                    ax.plot(t_s,drift_1stpass, label='site-based 1st pass')
+
+        p = self.visFr.pipeline
+        has_drift = 'driftx' in p.keys()
+        has_drift_ori = 'driftx_ori' in p.keys()
+        mbm = findmbm(p,warnings=False)
+        has_mbm = mbm is not None
+        has_mbm2 = 'mbmx' in p.keys()
+
+        if not has_drift and not (has_mbm or has_mbm2):
+            warn("pipeline has neither drift info nor MBM info, aborting...")
+        
+        t_s = 1e-3*p['t']
+        mbm_mean = {} # for caching
+        mbm_meansm = {} # for caching
+        t_sm = {}
+        
+        ### Fig 1 ####
+        fig, axs = plt.subplots(nrows=3)
+        for caxis, ax in zip(['x','y','z'],axs):
+            if has_drift:
+                drift_1stpass, drift_2ndpass = drift_total(p,caxis)
+                plot_drift(p,ax,drift_1stpass, drift_2ndpass)
             if has_mbm:
                 mod = findmbm(p,warnings=False,return_mod=True)
                 MBM_lowess_fraction = mod.MBM_lowess_fraction
                 mbm_mean[caxis] = mbm.mean(caxis)
                 ax.plot(mbm.t,mbm_mean[caxis],':',label='MBM mean')
-                from statsmodels.nonparametric.smoothers_lowess import lowess
-                if MBM_lowess_fraction > 1e-5:
-                    mbm_meansm[caxis] = lowess(mbm_mean[caxis], mbm.t, frac=MBM_lowess_fraction,
-                                               return_sorted=False)
-                else:
-                    mbm_meansm[caxis] = mbm_mean[caxis]
-                ax.plot(mbm.t,mbm_meansm[caxis],'-.',label='MBM lowess (lf=%.2f)' % MBM_lowess_fraction)
+                t_sm[caxis],mbm_meansm[caxis] = mod.lowess_calc(caxis) # this is now a cached version of the lowess calc!
+                ax.plot(t_sm[caxis],mbm_meansm[caxis],'-.',label='MBM lowess (lf=%.2f)' % MBM_lowess_fraction)
             if has_mbm2:
                 ax.plot(t_s,p['mbm%s' % caxis], label='MBM from module')
             ax.set_xlabel('time (s)')
             ax.set_ylabel('drift in %s (nm)' % caxis)
             ax.legend(loc="upper right")
+            ax.set_title("Total drift (Site based plus any previous corrections)")
         fig.tight_layout()
+        ### Fig 2 ####
         if has_mbm: # also plot a second figure without the non-smoothed MBM track
             fig, axs = plt.subplots(nrows=3)
             for caxis, ax in zip(['x','y','z'],axs):
-                caxis_nc = "%s_nc" % caxis
-                caxis_ori = "%s_ori" % caxis
                 if has_drift:
-                    if has_drift_ori:
-                        drift_2ndpass = p['drift%s' % caxis] - (p[caxis_ori]-p[caxis_nc])
-                        drift_1stpass = - (p[caxis_ori]-p[caxis_nc])
-                    else:
-                        drift_1stpass = p['drift%s' % caxis] - (p[caxis_ori]-p[caxis_nc])
-                if has_drift:
-                    if has_drift_ori:
-                        ax.plot(t_s,drift_2ndpass, label='origami 2nd pass')
-                        ax.plot(t_s,drift_1stpass,'--', label='origami 1st pass')
-                    else:
-                        ax.plot(t_s,drift_1stpass, label='origami 1st pass')
+                    drift_1stpass, drift_2ndpass = drift_total(p,caxis)
+                    plot_drift(p,ax,drift_1stpass, drift_2ndpass)
                 if has_mbm:
                     #ax.plot(mbm.t,mbm_mean[caxis],':',label='MBM mean')
-                    ax.plot(mbm.t,mbm_meansm[caxis],'r-.',label='MBM lowess (lf=%.2f)' % MBM_lowess_fraction)
+                    ax.plot(t_sm[caxis],mbm_meansm[caxis],'r-.',label='MBM lowess (lf=%.2f)' % MBM_lowess_fraction)
                 ax.set_xlabel('time (s)')
                 ax.set_ylabel('drift in %s (nm)' % caxis)
                 ax.legend(loc="upper left")
             fig.tight_layout()
+        ### Fig 3 ####
         if has_mbm: # also plot a third figure with all MBM tracks
             fig, axs = plt.subplots(nrows=3)
             for caxis, ax in zip(['x','y','z'],axs):
-                caxis_nc = "%s_nc" % caxis
-                caxis_ori = "%s_ori" % caxis
                 if has_drift:
-                    if has_drift_ori:
-                        drift_2ndpass = p['drift%s' % caxis] - (p[caxis_ori]-p[caxis_nc])
-                        drift_1stpass = - (p[caxis_ori]-p[caxis_nc])
-                    else:
-                        drift_1stpass = p['drift%s' % caxis] - (p[caxis_ori]-p[caxis_nc])
-                if has_drift:
-                    if has_drift_ori:
-                        ax.plot(t_s,drift_2ndpass, label='origami 2nd pass')
-                        ax.plot(t_s,drift_1stpass,'--', label='origami 1st pass')
-                    else:
-                        ax.plot(t_s,drift_1stpass, label='origami 1st pass')
+                    drift_1stpass, drift_2ndpass = drift_total(p,caxis)
+                    plot_drift(p,ax,drift_1stpass, drift_2ndpass)
                 if has_mbm:
                     #ax.plot(mbm.t,mbm_mean[caxis],':',label='MBM mean')
-                    ax.plot(mbm.t,mbm_meansm[caxis],'r-.',label='MBM lowess (lf=%.2f)' % MBM_lowess_fraction)
+                    ax.plot(t_sm[caxis],mbm_meansm[caxis],'r-.',label='MBM lowess (lf=%.2f)' % MBM_lowess_fraction)
                     mbm.plot_tracks_matplotlib(caxis,ax=ax,goodalpha=0.4)
                 ax.set_xlabel('time (s)')
                 ax.set_ylabel('drift in %s (nm)' % caxis)
                 ax.legend(loc="upper left")
             fig.tight_layout()
+        ### Fig 4 ####
         if has_mbm and has_drift: # also plot a fourth figure with a difference track for all axes
             tnew = 1e-3*p['t']
             mbmcorr = {}
             for axis in ['x','y','z']:
-                axis_interp_msm = np.interp(tnew,mbm.t,mbm_meansm[axis])          
+                axis_interp_msm = np.interp(tnew,t_sm[caxis],mbm_meansm[axis])          
                 mbmcorr[axis] = axis_interp_msm
- 
             fig, axs = plt.subplots(nrows=3)
             for caxis, ax in zip(['x','y','z'],axs):
-                caxis_nc = "%s_nc" % caxis
-                caxis_ori = "%s_ori" % caxis
+                drift_1stpass, drift_2ndpass = drift_total(p,caxis)
                 if has_drift:
                     if has_drift_ori:
-                        drift_2ndpass = p['drift%s' % caxis] - (p[caxis_ori]-p[caxis_nc])
-                        drift_1stpass = - (p[caxis_ori]-p[caxis_nc])
+                        ax.plot(t_s,drift_2ndpass-mbmcorr[caxis], label='diff to site-based 2nd pass')
                     else:
-                        drift_1stpass = p['drift%s' % caxis] - (p[caxis_ori]-p[caxis_nc])
-
-                if has_drift:
-                    if has_drift_ori:
-                        ax.plot(t_s,drift_2ndpass-mbmcorr[caxis], label='diff to origami 2nd pass')
-                    else:
-                        ax.plot(t_s,drift_1stpass-mbmcorr[caxis], label='diff to origami 1st pass')
+                        ax.plot(t_s,drift_1stpass-mbmcorr[caxis], label='diff to site-based 1st pass')
                 ax.plot([t_s.min(),t_s.max()],[0,0],'r-.')
                 ax.set_xlabel('time (s)')
                 ax.set_ylabel('differential drift in %s (nm)' % caxis)
@@ -928,6 +913,7 @@ class MINFLUXanalyser():
 
         preFiltered = unique_name('prefiltered',pipeline.dataSources.keys())
         corrSiteClumps = unique_name('corrected_siteclumps',pipeline.dataSources.keys())
+        corrAll = unique_name('corrected_allpoints',pipeline.dataSources.keys())
         siteClumps = unique_name('siteclumps',pipeline.dataSources.keys())
         dbscanClusteredSites = unique_name('dbscanClusteredSites',pipeline.dataSources.keys())
         sites = unique_name('sites',pipeline.dataSources.keys())
@@ -935,8 +921,9 @@ class MINFLUXanalyser():
         
         curds = pipeline.selectedDataSourceKey
         modules = [FilterTable(recipe,inputName=curds,outputName=preFiltered,
-                               filters={'error_x' : [0,3.3],
-                                        'error_z' : [0,3.3]}),
+                               filters={'error_x' : [0,3.5],
+                                        'error_y' : [0,3.5],
+                                        'error_z' : [0,3.5]}),
                    DBSCANClustering2(recipe,inputName=preFiltered,outputName=dbscanClusteredSites,
                                      searchRadius = 15.0,
                                      clumpColumnName = 'siteID',
@@ -946,7 +933,7 @@ class MINFLUXanalyser():
                    MergeClumps(recipe,inputName=siteClumps,outputName=sites,
                                labelKey='siteID',discardTrivial=True),
                    OrigamiSiteTrack(recipe,inputClusters=siteClumps,inputSites=sites,outputName=corrSiteClumps,
-                                    labelKey='siteID'),
+                                    outputAllPoints=corrAll,inputAllPoints=curds,labelKey='siteID'),
                    MergeClumps(recipe,inputName=corrSiteClumps,outputName=sites_c,
                                labelKey='siteID',discardTrivial=True)]
         recipe.add_modules_and_execute(modules)
@@ -970,7 +957,7 @@ class MINFLUXanalyser():
                        Mapping(recipe,inputName=dbscanClusteredSites,outputName=dbsnc,
                                mappings={'x': 'x_nc', 'y': 'y_nc', 'z': 'z_nc'}),
                        FilterTable(recipe,inputName=dbsnc,outputName=siteClumps,
-                                   filters={'siteClumpSize' : [3,40]}),
+                                   filters={'siteClumpSize' : [3,50]}), # need a minimum clumpsize and also maximal to avoid "fused" sites
                        MergeClumps(recipe,inputName=siteClumps,outputName=sites,
                                    labelKey='siteID',discardTrivial=True),
                        OrigamiSiteTrack(recipe,inputClusters=siteClumps,inputSites=sites,outputName=corrSiteClumps,
