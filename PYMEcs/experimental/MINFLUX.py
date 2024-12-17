@@ -444,6 +444,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Origami', "group and analyse origami sites", self.OnOrigamiSiteRecipe)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami site correction", self.OnOrigamiSiteTrackPlot)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami error estimates", self.OnOrigamiErrorPlot)
+        visFr.AddMenuItem('MINFLUX>Origami', "add final filter for site-based correctiopn data", self.OnOrigamiFinalFilter)
         visFr.AddMenuItem('MINFLUX', "Analysis settings", self.OnMINFLUXSettings)
         visFr.AddMenuItem('MINFLUX', "Manually create Colour panel", self.OnMINFLUXColour)
         visFr.AddMenuItem('MINFLUX>Util', "Plot temperature record matching current data series",self.OnMINFLUXplotTempData)
@@ -903,6 +904,23 @@ class MINFLUXanalyser():
         plot_tracking(p,is_coalesced,lowess_fraction=0.03)
         p.selectDataSource(curds)
 
+    def OnOrigamiFinalFilter(self, event=None):
+        from PYME.recipes.tablefilters import FilterTable
+        pipeline = self.visFr.pipeline
+        recipe = pipeline.recipe
+        curds = pipeline.selectedDataSourceKey
+
+        finalFiltered = unique_name('filtered_final',pipeline.dataSources.keys())
+
+        modules = [FilterTable(recipe,inputName=curds,outputName=finalFiltered,
+                               filters={'error_x' : [0,3.5],
+                                        'error_x' : [0,3.5],
+                                        'error_x' : [0,3.5],
+                                        'efo' : [10e3,1e5],
+                                        })]
+        recipe.add_modules_and_execute(modules)
+        pipeline.selectDataSource(finalFiltered)
+        
     def OnOrigamiSiteRecipe(self, event=None):
         from PYMEcs.recipes.localisations import OrigamiSiteTrack, DBSCANClustering2
         from PYME.recipes.localisations import MergeClumps
@@ -929,11 +947,11 @@ class MINFLUXanalyser():
                                      clumpColumnName = 'siteID',
                                      sizeColumnName='siteClumpSize'),
                    FilterTable(recipe,inputName=dbscanClusteredSites,outputName=siteClumps,
-                               filters={'siteClumpSize' : [3,40]}),
+                               filters={'siteClumpSize' : [3,50]}), # need a minimum clumpsize and also maximal to avoid "fused" sites
                    MergeClumps(recipe,inputName=siteClumps,outputName=sites,
                                labelKey='siteID',discardTrivial=True),
                    OrigamiSiteTrack(recipe,inputClusters=siteClumps,inputSites=sites,outputName=corrSiteClumps,
-                                    outputAllPoints=corrAll,inputAllPoints=curds,labelKey='siteID'),
+                                    outputAllPoints=corrAll,inputAllPoints=curds,labelKey='siteID',binnedStatistic='median'), # median to play it safe
                    MergeClumps(recipe,inputName=corrSiteClumps,outputName=sites_c,
                                labelKey='siteID',discardTrivial=True)]
         recipe.add_modules_and_execute(modules)
@@ -948,8 +966,9 @@ class MINFLUXanalyser():
             dbsnc = unique_name('dbs_nc',pipeline.dataSources.keys())
         
             modules = [FilterTable(recipe,inputName=curds,outputName=preFiltered,
-                                   filters={'error_x' : [0,3.3],
-                                            'error_z' : [0,3.3]}),
+                                   filters={'error_x' : [0,3.5],
+                                            'error_y' : [0,3.5],
+                                            'error_z' : [0,3.5]}),
                        DBSCANClustering2(recipe,inputName=preFiltered,outputName=dbscanClusteredSites,
                                          searchRadius = 15.0,
                                          clumpColumnName = 'siteID',
@@ -961,7 +980,7 @@ class MINFLUXanalyser():
                        MergeClumps(recipe,inputName=siteClumps,outputName=sites,
                                    labelKey='siteID',discardTrivial=True),
                        OrigamiSiteTrack(recipe,inputClusters=siteClumps,inputSites=sites,outputName=corrSiteClumps,
-                                        labelKey='siteID'),
+                                        labelKey='siteID',binnedStatistic='median'),
                        MergeClumps(recipe,inputName=corrSiteClumps,outputName=sites_c,
                                    labelKey='siteID',discardTrivial=True)]
         

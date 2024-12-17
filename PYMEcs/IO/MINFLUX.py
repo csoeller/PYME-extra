@@ -544,6 +544,7 @@ def monkeypatch_npyorzarr_io(visFr):
 
         mfx_attrs = arch['mfx'].attrs.asdict()
         if not '_legacy' in mfx_attrs:
+            mdh['MINFLUX.Format'] = 'RevAutumn2024'
             mdh['MINFLUX.AcquisitionDate'] = mfx_attrs['acquisition_date']
             mdh['MINFLUX.DataID'] = mfx_attrs['did']
             mdh['MINFLUX.Is3D'] = mfx_attrs['measurement']['dimensionality'] > 2
@@ -553,7 +554,10 @@ def monkeypatch_npyorzarr_io(visFr):
                 mdh['MINFLUX.Globals.%s' % par] = mfx_global_par[par]
             for pars in md_by_itrs:
                 mdh['MINFLUX.ByItrs.%s' % pars] = md_by_itrs[pars].to_numpy()
-
+        else:
+            mdh['MINFLUX.Format'] = 'LegacyZarrConversion'
+            mdh['MINFLUX.Is3D'] = mfx_attrs['_legacy']['_seqs'][0]['Itr'][0]['Mode']['dim'] > 2
+            
         return mdh
 
     def _load_ds_npy(filename):
