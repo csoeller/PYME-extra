@@ -444,7 +444,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Origami', "group and analyse origami sites", self.OnOrigamiSiteRecipe)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami site correction", self.OnOrigamiSiteTrackPlot)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami error estimates", self.OnOrigamiErrorPlot)
-        visFr.AddMenuItem('MINFLUX>Origami', "add final filter for site-based correctiopn data", self.OnOrigamiFinalFilter)
+        visFr.AddMenuItem('MINFLUX>Origami', "add final filter for site-based corrected data", self.OnOrigamiFinalFilter)
         visFr.AddMenuItem('MINFLUX', "Analysis settings", self.OnMINFLUXSettings)
         visFr.AddMenuItem('MINFLUX', "Manually create Colour panel", self.OnMINFLUXColour)
         visFr.AddMenuItem('MINFLUX>Util', "Plot temperature record matching current data series",self.OnMINFLUXplotTempData)
