@@ -39,7 +39,7 @@ def unique_name(stem,names):
 
 import pandas as pd
 
-def read_temp_csv(filename):
+def read_temp_csv(filename,timeformat='%d/%m/%Y %H:%M'):
     def remap_names(name): # for slightly more robust comlumn renaming
         if 'Rack' in name:
             return 'Rack'
@@ -50,7 +50,7 @@ def read_temp_csv(filename):
         else:
             return name
     trec = pd.read_csv(filename,encoding = "ISO-8859-1")
-    trec['datetime'] = pd.to_datetime(trec['Time'],format='%d/%m/%Y %H:%M')
+    trec['datetime'] = pd.to_datetime(trec['Time'],format=timeformat)
     return trec.rename(columns=remap_names)
 
 def set_diff(trec,t0):

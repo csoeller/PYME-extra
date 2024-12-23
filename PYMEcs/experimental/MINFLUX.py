@@ -802,7 +802,8 @@ class MINFLUXanalyser():
             warn("Need to set Temperature file location first")
             return
         from PYMEcs.misc.utils import read_temp_csv, set_diff, timestamp_to_datetime
-        mtemps = read_temp_csv(config.get('MINFLUX-temperature_file'))
+        mtemps = read_temp_csv(config.get('MINFLUX-temperature_file'),
+                               timeformat=config.get('MINFLUX-temperature_time_format','%d/%m/%Y %H:%M'))
         if len(self.visFr.pipeline.dataSources) == 0:
             warn("no datasources, this is probably an empty pipeline, have you loaded any data?")
             return
