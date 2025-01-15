@@ -71,6 +71,15 @@ def get_timestamp_from_filename(fname):
         warn("no timestamp match found in %s" % basename)
         return None
 
+def get_timestamp_from_mdh_acqdate(mdh):
+    from datetime import datetime
+    acqdate = mdh.get('MINFLUX.AcquisitionDate')
+    if acqdate is not None:
+        ti = datetime.strptime(acqdate,'%Y-%m-%dT%H:%M:%S%z')
+        return ti.strftime('%y%m%d-%H%M%S')
+    else:
+        return None
+
 def timestamp_to_datetime(ts):
     t0 = pd.to_datetime(ts,format="%y%m%d-%H%M%S")
     return t0
@@ -81,3 +90,16 @@ def parse_timestamp_from_filename(fname):
         return None
     t0 = timestamp_to_datetime(timestamp)
     return t0
+
+def recipe_from_mdh(mdh):
+    import re
+    separator = '|'.join([ # we "or"-combine the following regexs
+        '(?<=:) (?= )', # a space preceeded by a colon AND also followed by another space ; this is therefore not a "key: value" type YAML line
+        '(?<![ :-]) '   # a space NOT preceded by a colon, dash or another space
+    ])
+    recipe = mdh.get('Pipeline.Recipe')
+    if recipe is not None:
+        return('\n'.join(re.split(separator,recipe)))
+    else:
+        warn("could not retrieve Pipeline.Recipe")
+        return None

@@ -502,10 +502,25 @@ def monkeypatch_npyorzarr_io(visFr):
     visFr._populate_open_args_original = visFr._populate_open_args
     visFr._populate_open_args = types.MethodType(_populate_open_args_npyorzarr,visFr)
 
-    def _get_mdh(data,filename):
+    def _get_basic_MINFLUX_metadata(filename):
         from pathlib import Path
         mdh = MetaDataHandler.NestedClassMDHandler()
 
+        mdh['MINFLUX.Filename'] = Path(filename).name # the MINFLUX filename often holds some metadata
+        mdh['MINFLUX.Foreshortening'] = foreshortening
+        from PYMEcs.misc.utils import get_timestamp_from_filename, parse_timestamp_from_filename
+        ts = get_timestamp_from_filename(filename)
+        if ts is not None:
+            mdh['MINFLUX.TimeStamp'] = ts
+            # we add the zero to defeat the regexp that checks for names ending with 'time$'
+            # this falls foul of the comparison with an int (epoch time) in the metadata repr function
+            # because our time stamp is a pandas time stamp and comparison with int fails
+            mdh['MINFLUX.StartTime0'] = parse_timestamp_from_filename(filename).strftime("%Y-%m-%d %H:%M:%S")
+
+        return mdh
+    
+    def _get_mdh(data,filename):
+        mdh = _get_basic_MINFLUX_metadata(filename)
         if minflux_npy_new_format(data):
             mdh['MINFLUX.Format'] = 'RevAutumn2024'
             mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_new(data)
@@ -513,41 +528,25 @@ def monkeypatch_npyorzarr_io(visFr):
             mdh['MINFLUX.Format'] = 'Legacy'
             mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_legacy(data)
             mdh['MINFLUX.ExtraIteration'] = minflux_npy_has_extra_iter_legacy(data)
-
-        mdh['MINFLUX.Filename'] = Path(filename).name # the MINFLUX filename holds some metadata
-        mdh['MINFLUX.Foreshortening'] = foreshortening
-        from PYMEcs.misc.utils import get_timestamp_from_filename, parse_timestamp_from_filename
-        ts = get_timestamp_from_filename(filename)
-        if ts is not None:
-            mdh['MINFLUX.TimeStamp'] = ts
-            # we add the zero to defeat the regexp that checks for names ending with 'time$'
-            # this falls foul of the comparison with an int (epoch time) in the metadata repr function
-            # because our time stamp is a pandas time stamp and comparison with int fails
-            mdh['MINFLUX.StartTime0'] = parse_timestamp_from_filename(filename)
-
         return mdh
 
     def _get_mdh_zarr(filename,arch):
-        from pathlib import Path
-        mdh = MetaDataHandler.NestedClassMDHandler()
-
-        mdh['MINFLUX.Filename'] = Path(filename).name # the MINFLUX filename holds some metadata
-        mdh['MINFLUX.Foreshortening'] = foreshortening
-        from PYMEcs.misc.utils import get_timestamp_from_filename, parse_timestamp_from_filename
-        ts = get_timestamp_from_filename(filename)
-        if ts is not None:
-            mdh['MINFLUX.TimeStamp'] = ts
-            # we add the zero to defeat the regexp that checks for names ending with 'time$'
-            # this falls foul of the comparison with an int (epoch time) in the metadata repr function
-            # because our time stamp is a pandas time stamp and comparison with int fails
-            mdh['MINFLUX.StartTime0'] = parse_timestamp_from_filename(filename)
-
+        mdh = _get_basic_MINFLUX_metadata(filename)
         mfx_attrs = arch['mfx'].attrs.asdict()
         if not '_legacy' in mfx_attrs:
             mdh['MINFLUX.Format'] = 'RevAutumn2024'
             mdh['MINFLUX.AcquisitionDate'] = mfx_attrs['acquisition_date']
             mdh['MINFLUX.DataID'] = mfx_attrs['did']
             mdh['MINFLUX.Is3D'] = mfx_attrs['measurement']['dimensionality'] > 2
+            # now do some checks of acquisitiondate vs any filename derived info
+            from PYMEcs.misc.utils import get_timestamp_from_mdh_acqdate
+            ts = get_timestamp_from_mdh_acqdate(mdh)
+            if ts is not None:
+                if mdh.get('MINFLUX.TimeStamp') is not None:
+                    if mdh.get('MINFLUX.TimeStamp') != ts:
+                        warn("acq time stamp (%s) not equal to filename time stamp (%s)" % (ts,mdh.get('MINFLUX.TimeStamp')))
+                else:
+                    mdh['MINFLUX.TimeStamp'] = ts
 
             md_by_itrs,mfx_global_par = get_metadata_from_mfx_attrs(mfx_attrs)
             for par in mfx_global_par:
