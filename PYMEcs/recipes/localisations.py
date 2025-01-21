@@ -1478,11 +1478,12 @@ class MBMcorrection(ModuleBaseMDHmod):
                                 desc='lowess fraction used for smoothing of mean MBM trajectories (default 0.1); 0 = no smoothing')
     MBM_beads = List() # this is a dummy to make sure older style PVS files are read ok - TODO: get rid off at some stage!!!
     _MBM_beads = List() # this one does the real work and with the leading "_" is NOT treated as a parameter that "fires" the module! 
-
     _mbm_allbeads = List()
-
+    _initialized = Bool(False)
+    
     _mbm_cache = {}
     _lowess_cache = {}
+    
 
     def lowess_cachetuple(self):
         mbm = self.getmbm()
@@ -1573,13 +1574,12 @@ class MBMcorrection(ModuleBaseMDHmod):
                                       foreshortening=foreshortening)
                 logger.debug("reading in mbm data from file and made new mbm object")
                 logger.debug("mbm beadisgood: %s" % mbm.beadisgood)
-                self._mbm_allbeads = [bead for bead in mbm.beadisgood if np.sum(np.logical_not(np.isnan(mbm.beads['x'][bead]))) > 1] # exclude "empty" trajectories
-                self._MBM_beads = self._mbm_allbeads
                 self._mbm_cache[mbmkey] = mbm
+                self._initialized = False # new file, mark as uninitialized
             else:
                 mbm = self._mbm_cache[mbmkey]
 
-            if len(self._MBM_beads) == 0: # make sure we have a reasonable _MBM_beads list, i.e. re-initialiaise if not already done
+            if len(self._MBM_beads) == 0 or not self._initialized: # make sure we have a reasonable _MBM_beads list, i.e. re-initialiaise if not already done
                 self._mbm_allbeads = [bead for bead in mbm.beadisgood if np.sum(np.logical_not(np.isnan(mbm.beads['x'][bead]))) > 1] # exclude "empty" trajectories
                 self._MBM_beads = self._mbm_allbeads
 
@@ -1589,17 +1589,20 @@ class MBMcorrection(ModuleBaseMDHmod):
                     s = unifiedIO.read(self.mbmsettings)
                     mbmconf = json.loads(s)
                     self._mbm_cache[mbmsettingskey] = mbmconf
-                # this change means that for now we cannot alter the buttons with any effect the GUI interface, the config file always overrides the settings
-                # but it allows reloading the recipe with correct behaviour
-                # TODO: see if this can be changed
-                mbmconf = self._mbm_cache[mbmsettingskey]
-                for bead in mbmconf['beads']:
-                    mbm.beadisgood[bead] =  mbmconf['beads'][bead]
-                self._MBM_beads = [bead for bead in mbmconf['beads'].keys() if mbmconf['beads'][bead] and bead in self._mbm_allbeads]
-                
+                    self._initialized = False # new file, mark as uninitialized
+                # use of the _initialized flag should enable changes via the GUI tickboxes to work *after* a settings file has been read
+                if not self._initialized:
+                    mbmconf = self._mbm_cache[mbmsettingskey]
+                    for bead in mbmconf['beads']:
+                        mbm.beadisgood[bead] =  mbmconf['beads'][bead]
+                    self._MBM_beads = [bead for bead in mbmconf['beads'].keys() if mbmconf['beads'][bead] and bead in self._mbm_allbeads]
 
-            # NOTE: the bead bookkeeping logic needs a full makeover!!!
+            self._initialized = True
+
+            # NOTE: the bead bookkeeping logic needs a good double-check!!!
+            #       also add some comments to make logic clearer
             # in a second pass (if just loaded from mbmconf) set beadisgood to the useful self._MBM_beads subset
+            # or, if _MBM_beads was changed via the GUI interface, propagate the choices into mbm.beadisgood here
             for bead in mbm.beadisgood:
                 mbm.beadisgood[bead] = bead in self._MBM_beads
 
