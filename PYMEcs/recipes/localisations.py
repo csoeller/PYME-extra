@@ -1584,14 +1584,19 @@ class MBMcorrection(ModuleBaseMDHmod):
                 self._MBM_beads = self._mbm_allbeads
 
             mbmsettingskey = self.mbmsettings
-            if mbmsettingskey != '' and mbmsettingskey not in self._mbm_cache.keys():
-                s = unifiedIO.read(self.mbmsettings)
-                mbmconf = json.loads(s)
-
+            if mbmsettingskey != '':
+                if mbmsettingskey not in self._mbm_cache.keys():
+                    s = unifiedIO.read(self.mbmsettings)
+                    mbmconf = json.loads(s)
+                    self._mbm_cache[mbmsettingskey] = mbmconf
+                # this change means that for now we cannot alter the buttons with any effect the GUI interface, the config file always overrides the settings
+                # but it allows reloading the recipe with correct behaviour
+                # TODO: see if this can be changed
+                mbmconf = self._mbm_cache[mbmsettingskey]
                 for bead in mbmconf['beads']:
                     mbm.beadisgood[bead] =  mbmconf['beads'][bead]
                 self._MBM_beads = [bead for bead in mbmconf['beads'].keys() if mbmconf['beads'][bead] and bead in self._mbm_allbeads]
-                self._mbm_cache[mbmsettingskey] = mbmconf
+                
 
             # NOTE: the bead bookkeeping logic needs a full makeover!!!
             # in a second pass (if just loaded from mbmconf) set beadisgood to the useful self._MBM_beads subset
