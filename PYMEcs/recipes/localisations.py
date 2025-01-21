@@ -1494,10 +1494,10 @@ class MBMcorrection(ModuleBaseMDHmod):
     def lowess_cachehit(self):
         cachekey = self.lowess_cachekey()
         if cachekey in self._lowess_cache:
-            logger.debug("CACHEHIT from in-memory-cache")
+            logger.debug("CACHEHIT from in-memory-cache; cache tuple: %s" % str(self.lowess_cachetuple()))
             return self._lowess_cache[cachekey]
         elif self.lowess_chacheread():
-            logger.debug("CACHEHIT from file-cache")
+            logger.debug("CACHEHIT from file-cache; cache tuple: %s" % str(self.lowess_cachetuple()))
             return self._lowess_cache[cachekey]
         else:
             logger.debug("NO CACHEHIT!!! cache tuple: %s" % str(self.lowess_cachetuple()))
@@ -1571,11 +1571,17 @@ class MBMcorrection(ModuleBaseMDHmod):
                 from PYMEcs.IO.MINFLUX import foreshortening
                 mbm = MBMCollectionDF(name=Path(self.mbmfile).stem,filename=self.mbmfile,
                                       foreshortening=foreshortening)
+                logger.debug("reading in mbm data from file and made new mbm object")
+                logger.debug("mbm beadisgood: %s" % mbm.beadisgood)
                 self._mbm_allbeads = [bead for bead in mbm.beadisgood if np.sum(np.logical_not(np.isnan(mbm.beads['x'][bead]))) > 1] # exclude "empty" trajectories
                 self._MBM_beads = self._mbm_allbeads
                 self._mbm_cache[mbmkey] = mbm
             else:
                 mbm = self._mbm_cache[mbmkey]
+
+            if len(self._MBM_beads) == 0: # make sure we have a reasonable _MBM_beads list, i.e. re-initialiaise if not already done
+                self._mbm_allbeads = [bead for bead in mbm.beadisgood if np.sum(np.logical_not(np.isnan(mbm.beads['x'][bead]))) > 1] # exclude "empty" trajectories
+                self._MBM_beads = self._mbm_allbeads
 
             mbmsettingskey = self.mbmsettings
             if mbmsettingskey != '' and mbmsettingskey not in self._mbm_cache.keys():
@@ -1586,10 +1592,19 @@ class MBMcorrection(ModuleBaseMDHmod):
                     mbm.beadisgood[bead] =  mbmconf['beads'][bead]
                 self._MBM_beads = [bead for bead in mbmconf['beads'].keys() if mbmconf['beads'][bead] and bead in self._mbm_allbeads]
                 self._mbm_cache[mbmsettingskey] = mbmconf
+
+            # NOTE: the bead bookkeeping logic needs a full makeover!!!
             # in a second pass (if just loaded from mbmconf) set beadisgood to the useful self._MBM_beads subset
             for bead in mbm.beadisgood:
                 mbm.beadisgood[bead] = bead in self._MBM_beads
 
+            anygood = False
+            for bead in mbm.beadisgood:
+                if mbm.beadisgood[bead]:
+                    anygood = True
+            if not anygood:
+                raise RuntimeError("no 'good' bead selected, giving up...")
+            
             mbm.median_window = self.Median_window
 
             bead_ds_dict = get_bead_dict_from_mbm(mbm)
