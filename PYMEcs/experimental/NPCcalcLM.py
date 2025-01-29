@@ -116,6 +116,8 @@ class NPCcalc():
         visFr.AddMenuItem('Experimental>NPC2D', 'NPC Analysis settings', self.OnNPCsettings)
         visFr.AddMenuItem('Experimental>NPC3D', 'NPC Analysis settings', self.OnNPCsettings)
         visFr.AddMenuItem('Experimental>NPC3D', 'Add NPC Gallery', self.On3DNPCaddGallery)
+        visFr.AddMenuItem('Experimental>NPC3D', 'Plot NPC by-segment data', self.OnNPC3DPlotBySegments)
+        visFr.AddMenuItem('Experimental>NPC3D', 'Save NPC by-segment data', self.OnNPC3DSaveBySegments)
 
         self._npcsettings = None
 
@@ -231,6 +233,41 @@ class NPCcalc():
         npcs.plot_labeleff(thresh=self.NPCsettings.SegmentThreshold_3D)
 
 
+    def OnNPC3DSaveBySegments(self, event=None):
+        pipeline = self.visFr.pipeline
+        if 'npcs' in dir(pipeline) and pipeline.npcs is not None:
+            nbs = pipeline.npcs.n_bysegments()
+            if nbs is None:
+                warn("could not find npcs with by-segment fitting info, have you carried out fitting with recent code?")
+                return
+            with wx.FileDialog(self.visFr, 'Save NPC by-segment data as ...',
+                                wildcard='CSV (*.csv)|*.csv',
+                                style=wx.FD_SAVE) as fdialog:
+                if fdialog.ShowModal() != wx.ID_OK:
+                    return
+                else:
+                    fpath = fdialog.GetPath()
+                    
+            import pandas as pd
+            df = pd.DataFrame.from_dict(dict(top=nbs['top'].flatten(),bottom=nbs['bottom'].flatten()))
+            df.to_csv(fpath,index=False)
+        else:
+            warn("could not find valid NPC set, have you carried out fitting?")
+        
+    def OnNPC3DPlotBySegments(self, event=None):
+        pipeline = self.visFr.pipeline
+        if 'npcs' in dir(pipeline) and pipeline.npcs is not None:
+            nbs = pipeline.npcs.n_bysegments()
+            if nbs is None:
+                warn("could not find npcs with by-segment fitting info, have you carried out fitting with recent code?")
+                return
+            plt.figure()
+            plt.hist(nbs['bottom'].flatten(),bins='auto',alpha=0.5,label='bottom',density=True,histtype='step')
+            plt.hist(nbs['top'].flatten(),bins='auto',alpha=0.5,label='top',density=True,histtype='step')
+            plt.legend()
+        else:
+            warn("could not find valid NPC set, have you carried out fitting?")
+        
     def On3DNPCaddGallery(self, event=None):
         pipeline = self.visFr.pipeline
         if 'npcs' not in dir(pipeline) or 'measurements' not in dir(pipeline.npcs):

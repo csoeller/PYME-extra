@@ -138,7 +138,7 @@ def rfilt(xn,yn,r0,dr=25.0):
     return (xn[rimask],yn[rimask])
 
 def estimate_nlabeled(x,y,r0=None,nthresh=10,dr=30.0,rotation=None,
-                      do_plot=False,secondpass=False,fitmode='abs',return_radius=False):
+                      do_plot=False,secondpass=False,fitmode='abs',return_radius=False,return_bysegments=False):
     if r0 is None:
         xc, yc, r0, sigma = fitcirc(x,y)
         xn, yn = centreshift(x, y, xc, yc)
@@ -218,6 +218,8 @@ def estimate_nlabeled(x,y,r0=None,nthresh=10,dr=30.0,rotation=None,
 
     if return_radius:
         return (Nlabeled,r0)
+    elif return_bysegments:
+        return (Nlabeled,nhist)
     else:
         return Nlabeled
 
@@ -696,17 +698,19 @@ class NPC3D(object):
                 # self.plot_points('filtered')
                 x=self.filtered_pts[:,0]
                 y=self.filtered_pts[:,1]
-                self.n_top = estimate_nlabeled(x,y,r0=r0,dr=dr,nthresh=nthresh,do_plot=do_plot,rotation=rotation)
+                (self.n_top,self.n_top_bysegments) = estimate_nlabeled(x,y,r0=r0,dr=dr,nthresh=nthresh,do_plot=do_plot,
+                                                                       rotation=rotation,return_bysegments=True)
             else:
-                self.n_top = 0
+                (self.n_top,self.n_top_bysegments) = (0,np.zeros((8)))
             self.filter('z',-zrangeabs,0)
             if self.filtered_pts.size > 0:
                 # self.plot_points('filtered')
                 x=self.filtered_pts[:,0]
                 y=self.filtered_pts[:,1]
-                self.n_bot = estimate_nlabeled(x,y,r0=r0,dr=dr,nthresh=nthresh,do_plot=do_plot,rotation=rotation)
+                (self.n_bot,self.n_bot_bysegments) = estimate_nlabeled(x,y,r0=r0,dr=dr,nthresh=nthresh,do_plot=do_plot,
+                                                                       rotation=rotation,return_bysegments=True)
             else:
-                self.n_bot = 0
+                (self.n_bot,self.n_bot_bysegments) = (0,np.zeros((8)))
             return (self.n_top,self.n_bot)
 
 class NPC3DSet(object):
@@ -767,3 +771,21 @@ class NPC3DSet(object):
         for npc in self.npcs:
             heights.append(npc.get_glyph_height()/(0.01*npc.opt_result.x[6]))
         return heights
+
+    def n_bysegments(self):
+        nbs_top = []
+        nbs_bot = []
+        for npc in self.npcs:
+            if npc.fitted:
+                try:
+                   nbs_top.append(npc.n_top_bysegments)
+                except AttributeError:
+                    pass
+                try:
+                   nbs_bot.append(npc.n_bot_bysegments)
+                except AttributeError:
+                    pass
+        if len(nbs_top) == 0 and len(nbs_bot) == 0:
+            return None
+        else:
+            return dict(top=np.array(nbs_top),bottom=np.array(nbs_bot))
