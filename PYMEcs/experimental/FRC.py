@@ -2,6 +2,7 @@ import numpy as np
 from scipy import signal
 from scipy import stats
 import wx
+from PYME.warnings import warn
 
 ##################
 # FRC.py
@@ -237,10 +238,13 @@ class FRCplotter:
     def __init__(self, dsviewer):
         self.dsviewer = dsviewer
         dsviewer.AddMenuItem('Experimental>Analysis', 'FRC of image pair', self.OnFRC)
+        dsviewer.AddMenuItem('Experimental>Analysis', 'save last FRC curves', self.OnFRCSave)
         dsviewer.AddMenuItem('Experimental>Analysis', 'adjust FRC settings', self.OnFRCSettings)
         dsviewer.AddMenuItem('Experimental>Analysis', 'save MRC volumes for FSC', self.OnFSCsave_as_MRC)
+        
         self.frcSettings = FRCsettings()
-
+        self.lastFRC = None
+        
     def OnFRCSettings(self, event=None):
         if self.frcSettings.configure_traits(kind='modal'):
             pass
@@ -268,6 +272,25 @@ class FRCplotter:
         frc_plot(freqs,frc1,smoothed,fhb,f7,halfbit,chanNames,
                  showHalfbitThreshold=self.frcSettings.ShowHalfbitThreshold,
                  showGrid=self.frcSettings.ShowGrid)
+        
+        self.lastFRC = dict(frequencies=freqs,frc_curve=frc1,frc_smoothed=smoothed,frchbval=fhb,frcval=f7,frc_halfbit=halfbit)
+
+    def OnFRCSave(self, event=None):
+        if self.lastFRC is None:
+            warn("could not find data from prior FRC Plot; cannot scave, please plot first")
+            return
+        with wx.FileDialog(self.dsviewer, 'Save FRC data as ...',
+                           wildcard='CSV (*.csv)|*.csv',
+                           style=wx.FD_SAVE) as fdialog:
+            if fdialog.ShowModal() != wx.ID_OK:
+                return
+            else:
+                fpath = fdialog.GetPath()
+
+        lfrc = self.lastFRC
+        import pandas as pd
+        df = pd.DataFrame.from_dict(dict(freqs=lfrc['frequencies'],frc=lfrc['frc_curve'],frcsmooth=lfrc['frc_smoothed']))
+        df.to_csv(fpath,index=False)
         
     def OnFSCsave_as_MRC(self, event=None):
         from PYME.DSView.modules.coloc import ColocSettingsDialog
