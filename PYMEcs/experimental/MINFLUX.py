@@ -49,17 +49,29 @@ def plot_errors(pipeline):
 from PYMEcs.misc.matplotlib import boxswarmplot
 import pandas as pd
 def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', wintitle=None, bigCfraction=None, **kwargs):
+    if 'range' in kwargs:
+        enforce_xlims = True
+        xlims0=kwargs['range']
+        extent = xlims0[1] - xlims0[0]
+        frac = 0.05
+        xlims = [xlims0[0] - frac*extent, xlims0[1] + frac*extent]
+    else:
+        enforce_xlims = False
     fig = plt.figure()
     plt.subplot(221)
     h = plt.hist(cts,**kwargs,log=True)
     plt.xlabel(xlabel)
     plt.plot([np.mean(cts),np.mean(cts)],[0,h[0].max()])
     plt.plot([np.median(cts),np.median(cts)],[0,h[0].max()],'--')
+    if enforce_xlims:
+        plt.xlim(*xlims)
     plt.subplot(222)
     h = plt.hist(ctsgt1,**kwargs,log=True)
     plt.xlabel('%s ( > 1)' % xlabel)
     plt.plot([np.mean(ctsgt1),np.mean(ctsgt1)],[0,h[0].max()])
     plt.plot([np.median(ctsgt1),np.median(ctsgt1)],[0,h[0].max()],'--')
+    if enforce_xlims:
+        plt.xlim(*xlims)
     plt.subplot(223)
     dfcs = pd.DataFrame.from_dict(dict(clusterSize=cts))
     boxswarmplot(dfcs,format="%.1f",swarmsize=5,width=0.2,annotate_means=True,annotate_medians=True,swarmalpha=0.15,strip=True)
