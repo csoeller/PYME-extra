@@ -378,7 +378,8 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
                     #  in some properties these are NAN, for eco this seems 0, so ok to still use sum along whole axis
                     'tim': dfin['tim'], # we also keep the original float time index, units are [s]
                     'nPhotons': nphotons_all[wherelast],
-                    'nIters': niterations_all[wherelast]
+                    'nIters': niterations_all[wherelast],
+                    'itr': dfin['itr']
                     })
 
     if has_lnc:
