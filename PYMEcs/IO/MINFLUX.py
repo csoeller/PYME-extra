@@ -128,9 +128,20 @@ def minflux_npy_detect_3D_new(data):
         if not np.all(dfin['itr'] == 4):
             raise RuntimeError('2D detected but some "last iterations" have an index different from 4, giving up')
         return False # 2D
+    elif dfin['itr'][0] == 3: # 2D tracking
+        if not np.all(dfin['itr'] == 3):
+            raise RuntimeError('2D tracking detected but some "last iterations" have an index different from 3, giving up')
+        return False # 2D
     else:
-        raise RuntimeError('unknown number of final iteration, neither 4 (2D) nor 9 (3D), is actually: %d' %
+        raise RuntimeError('unknown number of final iteration, neither 3, (2D tracking), 4 (2D) nor 9 (3D), is actually: %d' %
                             (dfin['itr'][0]))
+
+def minflux_npy_detect_2Dtracking_new(data):
+    dfin = data[data['fnl'] == True]
+    if np.all(dfin['itr'] == 3):
+        return True
+    else:
+        return False
 
 def minflux_npy_has_extra_iter_legacy(data):
     if data['itr'].shape[1] == 6 or data['itr'].shape[1] == 11:
@@ -286,6 +297,7 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
     lastits = data['fnl'] == True
     wherelast = np.nonzero(lastits)[0]
     dfin = data[lastits]
+    is2dtracking = False
 
     if minflux_npy_detect_3D_new(data):
         is_3D = True
@@ -294,9 +306,13 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
             raise RuntimeError('CFR check_3D: 3D detected but some "cfr iterations" have an index different from 6, giving up')
     else:
         is_3D = False
-        wherecfr = wherelast - 1 # in 2D we do use the last but one iteration (iteration 3)
-        if not np.all(data[wherecfr]['itr'] == 3):
-            raise RuntimeError('CFR check_2D: 2D detected but some "cfr iterations" have an index different from 3, giving up')
+        if minflux_npy_detect_2Dtracking_new(data):
+            is2dtracking = True
+            wherecfr = wherelast
+        else:
+            wherecfr = wherelast - 1 # in 2D we do use the last but one iteration (iteration 3)
+            if not np.all(data[wherecfr]['itr'] == 3):
+                raise RuntimeError('CFR check_2D: 2D detected but some "cfr iterations" have an index different from 3, giving up')
 
     posnm = 1e9*dfin['loc'] # we keep all distances in units of nm
     posnm[:,2] *= foreshortening
