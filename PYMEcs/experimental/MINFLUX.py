@@ -475,7 +475,8 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MBM attributes", self.OnMBMAttributes)
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MFX attributes", self.OnMFXAttributes)
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MFX metadata info (experimental)", self.OnMFXInfo)
-        visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks", self.OnAddMINFLUXTracks)
+        visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from clumpIndex)", self.OnAddMINFLUXTracksCI)
+        visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from tid)", self.OnAddMINFLUXTracksTid)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -572,10 +573,16 @@ class MINFLUXanalyser():
         layer = TrackRenderLayer(self.visFr.pipeline, dsname='cluster_shapes', method='tracks', clump_key='polyIndex', line_width=2.0, alpha=0.5)
         self.visFr.add_layer(layer)
 
-    def OnAddMINFLUXTracks(self, event):        
+    def OnAddMINFLUXTracksCI(self, event):        
         # now we add a track layer to render our traces
         from PYME.LMVis.layers.tracks import TrackRenderLayer # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
         layer = TrackRenderLayer(self.visFr.pipeline, dsname='output', method='tracks', clump_key='clumpIndex', line_width=2.0, alpha=0.5)
+        self.visFr.add_layer(layer)
+
+    def OnAddMINFLUXTracksTid(self, event):        
+        # now we add a track layer to render our traces
+        from PYME.LMVis.layers.tracks import TrackRenderLayer # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
+        layer = TrackRenderLayer(self.visFr.pipeline, dsname='output', method='tracks', clump_key='tid', line_width=2.0, alpha=0.5)
         self.visFr.add_layer(layer)
 
     def OnLoadCustom(self, event):

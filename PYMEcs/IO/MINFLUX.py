@@ -308,7 +308,7 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
         is_3D = False
         if minflux_npy_detect_2Dtracking_new(data):
             is2dtracking = True
-            wherecfr = wherelast
+            wherecfr = wherelast # this is bogus for now; we really need to get CFR from previous itr==2 that belongs to the same trace
         else:
             wherecfr = wherelast - 1 # in 2D we do use the last but one iteration (iteration 3)
             if not np.all(data[wherecfr]['itr'] == 3):
@@ -456,10 +456,13 @@ def _get_mdh(data,filename):
     if minflux_npy_new_format(data):
         mdh['MINFLUX.Format'] = 'RevAutumn2024'
         mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_new(data)
+        mdh['MINFLUX.IsTracking'] = minflux_npy_detect_2Dtracking_new(data)
     else:
         mdh['MINFLUX.Format'] = 'Legacy'
         mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_legacy(data)
         mdh['MINFLUX.ExtraIteration'] = minflux_npy_has_extra_iter_legacy(data)
+        mdh['MINFLUX.IsTracking'] = False # for now we do not support tracking with legacy data
+
     return mdh
 
 def _get_mdh_zarr(filename,arch):
