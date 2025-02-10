@@ -367,11 +367,21 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
         pymedct.update({'z':posnm[:,2], 'error_z' : stdz})
 
     if props['Tracking']: # NOTE: for now 2D only, must fix in future for 3D!
-        LOCERR_MAX = 15.0
-        track_stdx = stdx.copy()
-        track_stdy = stdy.copy()
-        stdx = np.clip(stdx,None,LOCERR_MAX) # current workaround, need better loc err estimation
-        stdy = np.clip(stdy,None,LOCERR_MAX) # current workaround, need better loc err estimation
+
+        # estimating the experimental localization precision σ for each track by calculating the
+        # standard deviation (SD) of coordinate difference between consecutive localizations
+        # from supplement in Deguchi, T. et al. Direct observation of motor protein stepping in
+        #                             living cells using MINFLUX. Science 379, 1010–1015 (2023).
+        def diffstd(data):
+            return np.diff(data).std()/1.41 # take differential and then look at std_dev of that; 1/sqrt(2) to account for differences
+        
+        track_stdx = stdx
+        track_stdy = stdy
+        #LOCERR_MAX = 15.0
+        #stdx = np.clip(stdx,None,LOCERR_MAX) # current workaround, need better loc err estimation
+        #stdy = np.clip(stdy,None,LOCERR_MAX) # current workaround, need better loc err estimation
+        stdx = get_stddev_property(ids,posnm[:,0],statistic=diffstd)
+        stdy = get_stddev_property(ids,posnm[:,1],statistic=diffstd)
         track_tmin = get_stddev_property(ids,dfin['tim'],'min')
         track_tms = 1e3*(dfin['tim']-track_tmin)
         pymedct.update({'track_stdx':track_stdx, 'track_stdy':track_stdy, 'track_tms':track_tms})
