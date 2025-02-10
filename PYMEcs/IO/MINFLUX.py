@@ -104,9 +104,9 @@ def minflux_zarr2pyme(archz,return_original_array=False,make_clump_index=True,wi
         return pyme_recArray
 
 
-##################
-### LEGACY IO ####
-##################
+###############################
+### MINFLUX property checks ###
+###############################
 
 # here we check for size either 5 (2D) or 10 (3D); any other size raises an error
 def minflux_npy_detect_3D_legacy(data):
@@ -118,6 +118,16 @@ def minflux_npy_detect_3D_legacy(data):
         raise RuntimeError('unknown size of itr array, neither 5 (2D) nor 10 (3D), is actually: %d' %
                             (data['itr'].shape[1]))
 
+def minflux_check_poperties(data): # this is aiming at becoming a single stop to check MINFLUX file/dataset properties
+    props = {}
+    props['Is3D'] = minflux_npy_detect_3D_new(data)
+    props['Tracking'] = minflux_npy_detect_2Dtracking_new(data)
+    if minflux_npy_new_format(data):
+        props['Format'] = 'RevAutumn2024'
+    else:
+        props['Format'] = 'Legacy'
+    return props
+    
 def minflux_npy_detect_3D_new(data):
     dfin = data[data['fnl'] == True]
     if dfin['itr'][0] == 9:
@@ -148,10 +158,16 @@ def minflux_npy_has_extra_iter_legacy(data):
         return True # has a spare empty starting position
     else:
         return False
+
+
+##################
+### LEGACY IO ####
+##################
+
     
 # this one should be able to deal both with 2d and 3D
 def minflux_npy2pyme_legacy(data,make_clump_index=True,with_cfr_std=False):
-    
+
     if minflux_npy_detect_3D_legacy(data):
         is_3D = True
         iterno_loc = 9 # we pick up the most precise localisation from this iteration, also fbg
@@ -297,17 +313,15 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
     lastits = data['fnl'] == True
     wherelast = np.nonzero(lastits)[0]
     dfin = data[lastits]
-    is2dtracking = False
 
-    if minflux_npy_detect_3D_new(data):
-        is_3D = True
+    props = minflux_check_poperties(data)
+
+    if props['Is3D']:
         wherecfr = wherelast - 3
         if not np.all(data[wherecfr]['itr'] == 6):
             raise RuntimeError('CFR check_3D: 3D detected but some "cfr iterations" have an index different from 6, giving up')
     else:
-        is_3D = False
-        if minflux_npy_detect_2Dtracking_new(data):
-            is2dtracking = True
+        if props['Tracking']:
             wherecfr = wherelast # this is bogus for now; we really need to get CFR from previous itr==2 that belongs to the same trace
         else:
             wherecfr = wherelast - 1 # in 2D we do use the last but one iteration (iteration 3)
@@ -347,10 +361,20 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
     stdx[stdx < 1e-3] = 100.0 # if error estimate is too small, replace with 100 as "large" flag
     stdy = get_stddev_property(ids,posnm[:,1])
     stdy[stdy < 1e-3] = 100.0
-    if is_3D:
+    if props['Is3D']:
         stdz = get_stddev_property(ids,posnm[:,2])
         stdz[stdz < 1e-3] = 100.0
         pymedct.update({'z':posnm[:,2], 'error_z' : stdz})
+
+    if props['Tracking']: # NOTE: for now 2D only, must fix in future for 3D!
+        LOCERR_MAX = 15.0
+        track_stdx = stdx.copy()
+        track_stdy = stdy.copy()
+        stdx = np.clip(stdx,None,LOCERR_MAX) # current workaround, need better loc err estimation
+        stdy = np.clip(stdy,None,LOCERR_MAX) # current workaround, need better loc err estimation
+        track_tmin = get_stddev_property(ids,dfin['tim'],'min')
+        track_tms = 1e3*(dfin['tim']-track_tmin)
+        pymedct.update({'track_stdx':track_stdx, 'track_stdy':track_stdy, 'track_tms':track_tms})
 
     # we are currently not using the info on incomplete sequences
     seqid,incomplete_seqid  = mk_seqids_maxpos(data) # we give every sequence a unique id to allow summing up the photons
@@ -385,7 +409,7 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
     if has_lnc:
         pymedct.update({'x_nc' : posnm_nc[:,0],
                         'y_nc' : posnm_nc[:,1]})
-        if is_3D:
+        if props['Is3D']:
             pymedct.update({'z_nc' : posnm_nc[:,2]})
 
     # copy a few entries verbatim
@@ -398,14 +422,12 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
     pymepd = pd.DataFrame.from_dict(pymedct)
     return pymepd
 
-
-# deprecated
-# convenience function                           
-def _save_minflux_as_csv(pd_data, fname):
-    pd_data.to_csv(fname,index=False)
+#################################
+### MBM utility functionality ###
+#################################
 
 # we try to find an MBM collection attached
-# to an MBMcorrection generated data source
+# to an MBMcorrection module generated data source
 # returns None if unsuccesful
 def findmbm(pipeline,warnings=True,return_mod=False):
     from PYMEcs.recipes.localisations import MBMcorrection
@@ -454,14 +476,15 @@ def _get_basic_MINFLUX_metadata(filename):
 def _get_mdh(data,filename):
     mdh = _get_basic_MINFLUX_metadata(filename)
     if minflux_npy_new_format(data):
-        mdh['MINFLUX.Format'] = 'RevAutumn2024'
-        mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_new(data)
-        mdh['MINFLUX.IsTracking'] = minflux_npy_detect_2Dtracking_new(data)
+        props = minflux_check_poperties(data)
+        mdh['MINFLUX.Format'] = props['Format']
+        mdh['MINFLUX.Is3D'] = props['Is3D']
+        mdh['MINFLUX.Tracking'] = props['Tracking']
     else:
         mdh['MINFLUX.Format'] = 'Legacy'
         mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_legacy(data)
         mdh['MINFLUX.ExtraIteration'] = minflux_npy_has_extra_iter_legacy(data)
-        mdh['MINFLUX.IsTracking'] = False # for now we do not support tracking with legacy data
+        mdh['MINFLUX.Tracking'] = False # for now we do not support tracking with legacy data
 
     return mdh
 
@@ -488,6 +511,8 @@ def _get_mdh_zarr(filename,arch):
             mdh['MINFLUX.Globals.%s' % par] = mfx_global_par[par]
         for pars in md_by_itrs:
             mdh['MINFLUX.ByItrs.%s' % pars] = md_by_itrs[pars].to_numpy()
+        import re
+        mdh['MINFLUX.Tracking'] = re.search('tracking', mfx_global_par['ID'], re.IGNORECASE) is not None
     else:
         mdh['MINFLUX.Format'] = 'LegacyZarrConversion'
         mdh['MINFLUX.Is3D'] = mfx_attrs['_legacy']['_seqs'][0]['Itr'][0]['Mode']['dim'] > 2
@@ -538,6 +563,64 @@ def get_metadata_from_mfx_attrs(mfx_attrs):
     mfx_global_pars['FieldStride'] = mfx_globals['field']['stride']
 
     return (md_by_itrs,mfx_global_pars)
+
+
+##############################
+### tabular classes  #########
+##############################
+
+from PYME.IO.tabular import TabularBase
+
+# closely modeled on RecArraySource
+class MinfluxNpySource(TabularBase):
+    _name = "MINFLUX NPY File Source"
+    def __init__(self, filename):
+        """ Input filter for use with NPY data exported from MINFLUX data (typically residing in MSR files)."""
+
+        self.res = minflux_npy2pyme(filename)
+
+        # check for invalid localisations:
+        # possible TODO - is this needed/helpful, or should we propagate missing values further?
+        # FIXED - minflux_npy2pyme should now also work properly when invalid data is present
+        #         so returning just the valid events to PYME should be ok
+        if np.any(self.res['vld'] < 1):
+            self.res = self.res[self.res['vld'] >= 1]
+
+        self._keys = list(self.res.dtype.names)
+       
+
+    def keys(self):
+        return self._keys
+
+    def __getitem__(self, keys):
+        key, sl = self._getKeySlice(keys)
+        
+        if not key in self._keys:
+            raise KeyError('Key (%s) not found' % key)
+
+       
+        return self.res[key][sl]
+
+    
+    def getInfo(self):
+        return 'MINFLUX NPY Data Source\n\n %d points' % len(self.res['x'])
+
+class MinfluxZarrSource(MinfluxNpySource):
+    _name = "MINFLUX zarr File Source"
+    def __init__(self, filename):
+        """ Input filter for use with ZARR data exported from MINFLUX data (originally residing in MSR files)."""
+        import zarr
+        archz = zarr.open(filename)
+        self.zarr = archz
+        self._own_file = True # is this necessary? Normally only used by HDF to close HFD on destroy, zarr does not need "closing"
+
+        # NOTE: no further 'locations valid' check should be necessary - we filter already in the conversion function
+        self.res = minflux_zarr2pyme(archz)
+        
+        self._keys = list(self.res.dtype.names)
+
+        # note: aparently, closing an open zarr archive is not required; accordingly no delete and close methods necessary
+
     
 ##############################
 ### Register IO with PYME ####
@@ -585,7 +668,6 @@ def monkeypatch_npyorzarr_io(visFr):
     visFr._populate_open_args = types.MethodType(_populate_open_args_npyorzarr,visFr)
 
     def _load_ds_npy(filename):
-        from PYMEcs.IO.tabular import MinfluxNpySource
         ds = MinfluxNpySource(filename)
         ds.filename = filename
         
@@ -595,7 +677,6 @@ def monkeypatch_npyorzarr_io(visFr):
         return ds
 
     def _load_ds_zarrzip(filename):
-        from PYMEcs.IO.tabular import MinfluxZarrSource
         ds = MinfluxZarrSource(filename)
         ds.filename = filename
         
