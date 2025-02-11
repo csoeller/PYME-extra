@@ -356,6 +356,42 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
     else:
         ids = rawids
 
+    # we are currently not using the info on incomplete sequences
+    seqid,incomplete_seqid  = mk_seqids_maxpos(data) # we give every sequence a unique id to allow summing up the photons
+    # we assume for now the counts at offset can be used to sum up
+    # and get the total photons harvested in a sequence
+    nphotons_all = get_stddev_property(seqid,data['eco'],statistic='sum')
+    niterations_all = get_stddev_property(seqid,data['eco'],statistic='count') # we also count how many iterations were done, to see complete vs partial sequences
+    
+    if with_cfr_std: # we also compute on request a cfr std dev across a trace ID (=clump in PYME)
+        pymedct.update({'cfr_std':get_stddev_property(ids,data[wherecfr]['cfr'])})
+
+    pymedct.update({'x' : posnm[:,0],
+                    'y': posnm[:,1],
+                    # for t we use time to ms precision (without rounding); this is a reasonably close
+                    # correspondence to frame numbers as time coordinates in SMLM data
+                    't': (1e3*dfin['tim']).astype('i'),
+                    'cfr':data[wherecfr]['cfr'],
+                    'efo':dfin['efo'],
+                    'fbg': dfin['fbg'],
+                    # check with abberior
+                    # NOTE CS 3/2024: there seems to be an extra iteration in the newer files with MBM
+                    #  in some properties these are NAN, for eco this seems 0, so ok to still use sum along whole axis
+                    'tim': dfin['tim'], # we also keep the original float time index, units are [s]
+                    'nPhotons': nphotons_all[wherelast],
+                    'nIters': niterations_all[wherelast],
+                    'itr': dfin['itr']
+                    })
+    # copy a few entries verbatim
+    for key in ['tid','act','vld','sta','sqi','thi','gri']:
+        if key in data.dtype.fields:
+            pymedct[key] = dfin[key].astype('i') # these are either integer types or should be converted to integer
+
+    # spectral colour info
+    pymedct.update({'dcr':dfin['dcr'][:,0]})
+    if dfin['dcr'].shape[1] > 1: # first element is ch1/(ch1 + ch2), second is ch2/(ch1 + ch2) if present
+        pymedct.update({'dcr2':dfin['dcr'][:,1]})
+
     stdx = get_stddev_property(ids,posnm[:,0])
     # we expect this to only happen when clumpSize == 1, because then std dev comes back as 0
     stdx[stdx < 1e-3] = 100.0 # if error estimate is too small, replace with 100 as "large" flag
@@ -364,7 +400,6 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
     if props['Is3D']:
         stdz = get_stddev_property(ids,posnm[:,2])
         stdz[stdz < 1e-3] = 100.0
-        pymedct.update({'z':posnm[:,2], 'error_z' : stdz})
 
     if props['Tracking']: # NOTE: for now 2D only, must fix in future for 3D!
 
@@ -373,7 +408,9 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
         # from supplement in Deguchi, T. et al. Direct observation of motor protein stepping in
         #                             living cells using MINFLUX. Science 379, 1010–1015 (2023).
         def diffstd(data):
-            return np.diff(data).std()/1.41 # take differential and then look at std_dev of that; 1/sqrt(2) to account for differences
+            # take differential and then look at std_dev of that
+            # 1/sqrt(2) to account for variance increase on differences
+            return np.diff(data).std()/1.41
         
         track_stdx = stdx
         track_stdy = stdy
@@ -384,48 +421,22 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
         stdy = get_stddev_property(ids,posnm[:,1],statistic=diffstd)
         track_tmin = get_stddev_property(ids,dfin['tim'],'min')
         track_tms = 1e3*(dfin['tim']-track_tmin)
-        pymedct.update({'track_stdx':track_stdx, 'track_stdy':track_stdy, 'track_tms':track_tms})
+        pymedct.update({'track_stdx':track_stdx, 'track_stdy':track_stdy, 'track_tms':track_tms,
+                        # we return track_err[xy] in addition to error_x, error_y since it avoids
+                        # special treatment on coalescing and therefore allows comparison between
+                        # track_stdx and track_errx etc on a per track basis
+                        'track_errx':stdx.copy(), 'track_erry':stdy.copy(), 
+                        })
 
-    # we are currently not using the info on incomplete sequences
-    seqid,incomplete_seqid  = mk_seqids_maxpos(data) # we give every sequence a unique id to allow summing up the photons
-    # we assume for now the counts at offset can be used to sum up
-    # and get the total photons harvested in a sequence
-    nphotons_all = get_stddev_property(seqid,data['eco'],statistic='sum')
-    niterations_all = get_stddev_property(seqid,data['eco'],statistic='count') # we also count how many iterations were done, to see complete vs partial sequences
-    
-    if with_cfr_std: # we also compute on request a cfr std dev across a trace ID (=clump in PYME)
-        pymedct.update({'cfr_std':get_stddev_property(ids,data[wherecfr]['cfr'])})
-        
-    pymedct.update({'x' : posnm[:,0],
-                    'y': posnm[:,1],
-                    # for t we use time to ms precision (without rounding); this is a reasonably close
-                    # correspondence to frame numbers as time coordinates in SMLM data
-                    't': (1e3*dfin['tim']).astype('i'),
-                    'cfr':data[wherecfr]['cfr'],
-                    'efo':dfin['efo'],
-                    'dcr':dfin['dcr'][:,0], # TODO: these are now arrays with up to elements; for now just forst element
-                    'error_x' : stdx,
-                    'error_y' : stdy,
-                    'fbg': dfin['fbg'],
-                    # check with abberior
-                    # NOTE CS 3/2024: there seems to be an extra iteration in the newer files with MBM
-                    #  in some properties these are NAN, for eco this seems 0, so ok to still use sum along whole axis
-                    'tim': dfin['tim'], # we also keep the original float time index, units are [s]
-                    'nPhotons': nphotons_all[wherelast],
-                    'nIters': niterations_all[wherelast],
-                    'itr': dfin['itr']
-                    })
+    pymedct.update({'error_x' : stdx,'error_y' : stdy})
+    if props['Is3D']:
+        pymedct.update({'z':posnm[:,2], 'error_z' : stdz})
 
     if has_lnc:
         pymedct.update({'x_nc' : posnm_nc[:,0],
                         'y_nc' : posnm_nc[:,1]})
         if props['Is3D']:
             pymedct.update({'z_nc' : posnm_nc[:,2]})
-
-    # copy a few entries verbatim
-    for key in ['tid','act','vld']:
-        if key in data.dtype.fields:
-            pymedct[key] = dfin[key].astype('i') # these are either integer types or should be converted to integer
 
     # TODO: think this through - we don't really need a dataframe here,
     # could return a record array, or at least make that optional
@@ -793,12 +804,17 @@ class Pipeline(pipeline.Pipeline):
         if os.path.splitext(filename)[1] == '.npy': # MINFLUX NPY file
             logging.getLogger(__name__).info('.npy file, trying to load as MINFLUX npy ...')
             if not npy_is_minflux_data(filename,warning=True):
-                raise RuntimeError("can't read pipeline data from NPY file - not a MINFLUX data set")
-            from PYMEcs.IO.tabular import MinfluxNpySource
+                raise RuntimeError("can't read pipeline data from NPY file - not a MINFLUX data set?")
             ds = MinfluxNpySource(filename)
             data = np.load(filename)
             ds.mdh =  _get_mdh(data,filename)
-
+            return ds
+        elif os.path.splitext(filename)[1] == '.zip': # MINFLUX zarr file
+            logging.getLogger(__name__).info('.zip file, trying to load as MINFLUX zarr ...')
+            if not zip_is_minflux_zarr_data(filename,warning=True):
+                raise RuntimeError("can't read pipeline data from MINFLUX zarr file - not a MINFLUX data set?")
+            ds = MinfluxZarrSource(filename)
+            ds.mdh = _get_mdh_zarr(filename,ds.zarr)
             return ds
         else:
             return super()._ds_from_file(filename, **kwargs)
