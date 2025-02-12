@@ -421,11 +421,15 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
         stdy = get_stddev_property(ids,posnm[:,1],statistic=diffstd)
         track_tmin = get_stddev_property(ids,dfin['tim'],'min')
         track_tms = 1e3*(dfin['tim']-track_tmin)
+        track_lims = np.zeros_like(ids)
+        track_lims[np.diff(ids,prepend=0) > 0] = 1 # mark beginning of tracks with 1
+        track_lims[0:-1][np.diff(ids) > 0] = 2 # mark end of tracks with 2
         pymedct.update({'track_stdx':track_stdx, 'track_stdy':track_stdy, 'track_tms':track_tms,
                         # we return track_err[xy] in addition to error_x, error_y since it avoids
                         # special treatment on coalescing and therefore allows comparison between
                         # track_stdx and track_errx etc on a per track basis
-                        'track_errx':stdx.copy(), 'track_erry':stdy.copy(), 
+                        'track_errx':stdx.copy(), 'track_erry':stdy.copy(),
+                        'track_lims':track_lims,
                         })
 
     pymedct.update({'error_x' : stdx,'error_y' : stdy})
