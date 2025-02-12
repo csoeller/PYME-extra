@@ -423,7 +423,7 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
         track_tms = 1e3*(dfin['tim']-track_tmin)
         track_lims = np.zeros_like(ids)
         track_lims[np.diff(ids,prepend=0) > 0] = 1 # mark beginning of tracks with 1
-        track_lims[0:-1][np.diff(ids) > 0] = 2 # mark end of tracks with 2
+        track_lims[np.diff(ids,append=ids.max()+1) > 0] = 2 # mark end of tracks with 2
         pymedct.update({'track_stdx':track_stdx, 'track_stdy':track_stdy, 'track_tms':track_tms,
                         # we return track_err[xy] in addition to error_x, error_y since it avoids
                         # special treatment on coalescing and therefore allows comparison between
