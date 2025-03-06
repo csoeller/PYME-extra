@@ -1204,6 +1204,8 @@ class OrigamiSiteTrack(ModuleBaseMDHmod):
     def run(self, inputClusters, inputSites,inputAllPoints=None):
         site_id = self.labelKey
         idsunique = inputSites[site_id].astype('i')
+
+        has_z = 'error_z' in inputClusters.keys()
         # centroid coordinates
         xc = inputSites['x']
         yc = inputSites['y']
@@ -1246,18 +1248,21 @@ class OrigamiSiteTrack(ModuleBaseMDHmod):
                                          sgwindow_length=self.savgolWindowLength,sgpolyorder=self.savgolPolyorder)
             c_ysite = smoothed_site_func(t,ysite,bins=nbins,statistic=self.binnedStatistic,
                                          sgwindow_length=self.savgolWindowLength,sgpolyorder=self.savgolPolyorder)
-            c_zsite = smoothed_site_func(t,zsite,bins=nbins,statistic=self.binnedStatistic,
-                                         sgwindow_length=self.savgolWindowLength,sgpolyorder=self.savgolPolyorder)
+            if has_z:
+                c_zsite = smoothed_site_func(t,zsite,bins=nbins,statistic=self.binnedStatistic,
+                                             sgwindow_length=self.savgolWindowLength,sgpolyorder=self.savgolPolyorder)
         else:
             c_xsite = site_fit_gaussian(t,xsite,delta_s=self.smoothingBinWidthsSeconds,width_s=self.gaussianBinSizeSeconds)
             c_ysite = site_fit_gaussian(t,ysite,delta_s=self.smoothingBinWidthsSeconds,width_s=self.gaussianBinSizeSeconds)
-            c_zsite = site_fit_gaussian(t,zsite,delta_s=self.smoothingBinWidthsSeconds,width_s=self.gaussianBinSizeSeconds)
+            if has_z:
+                c_zsite = site_fit_gaussian(t,zsite,delta_s=self.smoothingBinWidthsSeconds,width_s=self.gaussianBinSizeSeconds)
 
         for j,id in enumerate(idsunique):
             idx = ids == id
             xerr[idx] = np.std(x[idx]-c_xsite(t[idx]))
             yerr[idx] = np.std(y[idx]-c_ysite(t[idx]))
-            zerr[idx] = np.std(z[idx]-c_zsite(t[idx]))
+            if has_z:
+                zerr[idx] = np.std(z[idx]-c_zsite(t[idx]))
             
         # note to self: we shall preserve the site coordinates in the new data source
         # new properties to create: [xyz]_site, [xyz]_ori, new [xyz]
@@ -1265,11 +1270,13 @@ class OrigamiSiteTrack(ModuleBaseMDHmod):
         mapped_ds = tabular.MappingFilter(inputClusters)
         mapped_ds.setMapping('x_ori', 'x')
         mapped_ds.setMapping('y_ori', 'y')
-        mapped_ds.setMapping('z_ori', 'z')
+        if has_z:
+            mapped_ds.setMapping('z_ori', 'z')
 
         mapped_ds.setMapping('error_x_ori', 'error_x')
         mapped_ds.setMapping('error_y_ori', 'error_y')
-        mapped_ds.setMapping('error_z_ori', 'error_z')
+        if has_z:
+            mapped_ds.setMapping('error_z_ori', 'error_z')
         
         # mapped_ds.addColumn('x_ori', x)
         # mapped_ds.addColumn('y_ori', y)
@@ -1277,71 +1284,63 @@ class OrigamiSiteTrack(ModuleBaseMDHmod):
         
         mapped_ds.addColumn('x_site_nc', xsite)
         mapped_ds.addColumn('y_site_nc', ysite)
-        mapped_ds.addColumn('z_site_nc', zsite)
+        if has_z:
+            mapped_ds.addColumn('z_site_nc', zsite)
 
         mapped_ds.addColumn('x_site', xsite-c_xsite(t))
         mapped_ds.addColumn('y_site', ysite-c_ysite(t))
-        mapped_ds.addColumn('z_site', zsite-c_zsite(t))
+        if has_z:
+            mapped_ds.addColumn('z_site', zsite-c_zsite(t))
 
         mapped_ds.addColumn('error_x_nc', xerrnc)
         mapped_ds.addColumn('error_y_nc', yerrnc)
-        mapped_ds.addColumn('error_z_nc', zerrnc)
+        if has_z:
+            mapped_ds.addColumn('error_z_nc', zerrnc)
 
         mapped_ds.addColumn('error_x', xerr)
         mapped_ds.addColumn('error_y', yerr)
-        mapped_ds.addColumn('error_z', zerr)
+        if has_z:
+            mapped_ds.addColumn('error_z', zerr)
         
         mapped_ds.addColumn('x', x-c_xsite(t))
         mapped_ds.addColumn('y', y-c_ysite(t))
-        mapped_ds.addColumn('z', z-c_zsite(t))
+        if has_z:
+            mapped_ds.addColumn('z', z-c_zsite(t))
 
         if 'driftx' in inputClusters.keys():
             mapped_ds.setMapping('driftx_ori', 'driftx')
             mapped_ds.setMapping('drifty_ori', 'drifty')
-            mapped_ds.setMapping('driftz_ori', 'driftz')
+            if has_z:
+                mapped_ds.setMapping('driftz_ori', 'driftz')
 
         mapped_ds.addColumn('driftx', c_xsite(t))
         mapped_ds.addColumn('drifty', c_ysite(t))
-        mapped_ds.addColumn('driftz', c_zsite(t))
+        if has_z:
+            mapped_ds.addColumn('driftz', c_zsite(t))
 
         if inputAllPoints is not None:
             mapped_ap = tabular.MappingFilter(inputAllPoints)
             # actual localisation coordinates
             x = inputAllPoints['x']
             y = inputAllPoints['y']
-            z = inputAllPoints['z']
+            if has_z:
+                z = inputAllPoints['z']
             t = inputAllPoints['t']
 
             mapped_ap.addColumn('x', x-c_xsite(t))
             mapped_ap.addColumn('y', y-c_ysite(t))
-            mapped_ap.addColumn('z', z-c_zsite(t))
+            if has_z:
+                mapped_ap.addColumn('z', z-c_zsite(t))
 
             mapped_ap.addColumn('driftx', c_xsite(t))
             mapped_ap.addColumn('drifty', c_ysite(t))
-            mapped_ap.addColumn('driftz', c_zsite(t))
+            if has_z:
+                mapped_ap.addColumn('driftz', c_zsite(t))
         else:
             # how to deal with an "optional" output
             # this would be a dummy assignment in the absence of inputAllPoints
             # mapped_ap = tabular.MappingFilter(inputClusters)
             mapped_ap = None # returning none in this case seems better and appears to work
-
-        # for now we disable this way of passing the correction function via metadata
-        if False:
-            from PYME.IO import MetaDataHandler
-
-            mdh = MetaDataHandler.DictMDHandler()
-            mdhin = inputClusters.mdh
-        
-            def checkmdh(item,mdh):
-                if item in mdh:
-                    return "%s_1" % item
-                else:
-                    return item
-            
-            mdh[checkmdh('Processing.DriftFuncs.X',mdhin)] = c_xsite
-            mdh[checkmdh('Processing.DriftFuncs.Y',mdhin)] = c_ysite
-            mdh[checkmdh('Processing.DriftFuncs.Z',mdhin)] = c_zsite
-            mdh[checkmdh('Processing.DriftFuncs.TRange',mdhin)] = [t.min(),t.max()]
         
         return {'outputName': mapped_ds, 'outputAllPoints' : mapped_ap, 'mdh' : None } # pass proper mdh instead of None if metadata output needed
 

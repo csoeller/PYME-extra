@@ -103,3 +103,17 @@ def recipe_from_mdh(mdh):
     else:
         warn("could not retrieve Pipeline.Recipe")
         return None
+
+def load_sessionfile(filename,substitute=True):
+    import yaml
+    from PYME.LMVis.sessionpaths import substitute_sessiondir
+        
+    with open(filename, 'r') as f:
+        session_txt = f.read()
+
+    if substitute:
+        session = yaml.safe_load(substitute_sessiondir(session_txt, filename)) # replace any possibly present SESSIONDIR_TOKEN
+    else:
+        session = yaml.safe_load(session_txt)
+        
+    return session
