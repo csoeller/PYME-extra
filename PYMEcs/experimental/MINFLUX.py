@@ -48,7 +48,7 @@ def plot_errors(pipeline):
     
 from PYMEcs.misc.matplotlib import boxswarmplot
 import pandas as pd
-def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', wintitle=None, bigCfraction=None, **kwargs):
+def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', wintitle=None, bigCfraction=None,bigcf_percluster=None, **kwargs):
     if 'range' in kwargs:
         enforce_xlims = True
         xlims0=kwargs['range']
@@ -99,33 +99,40 @@ def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', wintitle=None, 
         figtitle = ''
     if bigCfraction is not None:
         figtitle = figtitle + " bigC fraction %.1f %%" % (100*bigCfraction)
-        
+        if bigcf_percluster is not None:
+            figtitle = figtitle + " per cluster %.1f %%" % (100*bigcf_percluster)
+    else:
+        if bigcf_percluster is not None:
+            figtitle = figtitle + " bigC frac per cluster %.1f %%" % (100*bigcf_percluster)
+
     fig.canvas.manager.set_window_title(figtitle)
 
-def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True, return_means=False, psu=None, bins=15, **kwargs):
+def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True, return_means=False, psu=None, bins=15, bigc_thresh=50, **kwargs):
     if not ds in pipeline.dataSources:
         warn('no data source named "%s" - check recipe and ensure this is MINFLUX data' % ds)
         return
     curds = pipeline.selectedDataSourceKey
     pipeline.selectDataSource(ds)
     p = pipeline
-    uids, cts = np.unique(p['dbscanClumpID'], return_counts=True)
+    uids, idx, cts = np.unique(p['dbscanClumpID'], return_index=True, return_counts=True)
     nall = p['x'].size
     if 'bigCs' in p.dataSources:
         fraction = p.dataSources['bigCs']['x'].size/float(nall)
     else:
         fraction=None
+    clustersizes = p['dbscanClumpSize'][idx]
+    bigc_fracpercluster = float(np.sum(clustersizes>bigc_thresh))/clustersizes.size
     ctsgt1 = cts[cts > 1.1]
     pipeline.selectDataSource(curds)
     timestamp = pipeline.mdh.get('MINFLUX.TimeStamp')
     if showPlot:
         if psu is not None:
-            _plot_clustersize_counts(cts, ctsgt1,bins=bins,xlabel='# subunits',wintitle=timestamp,bigCfraction=fraction,**kwargs)
+            _plot_clustersize_counts(cts, ctsgt1,bins=bins,xlabel='# subunits',wintitle=timestamp,bigCfraction=fraction,bigcf_percluster=bigc_fracpercluster,**kwargs)
         else:
-            _plot_clustersize_counts(cts, ctsgt1,bins=bins,wintitle=timestamp,bigCfraction=fraction,**kwargs)
+            _plot_clustersize_counts(cts, ctsgt1,bins=bins,wintitle=timestamp,bigCfraction=fraction,bigcf_percluster=bigc_fracpercluster,**kwargs)
         if psu is not None:
             _plot_clustersize_counts(cts/4.0/psu, ctsgt1/4.0/psu, xlabel='# RyRs, corrected', bins=bins,wintitle=timestamp,
-                                     bigCfraction=fraction,**kwargs)
+                                     bigCfraction=fraction,bigcf_percluster=bigc_fracpercluster,**kwargs)
     
     csm = cts.mean()
     csgt1m = ctsgt1.mean()
@@ -424,8 +431,8 @@ class MINFLUXSettings(HasTraits):
     datasourceForClusterAnalysis = CStr(PYME.config.get('MINFLUX-clusterDS','dbscan_clustered'),label='datasource for 3D cluster analysis',
                                         desc="the datasource key that will be used to generate the 3D cluster size analysis")
     
-    #MBM_lowess_fraction = Float(0.03,label='lowess fraction for MBM smoothing',
-    #                                    desc='lowess fraction used for smoothing of coalesced MBM data (default 0.05)')
+    largeClusterThreshold = Float(50,label='Threshold for large clusters',
+                                  desc='minimum number of events to classify as large cluster')
     origamiWith_nc = Bool(False,label='add 2nd moduleset (no MBM corr)',
                           desc="if a full second module set is inserted to also analyse the origami data without any MBM corrections")
 
@@ -862,7 +869,7 @@ class MINFLUXanalyser():
         plot_errors(self.visFr.pipeline)
 
     def OnCluster3D(self, event):
-        plot_cluster_analysis(self.visFr.pipeline, ds=self.analysisSettings.datasourceForClusterAnalysis)
+        plot_cluster_analysis(self.visFr.pipeline, ds=self.analysisSettings.datasourceForClusterAnalysis,bigc_thresh=self.analysisSettings.largeClusterThreshold)
 
     def OnCluster2D(self, event):
         plot_cluster_analysis(self.visFr.pipeline, ds='dbscan2D')
@@ -956,6 +963,11 @@ class MINFLUXanalyser():
         pipeline = self.visFr.pipeline
         recipe = pipeline.recipe
 
+        filters={'error_x' : [0,3.5],
+                 'error_y' : [0,3.5]}
+        if 'error_z' in pipeline.keys():
+            filters['error_z'] = [0,3.5]
+        
         preFiltered = unique_name('prefiltered',pipeline.dataSources.keys())
         corrSiteClumps = unique_name('corrected_siteclumps',pipeline.dataSources.keys())
         corrAll = unique_name('corrected_allpoints',pipeline.dataSources.keys())
@@ -966,9 +978,7 @@ class MINFLUXanalyser():
         
         curds = pipeline.selectedDataSourceKey
         modules = [FilterTable(recipe,inputName=curds,outputName=preFiltered,
-                               filters={'error_x' : [0,3.5],
-                                        'error_y' : [0,3.5],
-                                        'error_z' : [0,3.5]}),
+                               filters=filters),
                    DBSCANClustering2(recipe,inputName=preFiltered,outputName=dbscanClusteredSites,
                                      searchRadius = 15.0,
                                      clumpColumnName = 'siteID',
@@ -993,9 +1003,7 @@ class MINFLUXanalyser():
             dbsnc = unique_name('dbs_nc',pipeline.dataSources.keys())
         
             modules = [FilterTable(recipe,inputName=curds,outputName=preFiltered,
-                                   filters={'error_x' : [0,3.5],
-                                            'error_y' : [0,3.5],
-                                            'error_z' : [0,3.5]}),
+                                   filters=filters),
                        DBSCANClustering2(recipe,inputName=preFiltered,outputName=dbscanClusteredSites,
                                          searchRadius = 15.0,
                                          clumpColumnName = 'siteID',
