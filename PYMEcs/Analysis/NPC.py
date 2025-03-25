@@ -286,19 +286,24 @@ def plotcdf_npc3d(nlab,plot_as_points=True,timestamp=None,thresh=None):
     if thresh is not None:
         labelexp = "thresh %d, %s" % (thresh,labelexp)
 
-    histret = plt.hist(nlab,range=(0,16),bins='auto',density=True,
+    # make sure our bin centers are integer spaced from 0 to 16
+    histret = plt.hist(nlab,bins=np.arange(17)+0.5,density=True,
                        histtype="step", cumulative=1, label=labelexp, alpha=0.3)
     if plot_as_points:
         histn = histret[0]
         histctr = 0.5*(histret[1][1:]+histret[1][0:-1])
         plt.scatter(histctr,histn)
 
+    # ensure we only have integer major ticks in the plot
+    ax = plt.gca()
+    ax.xaxis.get_major_locator().set_params(integer=True)
+    
     popt,perr, pcbfx, pcbestfit = npclabel_fit3D(histctr,histn)
     plt.plot(pcbfx,pcbestfit,'--')
     plt.legend()
     
-    plt.title("NPC 3D analysis using %d NPCs, LE = %d %% +- %.1f %%" %
-              (nlab.size,np.round(100.0*popt),100.0*perr))
+    plt.title("NPC 3D analysis using %d NPCs, LE = %.1f %% +- %.1f %%" %
+              (nlab.size,100.0*popt,100.0*perr))
     plt.xlabel("N labeled")
     plt.ylabel("CDF")
 
