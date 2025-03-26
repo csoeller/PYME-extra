@@ -277,7 +277,7 @@ def plotcdf_npc3d(nlab,plot_as_points=True,timestamp=None,thresh=None):
     pr = prangeNPC3D()
     for p in pr.keys():
         if p != 'krange':
-            plt.plot(pr['krange'],np.cumsum(pr[p]),label="p=%.1f" % p)
+            plt.plot(pr['krange'],np.cumsum(pr[p]),label="p=%.1f" % p,alpha=0.5)
     if timestamp is None:
         labelexp = 'experiment'
     else:
