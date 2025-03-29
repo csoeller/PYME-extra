@@ -522,12 +522,15 @@ def _get_mdh_zarr(filename,arch):
         mdh['MINFLUX.DataID'] = mfx_attrs['did']
         mdh['MINFLUX.Is3D'] = mfx_attrs['measurement']['dimensionality'] > 2
         # now do some checks of acquisitiondate vs any filename derived info
-        from PYMEcs.misc.utils import get_timestamp_from_mdh_acqdate
+        from PYMEcs.misc.utils import get_timestamp_from_mdh_acqdate, compare_timestamps_s
         ts = get_timestamp_from_mdh_acqdate(mdh)
         if ts is not None:
-            if mdh.get('MINFLUX.TimeStamp') is not None:
-                if mdh.get('MINFLUX.TimeStamp') != ts:
-                    warn("acq time stamp (%s) not equal to filename time stamp (%s)" % (ts,mdh.get('MINFLUX.TimeStamp')))
+            mts = mdh.get('MINFLUX.TimeStamp')
+            if mts is not None:
+                if mts != ts:
+                    delta_s = compare_timestamps_s(mts,ts)
+                    if delta_s > 5: # there can be rounding errors from the different TS sources, we tolerate up to 5s difference
+                        warn("acq time stamp (%s) not equal to filename time stamp (%s), delta in s is %d" % (ts,mts,delta_s))
             else:
                 mdh['MINFLUX.TimeStamp'] = ts
 

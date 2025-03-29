@@ -80,6 +80,15 @@ def get_timestamp_from_mdh_acqdate(mdh):
     else:
         return None
 
+def compare_timestamps_s(ts1,ts2):
+    t1 = timestamp_to_datetime(ts1)
+    t2 = timestamp_to_datetime(ts2)
+    if t1 > t2:
+        delta = t1-t2
+    else:
+        delta = t2-t1
+    return delta.seconds
+
 def timestamp_to_datetime(ts):
     t0 = pd.to_datetime(ts,format="%y%m%d-%H%M%S")
     return t0

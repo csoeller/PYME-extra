@@ -1391,6 +1391,58 @@ class MINFLUXcolours(ModuleBase):
 
         return mapped_ds
 
+def get_clump_property(ids, prop, statistic='mean'):
+    maxid = int(ids.max())
+    edges = -0.5+np.arange(maxid+2)
+    idrange = (0,maxid)
+        
+    propclump, bin_edge, binno = binned_statistic(ids, prop, statistic=statistic,
+                                                bins=edges, range=idrange)
+    propclump[np.isnan(propclump)] = 1000.0 # (mark as huge value)
+    mean_events = propclump[ids]
+    return mean_events
+    
+@register_module("DcrColour")
+class DcrColour(ModuleBase):
+    input = Input('localizations')
+    output = Output('colour_mapped')
+    
+    dcr_average_over_trace_threshold = Float(-1)
+    dcr_majority_vote = Bool(False)
+    dcr_majority_minimal_confidence = Float(0.1)
+    
+    def run(self, input):
+        mdh = input.mdh
+                
+        output = tabular.MappingFilter(input)
+        output.mdh = mdh
+    
+        if self.dcr_average_over_trace_threshold > 0 and self.dcr_average_over_trace_threshold < 1 and 'dcr' in output.keys():
+            #ratiometric
+            dcr_trace = get_clump_property(input['clumpIndex'],input['dcr'])
+            output.setMapping('ColourNorm', '1.0 + 0*dcr')
+            output.addColumn('dcr_trace',dcr_trace)
+            # the below calculates the "majority vote" (dcr_major = fraction of trace in short channel)
+            # dcr_mconf is the "confidence" associated with the majority vote
+            dcr_major = get_clump_property(input['clumpIndex'],1.0*(input['dcr'] < self.dcr_average_over_trace_threshold))
+            dcr_mconf = 2.0*np.maximum(dcr_major,1.0-dcr_major)-1.0
+            output.addColumn('dcr_major',dcr_major)
+            output.addColumn('dcr_mconf',dcr_mconf)
+            if self.dcr_majority_vote:
+                output.addColumn('p_near', 1.0*(dcr_major > 0.5)*(dcr_mconf >= self.dcr_majority_minimal_confidence))
+                output.addColumn('p_far', 1.0*(dcr_major <= 0.5)*(dcr_mconf >= self.dcr_majority_minimal_confidence))
+            else:
+                output.addColumn('p_near', 1.0*(dcr_trace < self.dcr_average_over_trace_threshold))
+                output.addColumn('p_far', 1.0*(dcr_trace >= self.dcr_average_over_trace_threshold)*(dcr_trace <= 1.0))
+
+            #output.setMapping('p_near', '1.0*(dcr < %.2f)' % (self.dcr_threshold))
+            #output.setMapping('p_far', '1.0*(dcr >= %.2f)' % (self.dcr_threshold))
+                    
+        cached_output = tabular.CachingResultsFilter(output)
+        # cached_output.mdh = output.mdh
+        return cached_output
+
+
 from pathlib import Path
 def check_mbm_name(mbmfilename,timestamp,endswith='__MBM-beads'):
     if timestamp is None:

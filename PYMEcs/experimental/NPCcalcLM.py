@@ -261,10 +261,16 @@ class NPCcalc():
             if nbs is None:
                 warn("could not find npcs with by-segment fitting info, have you carried out fitting with recent code?")
                 return
-            plt.figure()
-            plt.hist(nbs['bottom'].flatten(),bins='auto',alpha=0.5,label='bottom',density=True,histtype='step')
-            plt.hist(nbs['top'].flatten(),bins='auto',alpha=0.5,label='top',density=True,histtype='step')
+            fig = plt.figure()
+            plt.hist(nbs['bottom'].flatten(),bins=np.arange(nbs['bottom'].max()+2)-0.5,alpha=0.5,label='bottom',density=True,histtype='step')
+            plt.plot([nbs['bottom'].mean(),nbs['bottom'].mean()],[0,0.2],'b--')
+            plt.hist(nbs['top'].flatten(),bins=np.arange(nbs['top'].max()+2)-0.5,alpha=0.5,label='top',density=True,histtype='step')
+            plt.plot([nbs['top'].mean(),nbs['top'].mean()],[0,0.2],'r--')
             plt.legend()
+            plt.text(0.65,0.5,'cytop per site: %.1f' % (0.5*nbs['bottom'].mean()), horizontalalignment='center', # 0.5 to get per site because we have two sites per segment
+                     verticalalignment='center', color='b', transform=fig.transFigure)
+            plt.text(0.65,0.44,'nucleop per site: %.1f' % (0.5*nbs['top'].mean()), horizontalalignment='center', # 0.5 to get per site because we have two sites per segment
+                     verticalalignment='center', color='r', transform=fig.transFigure)
         else:
             warn("could not find valid NPC set, have you carried out fitting?")
         
