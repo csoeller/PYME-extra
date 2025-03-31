@@ -484,6 +484,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MFX metadata info (experimental)", self.OnMFXInfo)
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from clumpIndex)", self.OnAddMINFLUXTracksCI)
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from tid)", self.OnAddMINFLUXTracksTid)
+        visFr.AddMenuItem('MINFLUX>Colour', "Plot colour stats", self.OnPlotColourStats)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -496,6 +497,31 @@ class MINFLUXanalyser():
             for r in minfluxRecipes:
                 ID = visFr.AddMenuItem('MINFLUX>Recipes', r, self.OnLoadCustom).GetId()
                 self.minfluxRIDs[ID] = minfluxRecipes[r]
+
+    def OnPlotColourStats(self,event):
+        pipeline = self.visFr.pipeline
+        chans = pipeline.colourFilter.getColourChans()
+        if len(chans) < 1:
+            warn("No colour channel info, check if colour filtering module is active; aborting plotting")
+            return
+        cols = ['m','c','y']
+        if len(chans) > 3:
+            raise RuntimeError("too many channels, can only deal with max 3, got %d" % len(chans))
+        bins = np.linspace(0.45,0.95,int(0.5/0.005))
+        fig, axs = plt.subplots(nrows=2)
+        axs[0].hist(pipeline['dcr_trace'],bins=bins,color='gray',alpha=0.5,label='other')
+        for chan,col in zip(chans,cols[0:len(chans)]):
+            axs[0].hist(pipeline.colourFilter.get_channel_column(chan,'dcr_trace'),bins=bins,color=col,alpha=0.5,label=chan)
+        axs[0].set_xlabel('dcr_trace')
+        axs[0].set_ylabel('#')
+        axs[0].legend(loc="upper right")
+        axs[1].hist(pipeline['dcr'],bins=bins,color='gray',alpha=0.5,label='other')
+        for chan,col in zip(chans,cols[0:len(chans)]):
+            axs[1].hist(pipeline.colourFilter.get_channel_column(chan,'dcr'),bins=bins,color=col,alpha=0.5,label=chan)
+        axs[1].set_xlabel('dcr')
+        axs[1].set_ylabel('#')
+        axs[1].legend(loc="upper right")
+        plt.tight_layout()
 
     def OnMBMLowessCacheSave(self,event):
         pipeline = self.visFr.pipeline
