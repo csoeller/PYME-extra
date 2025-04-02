@@ -3,6 +3,8 @@ import numpy as np
 import wx
 
 from PYMEcs.pyme_warnings import warn
+
+# --- Define the Localisation Error Analysis function ---
 def plot_errors(pipeline):
     if not 'coalesced_nz' in pipeline.dataSources:
         warn('no data source named "coalesced_nz" - check recipe and ensure this is MINFLUX data')
@@ -11,23 +13,32 @@ def plot_errors(pipeline):
     pipeline.selectDataSource('coalesced_nz')
     p = pipeline
     clumpSize = p['clumpSize']
+    
+    # --- Prepare the plot --- 
     plt.figure()
     plt.subplot(221)
+    
+    # --- Plot the coalesced error in x, y (and z if available) ---
     if 'error_z' in pipeline.keys():
         plt.boxplot([p['error_x'],p['error_y'],p['error_z']],labels=['error_x','error_y','error_z'])
     else:
         plt.boxplot([p['error_x'],p['error_y']],labels=['error_x','error_y'])
     plt.ylabel('loc error - coalesced (nm)')
     pipeline.selectDataSource('with_clumps')
+    
+    # --- Plot the Photon number and background rate ---
     plt.subplot(222)
-    bp_dict = plt.boxplot([p['nPhotons'],p['fbg']],labels=['photons','background rate'])
-    for line in bp_dict['medians']:
+    bp_dict1 = plt.boxplot([p['nPhotons'],p['fbg']],labels=['photons','background rate'])
+    for line in bp_dict1['medians']:
         # get position data for median line
         x, y = line.get_xydata()[0] # top of median line
         # overlay median value
         plt.text(x, y, '%.0f' % y,
-                 horizontalalignment='right') # draw above, centered
+                horizontalalignment='right') # draw above, centered
     uids, idx = np.unique(p['clumpIndex'],return_index=True)
+    #print(f"bp_dict1: {bp_dict1['medians'][0].get_xydata()[0][1]}")
+    
+    # --- Plot the error in x, y, (and z if available) ---
     plt.subplot(223)
     if 'error_z' in pipeline.keys():
         plt.boxplot([p['error_x'][idx],p['error_y'][idx],p['error_z'][idx]],
@@ -35,6 +46,8 @@ def plot_errors(pipeline):
     else:
         plt.boxplot([p['error_x'][idx],p['error_y'][idx]],labels=['error_x','error_y'])
     plt.ylabel('loc error - raw (nm)')
+    
+    # --- Plot the clump size ---
     plt.subplot(224)
     bp_dict = plt.boxplot([clumpSize],labels=['clump size'])
     for line in bp_dict['medians']:
@@ -42,9 +55,50 @@ def plot_errors(pipeline):
         x, y = line.get_xydata()[0] # top of median line
         # overlay median value
         plt.text(x, y, '%.0f' % y,
-                 horizontalalignment='right') # draw above, centered
+                horizontalalignment='right') # draw above, centered
+    
+    # Display the plot
     plt.tight_layout()
     pipeline.selectDataSource(curds)
+    
+    # --- Calculate the mean and median of the clump size --- (Alex B addition)
+    # mean_photon = np.mean(p['nPhotons'])
+    median_photon = np.median(p['nPhotons'])
+    
+    # mean_bg = np.mean(p['fbg'])
+    median_bg = np.median(p['fbg'])
+    
+    # mean_clump = np.mean(p['clumpSize'])
+    pipeline.selectDataSource('coalesced_nz')
+    median_clump = np.median(p['clumpSize'])
+    
+    median_error_x = np.median(p['error_x'])
+    median_error_y = np.median(p['error_y'])
+    median_error_z = np.median(p['error_z'])
+    
+    # median_error_x_coalesced = np.median(p['error_x'])
+    # median_error_y_coalesced = np.median(p['error_y'])
+    # median_error_z_coalesced = np.median(p['error_z'])
+    
+    # --- Print statements --- (Alex B addition)
+    print("Raw median:", np.median(p['clumpSize']))
+    print("Number of data points:", len(p['clumpSize']))
+    print("Boxplot median:", [line.get_xydata()[0][1] for line in bp_dict['medians']])
+    
+    # --- Save the values to csv --- (Alex B addition)
+    df = pd.DataFrame({
+        "Metric": ["Photons", "Background", "Clump Size", "Error X", "Error Y", "Error Z"], #  "Error X", "Error Y", "Error Z"
+        "Median": [median_photon, median_bg, median_clump, median_error_x, median_error_y ,median_error_z ], 
+        "Unit": ["","","","nm","nm","nm" ]    })
+    # --- Show the head of df in the console --- (Alex B addition)
+    print(df.head())
+    
+    # --- Save the dataframe to a csv file in the user specified path --- (Alex B addition)
+    saving_name = input("filename to append to (will be save in the current location)?")
+    # append the data to the csv file
+    df.to_csv(f"{saving_name}.csv", mode='a', header=False, index=False)
+    # # --- Save as a standalone csv file --- (Alex B addition)
+    # df.to_csv(f"{saving_name}_standalone.csv", index=False)
     
 from PYMEcs.misc.matplotlib import boxswarmplot
 import pandas as pd

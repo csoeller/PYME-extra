@@ -385,6 +385,7 @@ class NPCcalc():
         self.visFr.add_layer(layer)        
 
     def OnNPC3DSaveMeasurements(self, event=None):
+        import pandas as pd
         pipeline = self.visFr.pipeline
         npcs = findNPCset(pipeline)
         if npcs is None or 'measurements' not in dir(npcs):
@@ -398,14 +399,52 @@ class NPCcalc():
             return
 
         fpath = fdialog.GetPath()
-        meas = np.array(npcs.measurements, dtype='i')
         import pandas as pd
         df = pd.DataFrame({'Ntop_NPC3D': meas[:, 0], 'Nbot_NPC3D': meas[:, 1]})
+        meas = np.array(npcs.measurements, dtype='i')
+        entries = len(np.unique(pipeline.objectID))
+        MINFLUX_filename = [pipeline.mdh.getEntry('MINFLUX.Filename')]*entries
+        NPC_threshold = [self.NPCsettings.SegmentThreshold_3D]*entries
+        fshortening = [pipeline.mdh.getEntry('MINFLUX.Foreshortening')]*entries
+        t_min = [np.round(np.min(pipeline.tim))]*entries
+        t_max = [np.round(np.max(pipeline.tim))]*entries
+        t_maxhr = [np.round(ti/3600) for ti in t_max]
 
-        from pathlib import Path
-        with open(fpath, 'w') as f:
-            f.write('# threshold %d, source data file %s\n' %
-                    (self.NPCsettings.SegmentThreshold_3D,Path(pipeline_filename(pipeline)).name))
+        duration_hours = [np.round((np.max(pipeline.tim)-np.min(pipeline.tim))/3600,2)]*entries
+        duration_hours_rounded = [np.round(duration) for duration in duration_hours]
+        dim_z_nm = [np.round(np.max(pipeline.z)-np.min(pipeline.z),2)]*entries
+        NPCLE = (meas[:,0]+meas[:,1])/16
+        
+        unique_ids, counts = np.unique(pipeline.objectID, return_counts=True)
+        nEvents = counts.tolist()  
+        
+        df = pd.DataFrame({'Ntop_NPC3D': meas[:, 0], 'Nbot_NPC3D': meas[:, 1], "NPC_LE": NPCLE,
+                            'objectID': np.unique(pipeline.objectID),
+                            'diameters': np.round(pipeline.npcs.diam(), 4),
+                            'heights': np.round(pipeline.npcs.height(), 4),
+                            't_min': t_min,
+                            't_max': t_max,
+                            't_maxhr': t_maxhr,
+                            'duration_hours': duration_hours,
+                            'duration_hours_rounded': duration_hours_rounded,
+                            'nEvents': nEvents,
+                            'dim_z_nm': dim_z_nm,
+                            'foreshortening': fshortening,
+                            'NPC_threshold': NPC_threshold,                            
+                            'filename': MINFLUX_filename})
+
+        pipeline.selectDataSource('Localizations')
+        dim_x = (np.max(pipeline.x)-np.min(pipeline.x))/1000
+        dim_y = (np.max(pipeline.y)-np.min(pipeline.y))/1000
+        area_xy = [np.round(dim_x*dim_y,2)]*entries
+
+        df.insert(3, 'area_xy', area_xy)
+
+        try:
+            pipeline.selectDataSource('valid_npcs')
+            print("Pipeline data source successfully changed")
+        except:
+            print("Unable to change the pipeline to 'valid_npcs'")
 
         df.to_csv(fpath,index=False, mode='a')
 

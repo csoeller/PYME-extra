@@ -3,6 +3,8 @@ from PYMEcs.IO.MINFLUX import get_stddev_property
 import numpy as np
 import matplotlib.pyplot as plt
 from PYMEcs.pyme_warnings import warn
+import pandas as pd
+
 
 def propcheck_density_stats(ds,warning=True):
     for prop in ['clst_area','clst_vol','clst_density','clst_stdz']:
@@ -51,7 +53,6 @@ def plot_density_stats(ds,objectID='dbscanClumpID',scatter=False):
         ax1[1].scattered_boxplot(sz,labels=['Stddev Z'],showmeans=True)
     plt.tight_layout()
 
-import pandas as pd
 from PYMEcs.misc.matplotlib import boxswarmplot
 def plot_density_stats_sns(ds,objectID='dbscanClumpID'):
     if not propcheck_density_stats(ds):
@@ -78,10 +79,17 @@ def plot_density_stats_sns(ds,objectID='dbscanClumpID'):
 
     return dens
 
+
+# copied from experimental>NPCcalcLM.py to try getting the filename
+# this should be a backwards compatible way to access the main filename associated with the pipeline/datasource
+
 def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, times,
                        showTimeAverages=False, dsKey=None, areaString=None):
     
+    # --- Create the figure (plot with 2x2 subplots) ---
     fig, (ax1, ax2) = plt.subplots(2, 2)
+    
+    # --- Compute the TBT Median ---
     h = ax1[0].hist(deltas,bins=40)
     dtmedian = np.median(deltas)
     ax1[0].plot([dtmedian,dtmedian],[0,h[0].max()])
@@ -93,6 +101,7 @@ def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, ti
         ax1[0].text(0.95, 0.6, areaString, horizontalalignment='right',
              verticalalignment='bottom', transform=ax1[0].transAxes)
     
+    # --- Compute the Duration Median ---
     h = ax1[1].hist(durations,bins=40)
     durmedian = np.median(durations)
     ax1[1].plot([durmedian,durmedian],[0,h[0].max()])
@@ -100,6 +109,7 @@ def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, ti
     ax1[1].text(0.95, 0.8, 'median %.0f ms' % (1e3*durmedian), horizontalalignment='right',
              verticalalignment='bottom', transform=ax1[1].transAxes)
 
+    # --- Compute the Time between Localisations Median ---
     h = ax2[0].hist(tdiff,bins=50,range=(0,0.1))
     ax2[0].plot([tdmedian,tdmedian],[0,h[0].max()])
     # these are times between repeated localisations of the same dye molecule
@@ -107,7 +117,7 @@ def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, ti
     ax2[0].text(0.95, 0.8, 'median %.0f ms' % (1e3*tdmedian), horizontalalignment='right',
              verticalalignment='bottom', transform=ax2[0].transAxes)
 
-
+    # --- Compute the TBT running time average ---
     if showTimeAverages:
         ax2[1].plot(times,efo_or_dtovertime)
         ax2[1].set_xlabel('TBT running time average [s]')
@@ -122,7 +132,22 @@ def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, ti
         plt.suptitle('Location rate analysis from datasource %s' % dsKey)
     plt.tight_layout()
 
-
+    # --- Calculate dimensions and area of the image ---
+    dimension = areaString.split(' ')[1]
+    area = float(dimension.split('x')[0])*float(dimension.split('x')[1])
+    
+    # --- Save medians values to csv --- (Alex B addition)
+    df = pd.DataFrame({
+        "Metric": ["TBT (Time Between Traces)", "dimension", "area", "Trace Duration", "Time Between Localizations"],
+        "Median": [dtmedian, dimension, area, durmedian * 1e3, tdmedian * 1e3],  # Convert seconds -> milliseconds where needed
+        "Unit": ["s","um^2","um^2", "ms", "ms"]    })
+    # --- Show the head of df in the console --- (Alex B addition)
+    print(df.head())
+    
+    # --- Save the dataframe to a csv file in the user specified path --- (Alex B addition)
+    saving_path = input("name the file to save (will be save in the current location):")
+    df.to_csv(saving_path + ".csv", index=False)
+    
 # this function assumes a pandas dataframe
 # the pandas frame should generally be generated via the function minflux_npy2pyme from PYMEcs.IO.MINFLUX
 def analyse_locrate_pdframe(datain,use_invalid=False,showTimeAverages=True):
