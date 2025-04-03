@@ -1742,7 +1742,9 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
     NPCRotationAngle = Enum(['positive','negative','zero'],desc="way to treat rotation for NPC gallery")
     Zclip_3D = Float(75.0,label='Z-clip value from center of NPC',
                      desc='the used zrange from the (estimated) center of the NPC, from (-zclip..+zclip) in generating gallery')
-
+    gallery_x_offset = Float(0)
+    gallery_y_offset = Float(0)
+    
     _npc_cache = {}
 
     def run(self,inputLocalizations):
@@ -1766,7 +1768,10 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
             NPCmdh['Processing.NPCAnalysisInput.npcs'] = NPCSetContainer(npcs)
 
             from PYMEcs.Analysis.NPC import mk_NPC_gallery
-            outputGallery, outputSegments = mk_NPC_gallery(npcs,self.NPC_Gallery_Arrangement,self.Zclip_3D,self.NPCRotationAngle)
+            outputGallery, outputSegments = mk_NPC_gallery(npcs,self.NPC_Gallery_Arrangement,
+                                                           self.Zclip_3D,self.NPCRotationAngle,
+                                                           xoffs=self.gallery_x_offset,
+                                                           yoffs=self.gallery_y_offset)
             return dict(output=mapped_ds, outputGallery=outputGallery,
                     outputSegments=outputSegments, mdh=NPCmdh)
 

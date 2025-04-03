@@ -813,7 +813,7 @@ class NPCSetContainer(object):
         warn("NPCset is being unpickled - this is just a dummy unpickle, won't be usable after unpickling")
         self._unpickled = d
 
-def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle):
+def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle,xoffs=0,yoffs=0):
     x = np.empty((0))
     y = np.empty((0))
     z = np.empty((0))
@@ -924,11 +924,11 @@ def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle):
     error_y = np.full_like(x,1.0,dtype='f')
     error_z = np.full_like(x,1.0,dtype='f')
 
-    dsdict = dict(x=x,y=y,z=z,
+    dsdict = dict(x=x+xoffs,y=y+yoffs,z=z,
                   objectID=objectID,t=t,A=A,
                   error_x=error_x,error_y=error_y,error_z=error_z)
 
-    trdict = dict(x=xtr,y=ytr,z=ztr,
+    trdict = dict(x=xtr+xoffs,y=ytr+yoffs,z=ztr,
                   objectID=objectIDtr,polyIndex=polyidtr)
         
     from PYME.IO.tabular import DictSource
