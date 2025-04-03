@@ -6,6 +6,7 @@ from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float, Bool
 import numpy as np
 import matplotlib.pyplot as plt
 from PYMEcs.misc.utils import unique_name
+from PYMEcs.IO.NPC import findNPCset
 import logging
 
 logger = logging.getLogger(__name__)
@@ -176,8 +177,8 @@ class NPCcalc():
         from PYMEcs.Analysis.NPC import NPC3DSet
         pipeline = self.visFr.pipeline
 
-        if 'npcs' in dir(pipeline) and pipeline.npcs is not None:
-            npcs = pipeline.npcs
+        if findNPCset(pipeline) is not None:
+            npcs = findNPCset(pipeline)
             do_plot = False
         else:
             from PYMEcs.IO.MINFLUX import foreshortening
@@ -235,8 +236,8 @@ class NPCcalc():
 
     def OnNPC3DSaveBySegments(self, event=None):
         pipeline = self.visFr.pipeline
-        if 'npcs' in dir(pipeline) and pipeline.npcs is not None:
-            nbs = pipeline.npcs.n_bysegments()
+        if findNPCset(pipeline) is not None:
+            nbs = findNPCset(pipeline).n_bysegments()
             if nbs is None:
                 warn("could not find npcs with by-segment fitting info, have you carried out fitting with recent code?")
                 return
@@ -256,8 +257,8 @@ class NPCcalc():
         
     def OnNPC3DPlotBySegments(self, event=None):
         pipeline = self.visFr.pipeline
-        if 'npcs' in dir(pipeline) and pipeline.npcs is not None:
-            nbs = pipeline.npcs.n_bysegments()
+        if findNPCset(pipeline) is not None:
+            nbs = findNPCset(pipeline).n_bysegments()
             if nbs is None:
                 warn("could not find npcs with by-segment fitting info, have you carried out fitting with recent code?")
                 return
@@ -276,137 +277,21 @@ class NPCcalc():
         
     def On3DNPCaddGallery(self, event=None):
         pipeline = self.visFr.pipeline
-        if 'npcs' not in dir(pipeline) or 'measurements' not in dir(pipeline.npcs):
+        npcs = findNPCset(pipeline)
+        if npcs is None or 'measurements' not in dir(npcs):
             warn('no valid NPC measurements found, therefore cannot add gallery...')
-            return
-        npcs = pipeline.npcs
+            return 
 
         if 'NPCgallery' in pipeline.dataSources.keys():
             # TODO: we may need to relax this
             warn("dataSource 'NPCgallery' already exists, currently we do not support recalculating a new gallery")
             return
 
-        x = np.empty((0))
-        y = np.empty((0))
-        z = np.empty((0))
-        objectID = np.empty((0),int)
-
-        if self.NPCsettings.NPCGalleryArrangement == 'TopOverBottom':
-            gspx = 180
-            gspy = 180
-            gsdx = 0
-            rowlength = 10
-        elif self.NPCsettings.NPCGalleryArrangement == 'TopBesideBottom':
-            gspx = 400
-            gspy = 180
-            gsdx = 180
-            rowlength = 5
-
-        elif self.NPCsettings.NPCGalleryArrangement == 'SingleAverageSBS':
-            gspx = 0
-            gspy = 0
-            gsdx = 180
-            rowlength = 5
-
-        else:
-            gspx = 0
-            gspy = 0
-            gsdx = 0
-            rowlength = 5
-
-        xtr = np.empty((0))
-        ytr = np.empty((0))
-        ztr = np.empty((0))
-        objectIDtr = np.empty((0),int)
-        polyidtr = np.empty((0),int)
-        
-        xg = []
-        yg = []
-        dphi = np.pi/4
-        radius = 65.0
-        pi_base = []
-        
-        for i in range(8):
-            xg.extend([0,radius*np.sin(i*dphi)])
-            yg.extend([0,radius*np.cos(i*dphi)])
-            pi_base.extend([i+1,i+1])
-
-        zt = np.full((16),25.0)
-        zb = -np.full((16),25.0)
-
-        polyidx = np.array(pi_base,dtype='i')
-        xga = np.array(xg)
-        yga = np.array(yg)
-        
-        for i,npc in enumerate(npcs.npcs):
-            if not npc.fitted:
-                warn("NPC not yet fitted, please call only after fitting")
-                return
-
-            gxt = (i % rowlength) * gspx
-            gxb = gxt + gsdx
-            gy = (i // rowlength) * gspy
-            
-            npc.filter('z',0,self.NPCsettings.Zclip_3D)
-            ptst = npc.filtered_pts
-            npc.filter('z',-self.NPCsettings.Zclip_3D,0)
-            ptsb = npc.filtered_pts
-
-            from scipy.spatial.transform import Rotation as R
-            if npc.rotation is not None:
-                if self.NPCsettings.NPCRotationAngle == 'negative':
-                    factor = -1.0
-                elif self.NPCsettings.NPCRotationAngle == 'positive':
-                    factor = 1.0
-                else:
-                    factor = 0.0
-                ptst = R.from_euler('z', factor*npc.rotation, degrees=False).apply(ptst)
-                ptsb = R.from_euler('z', factor*npc.rotation, degrees=False).apply(ptsb)
-            
-            x = np.append(x,ptst[:,0] + gxt)
-            y = np.append(y,ptst[:,1] + gy)
-            z = np.append(z,ptst[:,2])
-
-            x = np.append(x,ptsb[:,0] + gxb)
-            y = np.append(y,ptsb[:,1] + gy)
-            z = np.append(z,ptsb[:,2])
-
-            objectID = np.append(objectID,np.full_like(ptst[:,0],npc.objectID,dtype=int))
-            objectID = np.append(objectID,np.full_like(ptsb[:,0],npc.objectID,dtype=int))
-
-            xtr = np.append(xtr,xga + gxt)
-            ytr = np.append(ytr,yga + gy)
-            ztr = np.append(ztr,zt)
-
-            objectIDtr = np.append(objectIDtr, np.full_like(xga,npc.objectID,dtype=int))
-            polyidtr = np.append(polyidtr, polyidx)
-            polyidx += 8
-
-            xtr = np.append(xtr,xga + gxb)
-            ytr = np.append(ytr,yga + gy)
-            ztr = np.append(ztr,zb)
-
-            objectIDtr = np.append(objectIDtr, np.full_like(xga,npc.objectID,dtype=int))
-            polyidtr = np.append(polyidtr, polyidx)
-            polyidx += 8            
-
-        t = np.arange(x.size)
-        A = np.full_like(x,10.0,dtype='f')
-        error_x = np.full_like(x,1.0,dtype='f')
-        error_y = np.full_like(x,1.0,dtype='f')
-        error_z = np.full_like(x,1.0,dtype='f')
-
-        dsdict = dict(x=x,y=y,z=z,
-                      objectID=objectID,t=t,A=A,
-                      error_x=error_x,error_y=error_y,error_z=error_z)
-
-        trdict = dict(x=xtr,y=ytr,z=ztr,
-                      objectID=objectIDtr,polyIndex=polyidtr)
-        
-        from PYME.IO.tabular import DictSource
-        pipeline.addDataSource('NPCgallery',DictSource(dsdict),False) # should check if already exists!
+        from PYMEcs.Analysis.NPC import mk_NPC_gallery
+        gallery, segments = mk_NPC_gallery(npcs,self.NPCsettings.NPCGalleryArrangement,self.NPCsettings.Zclip_3D,self.NPCsettings.NPCRotationAngle)
+        pipeline.addDataSource('NPCgallery',gallery,False) # should check if already exists!
         if self.NPCsettings.IncludeSegmentLinesWithGallery:
-            pipeline.addDataSource('NPCgallerySegments',DictSource(trdict),False)
+            pipeline.addDataSource('NPCgallerySegments',segments,False)
         pipeline.Rebuild() # check, is this the right way when add a new non-module based dataSource?
 
         from PYME.LMVis.layers.pointcloud import PointCloudRenderLayer
@@ -421,10 +306,10 @@ class NPCcalc():
 
     def On3DNPCaddTemplates(self, event=None):
         pipeline = self.visFr.pipeline
-        if 'npcs' not in dir(pipeline) or 'measurements' not in dir(pipeline.npcs):
+        npcs = findNPCset(pipeline)
+        if npcs is None or 'measurements' not in dir(npcs):
             warn('no valid NPC measurements found, therefore cannot add templates...')
-            return
-        npcs = pipeline.npcs
+            return 
 
         if 'NPCtemplates' in pipeline.dataSources.keys():
             # TODO: if practically this becomes an issue learn how to update an existing datasource
@@ -490,9 +375,10 @@ class NPCcalc():
 
     def OnNPC3DSaveMeasurements(self, event=None):
         pipeline = self.visFr.pipeline
-        if 'npcs' not in dir(pipeline) or 'measurements' not in dir(pipeline.npcs):
+        npcs = findNPCset(pipeline)
+        if npcs is None or 'measurements' not in dir(npcs):
             warn('no valid NPC measurements found, therefore cannot save...')
-            return
+            return 
         
         fdialog = wx.FileDialog(self.visFr, 'Save NPC measurements as ...',
                                 wildcard='CSV (*.csv)|*.csv',
@@ -501,7 +387,7 @@ class NPCcalc():
             return
 
         fpath = fdialog.GetPath()
-        meas = np.array(pipeline.npcs.measurements, dtype='i')
+        meas = np.array(npcs.measurements, dtype='i')
         import pandas as pd
         df = pd.DataFrame({'Ntop_NPC3D': meas[:, 0], 'Nbot_NPC3D': meas[:, 1]})
 
@@ -529,40 +415,28 @@ class NPCcalc():
         plotcdf_npc3d(nlab,timestamp=get_timestamp_from_filename(fname))
 
     def OnNPC3DLoadNPCSet(self, event=None):
-        import pickle
-        from pathlib import Path
+        from PYMEcs.IO.NPC import load_NPC_set
+        
         pipeline = self.visFr.pipeline
         fdialog = wx.FileDialog(self.visFr, 'Load NPC measurements from ...',
                                 wildcard='Pickle (*.pickle)|*.pickle',
                                 style=wx.FD_OPEN)
         if fdialog.ShowModal() != wx.ID_OK:
             return
-        fname = Path(fdialog.GetPath())
-        MINFLUXts = pipeline.mdh.get('MINFLUX.TimeStamp')
-        if MINFLUXts is not None and MINFLUXts not in fname.stem:
-            warn("MINFLUX time stamp not in NPC dataset filename; check correct filename chosen: %s vs %s" %
-                 (MINFLUXts,fname.stem))
-        with open(fname,'rb') as fi:
-            pipeline.npcs=pickle.load(fi)
 
-        try:
-            npc_foreshortening = pipeline.npcs.foreshortening
-        except AttributeError:
-            npc_foreshortening = 1.0
-
-        ds_foreshortening = pipeline.mdh.get('MINFLUX.Foreshortening',1.0)
-        if np.abs(npc_foreshortening-ds_foreshortening) >= 0.01:
-            warn("NPC foreshortening is %.2f while dataset foreshortening is %.2f, check this is compatible" %
-                 (npc_foreshortening,ds_foreshortening))
+        pipeline.npcs = load_NPC_set(fdialog.GetPath(),
+                                     ts=pipeline.mdh.get('MINFLUX.TimeStamp'),
+                                     foreshortening=pipeline.mdh.get('MINFLUX.Foreshortening',1.0))
 
     def OnNPC3DSaveNPCSet(self, event=None):
-        import pickle
+        from PYMEcs.IO.NPC import save_NPC_set
         pipeline = self.visFr.pipeline
         defaultFile = None
         MINFLUXts = pipeline.mdh.get('MINFLUX.TimeStamp')
         if MINFLUXts is not None:
             defaultFile = "%s-NPCset.pickle" % MINFLUXts
-        if 'npcs' not in dir(pipeline):
+        npcs = findNPCset(pipeline)
+        if npcs is None:
             warn('no valid NPC Set found, therefore cannot save...')
             return
         fdialog = wx.FileDialog(self.visFr, 'Save NPC Set as ...',
@@ -571,18 +445,17 @@ class NPCcalc():
                                 style=wx.FD_SAVE)
         if fdialog.ShowModal() != wx.ID_OK:
             return
-
-        fpath = fdialog.GetPath()
-        with open(fpath, "wb") as file:
-            pickle.dump(pipeline.npcs,file)
+        
+        save_NPC_set(npcs,fdialog.GetPath())
 
     def OnNPC3DGeometryStats(self,event=None):
         pipeline = self.visFr.pipeline
-        if 'npcs' not in dir(pipeline) or pipeline.npcs is None:
+        npcs = findNPCset(pipeline)
+        if npcs is None:
             warn('no valid NPC measurements found, thus no geometry info available...')
             return
-        diams = np.asarray(pipeline.npcs.diam())
-        heights = np.asarray(pipeline.npcs.height())
+        diams = np.asarray(npcs.diam())
+        heights = np.asarray(npcs.height())
         plt.figure()
         res = plt.boxplot([diams,heights],showmeans=True,labels=['diameter','height'])
         plt.title("NPC mean diam %.0f nm, mean ring spacing %.0f nm" % (diams.mean(),heights.mean()))

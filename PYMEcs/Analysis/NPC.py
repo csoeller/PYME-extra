@@ -794,3 +794,128 @@ class NPC3DSet(object):
             return None
         else:
             return dict(top=np.array(nbs_top),bottom=np.array(nbs_bot))
+
+
+def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle):
+    x = np.empty((0))
+    y = np.empty((0))
+    z = np.empty((0))
+    objectID = np.empty((0),int)
+
+    if mode == 'TopOverBottom':
+        gspx = 180
+        gspy = 180
+        gsdx = 0
+        rowlength = 10
+    elif mode == 'TopBesideBottom':
+        gspx = 400
+        gspy = 180
+        gsdx = 180
+        rowlength = 5
+
+    elif mode == 'SingleAverageSBS':
+        gspx = 0
+        gspy = 0
+        gsdx = 180
+        rowlength = 5
+
+    else:
+           gspx = 0
+           gspy = 0
+           gsdx = 0
+           rowlength = 5
+
+    xtr = np.empty((0))
+    ytr = np.empty((0))
+    ztr = np.empty((0))
+    objectIDtr = np.empty((0),int)
+    polyidtr = np.empty((0),int)
+        
+    xg = []
+    yg = []
+    dphi = np.pi/4
+    radius = 65.0
+    pi_base = []
+        
+    for i in range(8):
+        xg.extend([0,radius*np.sin(i*dphi)])
+        yg.extend([0,radius*np.cos(i*dphi)])
+        pi_base.extend([i+1,i+1])
+
+    zt = np.full((16),25.0)
+    zb = -np.full((16),25.0)
+
+    polyidx = np.array(pi_base,dtype='i')
+    xga = np.array(xg)
+    yga = np.array(yg)
+        
+    for i,npc in enumerate(npcs.npcs):
+        if not npc.fitted:
+            warn("NPC not yet fitted, please call only after fitting")
+            return
+
+        gxt = (i % rowlength) * gspx
+        gxb = gxt + gsdx
+        gy = (i // rowlength) * gspy
+            
+        npc.filter('z',0,zclip3d)
+        ptst = npc.filtered_pts
+        npc.filter('z',-zclip3d,0)
+        ptsb = npc.filtered_pts
+
+        from scipy.spatial.transform import Rotation as R
+        if npc.rotation is not None:
+            if NPCRotationAngle == 'negative':
+                factor = -1.0
+            elif NPCRotationAngle == 'positive':
+                factor = 1.0
+            else:
+                factor = 0.0
+            ptst = R.from_euler('z', factor*npc.rotation, degrees=False).apply(ptst)
+            ptsb = R.from_euler('z', factor*npc.rotation, degrees=False).apply(ptsb)
+            
+        x = np.append(x,ptst[:,0] + gxt)
+        y = np.append(y,ptst[:,1] + gy)
+        z = np.append(z,ptst[:,2])
+
+        x = np.append(x,ptsb[:,0] + gxb)
+        y = np.append(y,ptsb[:,1] + gy)
+        z = np.append(z,ptsb[:,2])
+
+        objectID = np.append(objectID,np.full_like(ptst[:,0],npc.objectID,dtype=int))
+        objectID = np.append(objectID,np.full_like(ptsb[:,0],npc.objectID,dtype=int))
+
+        xtr = np.append(xtr,xga + gxt)
+        ytr = np.append(ytr,yga + gy)
+        ztr = np.append(ztr,zt)
+
+        objectIDtr = np.append(objectIDtr, np.full_like(xga,npc.objectID,dtype=int))
+        polyidtr = np.append(polyidtr, polyidx)
+        polyidx += 8
+
+        xtr = np.append(xtr,xga + gxb)
+        ytr = np.append(ytr,yga + gy)
+        ztr = np.append(ztr,zb)
+
+        objectIDtr = np.append(objectIDtr, np.full_like(xga,npc.objectID,dtype=int))
+        polyidtr = np.append(polyidtr, polyidx)
+        polyidx += 8            
+
+    t = np.arange(x.size)
+    A = np.full_like(x,10.0,dtype='f')
+    error_x = np.full_like(x,1.0,dtype='f')
+    error_y = np.full_like(x,1.0,dtype='f')
+    error_z = np.full_like(x,1.0,dtype='f')
+
+    dsdict = dict(x=x,y=y,z=z,
+                  objectID=objectID,t=t,A=A,
+                  error_x=error_x,error_y=error_y,error_z=error_z)
+
+    trdict = dict(x=xtr,y=ytr,z=ztr,
+                  objectID=objectIDtr,polyIndex=polyidtr)
+        
+    from PYME.IO.tabular import DictSource
+    gallery = DictSource(dsdict)
+    segments = DictSource(trdict)
+
+    return gallery,segments
