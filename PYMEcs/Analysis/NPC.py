@@ -795,6 +795,23 @@ class NPC3DSet(object):
         else:
             return dict(top=np.array(nbs_top),bottom=np.array(nbs_bot))
 
+class NPCSetContainer(object):
+    def __init__(self,npcs):
+        self.npcs=npcs
+
+    def get_npcset(self):
+        return self.npcs
+    
+    # we add custom pickling/unpickling method so that an npcset instance in the
+    # PYME metadata won't trip up image saving with metadata
+    # really some kind of hack, perhaps it is better to save the mbm instance in some other form
+    def __getstate__(self):
+        warn("NPCset is being pickled - just a dummy mostly for PYME metadata - won't be usable after unpickling")
+        return 'not a valid npcset object after pickling/unpickling'
+    
+    def __setstate__(self, d):
+        warn("NPCset is being unpickled - this is just a dummy unpickle, won't be usable after unpickling")
+        self._unpickled = d
 
 def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle):
     x = np.empty((0))

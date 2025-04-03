@@ -1726,6 +1726,52 @@ class MBMcorrection(ModuleBaseMDHmod):
                     Item('outputTracksCorr'),
                     buttons=['OK'])
 
+from PYMEcs.Analysis.NPC import NPCSetContainer
+
+@register_module('NPCAnalysisInput')
+class NPCAnalysisInput(ModuleBaseMDHmod):
+    inputLocalizations = Input('selected_npcs')
+    output = Output('with_npcs')
+    outputGallery = Output('npc_gallery')
+    outputSegments = Output('npc_segments')
+    
+    NPC_analysis_file = FileOrURI('')
+    NPC_filename_checks = Bool(True)
+    NPC_Gallery_Arrangement = Enum(['SingleAverageSBS','TopOverBottom','TopBesideBottom','SingleAverage'],
+                                   desc="how to arrange 3D NPC parts in NPC gallery; SBS = SideBySide top and bottom")
+    NPCRotationAngle = Enum(['positive','negative','zero'],desc="way to treat rotation for NPC gallery")
+    Zclip_3D = Float(75.0,label='Z-clip value from center of NPC',
+                     desc='the used zrange from the (estimated) center of the NPC, from (-zclip..+zclip) in generating gallery')
+
+    _npc_cache = {}
+
+    def run(self,inputLocalizations):
+        from PYME.IO import unifiedIO
+        from pathlib import Path
+
+        mapped_ds = tabular.MappingFilter(inputLocalizations)
+
+        if self.NPC_analysis_file != '':
+            npckey = self.NPC_analysis_file
+            if npckey not in self._npc_cache.keys():
+                from PYMEcs.IO.NPC import load_NPC_set
+                npcs = load_NPC_set(self.NPC_analysis_file)
+                logger.debug("reading in npcset object from file")
+                self._npc_cache[npckey] = npcs
+            else:
+                npcs = self._npc_cache[npckey]
+
+            from PYME.IO import MetaDataHandler
+            NPCmdh = MetaDataHandler.DictMDHandler()
+            NPCmdh['Processing.NPCAnalysisInput.npcs'] = NPCSetContainer(npcs)
+
+            from PYMEcs.Analysis.NPC import mk_NPC_gallery
+            outputGallery, outputSegments = mk_NPC_gallery(npcs,self.NPC_Gallery_Arrangement,self.Zclip_3D,self.NPCRotationAngle)
+            return dict(output=mapped_ds, outputGallery=outputGallery,
+                    outputSegments=outputSegments, mdh=NPCmdh)
+
+        return dict(output=mapped_ds, outputGallery=None,
+                    outputSegments=None, mdh=None)  # return empty slots for outputs etc in this case
 
 try:
     import alphashape

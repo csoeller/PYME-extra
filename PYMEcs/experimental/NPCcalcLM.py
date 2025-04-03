@@ -121,6 +121,8 @@ class NPCcalc():
         visFr.AddMenuItem('Experimental>NPC3D', 'Save NPC by-segment data', self.OnNPC3DSaveBySegments)
 
         self._npcsettings = None
+        self.gallery_layer = None
+        self.segment_layer = None
 
     @property
     def NPCsettings(self):
@@ -280,29 +282,38 @@ class NPCcalc():
         npcs = findNPCset(pipeline)
         if npcs is None or 'measurements' not in dir(npcs):
             warn('no valid NPC measurements found, therefore cannot add gallery...')
-            return 
-
-        if 'NPCgallery' in pipeline.dataSources.keys():
-            # TODO: we may need to relax this
-            warn("dataSource 'NPCgallery' already exists, currently we do not support recalculating a new gallery")
             return
 
-        from PYMEcs.Analysis.NPC import mk_NPC_gallery
-        gallery, segments = mk_NPC_gallery(npcs,self.NPCsettings.NPCGalleryArrangement,self.NPCsettings.Zclip_3D,self.NPCsettings.NPCRotationAngle)
-        pipeline.addDataSource('NPCgallery',gallery,False) # should check if already exists!
-        if self.NPCsettings.IncludeSegmentLinesWithGallery:
-            pipeline.addDataSource('NPCgallerySegments',segments,False)
-        pipeline.Rebuild() # check, is this the right way when add a new non-module based dataSource?
+        gallery_ds = None
+        segment_ds = None
+        npcmod = findNPCset(pipeline,return_mod=True)
+        if npcmod is not None:
+            gallery_ds = npcmod.outputGallery
+            segment_ds = npcmod.outputSegments
+        else:
+            if 'npc_gallery' in pipeline.dataSources.keys():
+                # this should not happen if we use a module, so only if somebody already manually made this ds
+                warn("dataSource 'npc_gallery' already exists, currently we do not support recalculating a new gallery")
+                return
+            from PYMEcs.Analysis.NPC import mk_NPC_gallery
+            gallery, segments = mk_NPC_gallery(npcs,self.NPCsettings.NPCGalleryArrangement,self.NPCsettings.Zclip_3D,self.NPCsettings.NPCRotationAngle)
+            pipeline.addDataSource('npc_gallery',gallery,False) # should check if already exists!
+            gallery_ds = 'npc_gallery'
+            if self.NPCsettings.IncludeSegmentLinesWithGallery:
+                pipeline.addDataSource('npc_segments',segments,False)
+                segment_ds = 'npc_segments'
+            pipeline.Rebuild() # check, is this the right way when add a new non-module based dataSource?
 
-        from PYME.LMVis.layers.pointcloud import PointCloudRenderLayer
-        layer = PointCloudRenderLayer(pipeline, dsname='NPCgallery', method='pointsprites', cmap='plasma', point_size=4.0, alpha=0.5, vertexColour='z')
-        self.visFr.add_layer(layer)
+        if gallery_ds is not None and self.gallery_layer is None:
+            from PYME.LMVis.layers.pointcloud import PointCloudRenderLayer
+            self.gallery_layer = PointCloudRenderLayer(pipeline, dsname=gallery_ds, method='pointsprites', cmap='plasma', point_size=4.0, alpha=0.5, vertexColour='z')
+            self.visFr.add_layer( self.gallery_layer)
 
-        if self.NPCsettings.IncludeSegmentLinesWithGallery:
+        if segment_ds is not None and self.segment_layer is None:
             from PYME.LMVis.layers.tracks import TrackRenderLayer
-            layer = TrackRenderLayer(pipeline, dsname='NPCgallerySegments', method='tracks', clump_key='polyIndex', line_width=2.0,
+            self.segment_layer = TrackRenderLayer(pipeline, dsname=segment_ds, method='tracks', clump_key='polyIndex', line_width=2.0,
                                      alpha=0.5,cmap='SolidWhite')
-            self.visFr.add_layer(layer)
+            self.visFr.add_layer(self.segment_layer)
 
     def On3DNPCaddTemplates(self, event=None):
         pipeline = self.visFr.pipeline
