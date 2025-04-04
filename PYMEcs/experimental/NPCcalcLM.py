@@ -465,11 +465,16 @@ class NPCcalc():
         if npcs is None:
             warn('no valid NPC measurements found, thus no geometry info available...')
             return
+        import pandas as pd
+        from PYMEcs.misc.matplotlib import boxswarmplot, figuredefaults
         diams = np.asarray(npcs.diam())
         heights = np.asarray(npcs.height())
+        geo_df = pd.DataFrame.from_dict(dict(diameter=diams,height=heights))
+        figuredefaults(fontsize=12)
         plt.figure()
-        res = plt.boxplot([diams,heights],showmeans=True,labels=['diameter','height'])
-        plt.title("NPC mean diam %.0f nm, mean ring spacing %.0f nm" % (diams.mean(),heights.mean()))
+        bp = boxswarmplot(geo_df,width=0.35,annotate_medians=True,annotate_means=True,showmeans=True,swarmalpha=0.4,swarmsize=4)
+        # res = plt.boxplot([diams,heights],showmeans=True,labels=['diameter','height'])
+        plt.title("NPC mean diam %.0f nm, mean ring spacing %.0f nm" % (diams.mean(),heights.mean()), fontsize=11)
         plt.ylim(0,150)
 
     def OnSelectNPCsByMask(self,event=None):
