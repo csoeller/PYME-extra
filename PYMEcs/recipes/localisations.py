@@ -1736,14 +1736,16 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
     outputSegments = Output('npc_segments')
     
     NPC_analysis_file = FileOrURI('')
-    NPC_filename_checks = Bool(True)
     NPC_Gallery_Arrangement = Enum(['SingleAverageSBS','TopOverBottom','TopBesideBottom','SingleAverage'],
                                    desc="how to arrange 3D NPC parts in NPC gallery; SBS = SideBySide top and bottom")
+
     NPCRotationAngle = Enum(['positive','negative','zero'],desc="way to treat rotation for NPC gallery")
     Zclip_3D = Float(75.0,label='Z-clip value from center of NPC',
                      desc='the used zrange from the (estimated) center of the NPC, from (-zclip..+zclip) in generating gallery')
     gallery_x_offset = Float(0)
     gallery_y_offset = Float(0)
+    NPC_version_check = Enum(['minimum version','exact version','no check'])
+    NPC_target_version = CStr('0.9')
     
     _npc_cache = {}
 
@@ -1756,9 +1758,14 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
         if self.NPC_analysis_file != '':
             npckey = self.NPC_analysis_file
             if npckey not in self._npc_cache.keys():
-                from PYMEcs.IO.NPC import load_NPC_set
-                npcs = load_NPC_set(self.NPC_analysis_file)
+                from PYMEcs.IO.NPC import load_NPC_set, check_npcset_version
+                mdh = inputLocalizations.mdh
+                npcs = load_NPC_set(self.NPC_analysis_file,ts=mdh.get('MINFLUX.TimeStamp'),
+                                     foreshortening=mdh.get('MINFLUX.Foreshortening',1.0))
                 logger.debug("reading in npcset object from file")
+                if self.NPC_version_check != 'no check' and not check_npcset_version(npcs,self.NPC_target_version,mode=self.NPC_version_check):
+                    warn('requested npcset object version %s, got version %s' %
+                         (self.NPC_target_version,check_npcset_version(npcs,self.NPC_target_version,mode='return_version')))
                 self._npc_cache[npckey] = npcs
             else:
                 npcs = self._npc_cache[npckey]
@@ -1777,6 +1784,29 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
 
         return dict(output=mapped_ds, outputGallery=None,
                     outputSegments=None, mdh=None)  # return empty slots for outputs etc in this case
+
+
+    @property
+    def default_view(self):
+        from traitsui.api import View, Group, Item, CheckListEditor
+        from PYME.ui.custom_traits_editors import CBEditor
+
+        return View(Item('inputLocalizations', editor=CBEditor(choices=self._namespace_keys)),
+                    Item('_'),
+                    Item('NPC_analysis_file'),
+                    Item('NPC_version_check'),
+                    Item('NPC_target_version'),
+                    Item('_'),                    
+                    Item('NPC_Gallery_Arrangement'),
+                    Item('Zclip_3D'),
+                    Item('NPCRotationAngle'),
+                    Item('gallery_x_offset'),
+                    Item('gallery_y_offset'),
+                    Item('_'),
+                    Item('output'),
+                    Item('outputGallery'),
+                    Item('outputSegments'),
+                    buttons=['OK'])
 
 try:
     import alphashape

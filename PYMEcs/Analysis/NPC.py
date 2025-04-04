@@ -731,6 +731,7 @@ class NPC3DSet(object):
         self.llm = LLmaximizerNPC3D([self.npcdiam,self.npcheight],eps=15.0,sigma=7.0,bgprob=1e-9,extent_nm=300.0)
         self.measurements = []
         self.known_number = known_number # only considered if > 0
+        self._version='1.0' # remember to increment version when changing this object or the underlying npc object definitions
 
     def registerNPC(self,npc):
         self.npcs.append(npc)
@@ -795,6 +796,9 @@ class NPC3DSet(object):
         else:
             return dict(top=np.array(nbs_top),bottom=np.array(nbs_bot))
 
+    def version(self):
+        return self._version
+    
 class NPCSetContainer(object):
     def __init__(self,npcs):
         self.npcs=npcs
