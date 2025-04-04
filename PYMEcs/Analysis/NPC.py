@@ -29,8 +29,6 @@ piover4 = np.pi/4.0
     
 #     return (crot.T[:,0],crot.T[:,1])
 
-piover4 = np.pi/4.0
-
 from circle_fit import taubinSVD
 def fitcirc(x,y,sigma=None):
     pcs = np.vstack((x,y)).T
@@ -822,7 +820,11 @@ def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle,xoffs=0,yoffs=0):
     y = np.empty((0))
     z = np.empty((0))
     objectID = np.empty((0),int)
+    is_top = np.empty((0),int)
+    segmentID = np.empty((0),int)
+    phi = np.empty((0))
 
+    
     if mode == 'TopOverBottom':
         gspx = 180
         gspy = 180
@@ -894,18 +896,29 @@ def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle,xoffs=0,yoffs=0):
                 factor = 0.0
             ptst = R.from_euler('z', factor*npc.rotation, degrees=False).apply(ptst)
             ptsb = R.from_euler('z', factor*npc.rotation, degrees=False).apply(ptsb)
-            
+
+        phit = phi_from_coords(ptst[:,0],ptst[:,1])
+        phib = phi_from_coords(ptsb[:,0],ptsb[:,1])
+        
         x = np.append(x,ptst[:,0] + gxt)
         y = np.append(y,ptst[:,1] + gy)
         z = np.append(z,ptst[:,2])
+        phi = np.append(phi, phit)
+        segmentID = np.append(segmentID, ((phit+np.pi)/piover4).astype(int))
+        
 
         x = np.append(x,ptsb[:,0] + gxb)
         y = np.append(y,ptsb[:,1] + gy)
         z = np.append(z,ptsb[:,2])
-
+        phi = np.append(phi, phib)
+        segmentID = np.append(segmentID, ((phib+np.pi)/piover4).astype(int))
+        
         objectID = np.append(objectID,np.full_like(ptst[:,0],npc.objectID,dtype=int))
         objectID = np.append(objectID,np.full_like(ptsb[:,0],npc.objectID,dtype=int))
 
+        is_top = np.append(is_top,np.ones_like(phit,dtype=int))
+        is_top = np.append(is_top,np.zeros_like(phib,dtype=int))
+        
         xtr = np.append(xtr,xga + gxt)
         ytr = np.append(ytr,yga + gy)
         ztr = np.append(ztr,zt)
@@ -930,7 +943,8 @@ def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle,xoffs=0,yoffs=0):
 
     dsdict = dict(x=x+xoffs,y=y+yoffs,z=z,
                   objectID=objectID,t=t,A=A,
-                  error_x=error_x,error_y=error_y,error_z=error_z)
+                  error_x=error_x,error_y=error_y,error_z=error_z,
+                  is_top=is_top,segmentID=segmentID,phi=phi)
 
     trdict = dict(x=xtr+xoffs,y=ytr+yoffs,z=ztr,
                   objectID=objectIDtr,polyIndex=polyidtr)
