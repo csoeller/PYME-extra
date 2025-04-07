@@ -57,17 +57,17 @@ def findNPCset(pipeline,return_mod=False):
         return None
     return npc_set_container.get_npcset()
 
-from packaging.version import Version
+from packaging.version import Version # this allows us to do simpler comparisons
 def check_npcset_version(npcset,target_version,mode='minimum version'):
     version = None
     try:
         version =  npcset.version()
     except AttributeError:
         pass
-    if version is None:
+    if version is None: # older version, use some heuristics
         if 'n_bysegments' not in dir (npcset):
             version = Version('0.1')
-        elif npcset.n_bysegments() is None:
+        elif npcset.n_bysegments() is None: # this can also happy with newer version when not yet fitted, but then we should not have loaded this as a saved object
             version = Version('0.1')
         else:
             version = Version('0.9')
