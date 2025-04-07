@@ -31,7 +31,7 @@ def get_stddev_property(ids, prop, statistic='std'):
     std_events = propstd[ids]
     return std_events
 
-from PYME.warnings import warn
+from PYMEcs.pyme_warnings import warn
 def npy_is_minflux_data(filename, warning=False, return_msg=False):
     data = np.load(filename)
     valid = True

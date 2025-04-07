@@ -1,4 +1,4 @@
-from PYME.warnings import warn
+from PYMEcs.pyme_warnings import warn
 import pickle
 from pathlib import Path
 

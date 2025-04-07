@@ -16,7 +16,7 @@ from PYME.contrib.wxPlotPanel import PlotPanel
 from PYME.IO import MetaDataHandler
 from PYME.DSView import dsviewer as dsviewer
 import PYME.IO.image as im
-from PYME.warnings import warn
+from PYMEcs.pyme_warnings import warn
 
 import os
 

@@ -57,7 +57,7 @@ def set_diff(trec,t0):
     trec['tdiff'] = trec['datetime'] - t0
     trec['tdiff_s'] = trec['tdiff'].dt.total_seconds().astype('f')
 
-from PYME.warnings import warn
+from PYMEcs.pyme_warnings import warn
 def get_timestamp_from_filename(fname):
     from pathlib import Path
     import re

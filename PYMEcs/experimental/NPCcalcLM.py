@@ -1,4 +1,4 @@
-from PYME.warnings import warn
+from PYMEcs.pyme_warnings import warn
 from PYMEcs.Analysis.NPC import estimate_nlabeled, npclabel_fit, plotcdf_npc3d
 from PYME.recipes import tablefilters
 import wx

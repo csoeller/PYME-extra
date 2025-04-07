@@ -2,7 +2,7 @@ from scipy.stats import binned_statistic
 from PYMEcs.IO.MINFLUX import get_stddev_property
 import numpy as np
 import matplotlib.pyplot as plt
-from PYME.warnings import warn
+from PYMEcs.pyme_warnings import warn
 
 def propcheck_density_stats(ds,warning=True):
     for prop in ['clst_area','clst_vol','clst_density','clst_stdz']:

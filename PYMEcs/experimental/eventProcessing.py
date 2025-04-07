@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-from PYME.warnings import warn
+from PYMEcs.pyme_warnings import warn
 
 class EventProcessing:
     """

@@ -4,7 +4,7 @@ from PYME.recipes.traits import Input, Output, Float, Enum, CStr, Bool, Int, Lis
 import numpy as np
 import pandas as pd
 from PYME.IO import tabular
-from PYME.warnings import warn
+from PYMEcs.pyme_warnings import warn
 
 import logging
 logger = logging.getLogger(__file__)

@@ -2,7 +2,7 @@ import numpy as np
 from scipy import signal
 from scipy import stats
 import wx
-from PYME.warnings import warn
+from PYMEcs.pyme_warnings import warn
 
 ##################
 # FRC.py

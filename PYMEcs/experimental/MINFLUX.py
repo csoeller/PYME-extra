@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import wx
 
-from PYME.warnings import warn
+from PYMEcs.pyme_warnings import warn
 def plot_errors(pipeline):
     if not 'coalesced_nz' in pipeline.dataSources:
         warn('no data source named "coalesced_nz" - check recipe and ensure this is MINFLUX data')

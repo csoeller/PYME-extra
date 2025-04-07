@@ -3,7 +3,7 @@ from PYME.recipes.traits import HasTraits, Float, List, Bool, Int, CStr, Enum, o
 
 from PYME.IO.image import ImageStack
 import numpy as np
-from PYME.warnings import warn
+from PYMEcs.pyme_warnings import warn
 from pathlib import Path
 
 import logging
