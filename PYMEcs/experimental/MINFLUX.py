@@ -58,25 +58,31 @@ def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', wintitle=None, 
     else:
         enforce_xlims = False
     fig = plt.figure()
-    plt.subplot(221)
+    plt.subplot(321)
     h = plt.hist(cts,**kwargs,log=True)
     plt.xlabel(xlabel)
     plt.plot([np.mean(cts),np.mean(cts)],[0,h[0].max()])
     plt.plot([np.median(cts),np.median(cts)],[0,h[0].max()],'--')
     if enforce_xlims:
         plt.xlim(*xlims)
-    plt.subplot(222)
+    plt.subplot(322)
     h = plt.hist(ctsgt1,**kwargs,log=True)
     plt.xlabel('%s ( > 1)' % xlabel)
     plt.plot([np.mean(ctsgt1),np.mean(ctsgt1)],[0,h[0].max()])
     plt.plot([np.median(ctsgt1),np.median(ctsgt1)],[0,h[0].max()],'--')
     if enforce_xlims:
         plt.xlim(*xlims)
-    plt.subplot(223)
-    dfcs = pd.DataFrame.from_dict(dict(clusterSize=cts))
+    plt.subplot(323)
+    dfcs = pd.DataFrame.from_dict(dict(SUclusterSize=cts))
     boxswarmplot(dfcs,format="%.1f",swarmsize=5,width=0.2,annotate_means=True,annotate_medians=True,swarmalpha=0.15,strip=True)
-    plt.subplot(224)
-    dfcsgt1 = pd.DataFrame.from_dict(dict(clusterSizeGT1=ctsgt1))
+    plt.subplot(324)
+    dfcsgt1 = pd.DataFrame.from_dict(dict(SUclusterSizeGT1=ctsgt1))
+    boxswarmplot(dfcsgt1,format="%.1f",swarmsize=5,width=0.2,annotate_means=True,annotate_medians=True,swarmalpha=0.15,strip=True)
+    plt.subplot(325)
+    dfcs = pd.DataFrame.from_dict(dict(RyRclusterSizeInts=np.ceil(0.25*cts)))
+    boxswarmplot(dfcs,format="%.1f",swarmsize=5,width=0.2,annotate_means=True,annotate_medians=True,swarmalpha=0.15,strip=True)
+    plt.subplot(326)
+    dfcsgt1 = pd.DataFrame.from_dict(dict(RyRclusterSizeIntsGT1=np.ceil(0.25*ctsgt1)))
     boxswarmplot(dfcsgt1,format="%.1f",swarmsize=5,width=0.2,annotate_means=True,annotate_medians=True,swarmalpha=0.15,strip=True)
 
     largest = cts[np.argsort(cts)][-3:]
@@ -482,6 +488,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MBM attributes", self.OnMBMAttributes)
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MFX attributes", self.OnMFXAttributes)
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MFX metadata info (experimental)", self.OnMFXInfo)
+        visFr.AddMenuItem('MINFLUX>Zarr', "Convert zarr file store to zarr zip store", self.OnZarrToZipStore)
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from clumpIndex)", self.OnAddMINFLUXTracksCI)
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from tid)", self.OnAddMINFLUXTracksTid)
         visFr.AddMenuItem('MINFLUX>Colour', "Plot colour stats", self.OnPlotColourStats)
@@ -591,7 +598,29 @@ class MINFLUXanalyser():
             with ScrolledMessageDialog(self.visFr, mfx_info_str, "MFX info (tentative)", size=(900,400),
                                         style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE ) as dlg:
                 dlg.ShowModal()            
-    
+
+    def OnZarrToZipStore(self, event):
+        with wx.DirDialog(self.visFr, 'Zarr to convert ...',
+                          style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST) as ddialog:
+            if ddialog.ShowModal() != wx.ID_OK:
+                return
+            fpath = ddialog.GetPath()
+        from PYMEcs.misc.utils import zarrtozipstore
+        from pathlib import Path
+        zarr_root = Path(fpath)
+        dest_dir = zarr_root.parent
+
+        progress = wx.ProgressDialog("converting to zarr zip store", "please wait", maximum=1,
+                                     parent=self.visFr,
+                                     style=wx.PD_SMOOTH | wx.PD_AUTO_HIDE
+                                     )
+        progress.Update(1)
+        
+        created = Path(zarrtozipstore(zarr_root,dest_dir))
+
+        progress.Destroy()
+        warn("created new zip store '%s' in directory '%s'" % (created.name,created.parent))
+
     def OnDensityStats(self, event):
         from PYMEcs.Analysis.MINFLUX import plot_density_stats_sns
         plot_density_stats_sns(self.visFr.pipeline)

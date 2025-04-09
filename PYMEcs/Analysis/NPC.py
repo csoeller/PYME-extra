@@ -804,11 +804,15 @@ class NPCSetContainer(object):
         self.npcs=npcs
 
     def get_npcset(self):
+        if '_unpickled' in dir(self):
+            warn(self._unpickled)
+            return None
         return self.npcs
     
-    # we add custom pickling/unpickling method so that an npcset instance in the
-    # PYME metadata won't trip up image saving with metadata
-    # really some kind of hack, perhaps it is better to save the mbm instance in some other form
+    # we add custom pickling/unpickling methods so that an npcset instance in the
+    # PYME metadata won't greatly inflate the image saving footprint
+    # the pickled version of the npcset should be on disk already, no need to "properly" pickle/unpickle the NPCSetContainer
+    #  which was created for this very purpose, i.e. the NPCSetContainer object needs to only persist during the lifetime of the pymevis viewer
     def __getstate__(self):
         warn("NPCset is being pickled - just a dummy mostly for PYME metadata - won't be usable after unpickling")
         return 'not a valid npcset object after pickling/unpickling'

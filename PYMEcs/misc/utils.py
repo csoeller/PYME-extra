@@ -126,3 +126,24 @@ def load_sessionfile(filename,substitute=True):
         session = yaml.safe_load(session_txt)
         
     return session
+
+from pathlib import Path
+def zarrtozipstore(zarr_root,dest_dir,verbose=False):
+    zarr_root = Path(zarr_root)
+    dest_dir = Path(dest_dir)
+
+    if not (zarr_root.exists() and zarr_root.is_dir()):
+        raise RuntimeError('path "%s" does not exist or is not a directory' % (zarr_root))
+    if not (zarr_root / '.zgroup').exists():
+        warn("did not find .zgroup file in directory, this may not be a zarr directory")
+        
+    archive_name = dest_dir / zarr_root.with_suffix('.zarr').name
+
+    if verbose:
+        warn("zarr file archive at\n'%s'\n, zipping to dir\n'%s'\n with name '%s'" % (zarr_root,archive_name.parent,archive_name.name))
+    
+    from shutil import make_archive
+    created = make_archive(archive_name,
+                           'zip',
+                           root_dir=zarr_root)
+    return created
