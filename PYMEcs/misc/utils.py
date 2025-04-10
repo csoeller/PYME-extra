@@ -128,16 +128,18 @@ def load_sessionfile(filename,substitute=True):
     return session
 
 from pathlib import Path
-def zarrtozipstore(zarr_root,dest_dir,verbose=False):
+def zarrtozipstore(zarr_root,archive_name,verbose=False):
     zarr_root = Path(zarr_root)
-    dest_dir = Path(dest_dir)
+    archive_name = Path(archive_name)
 
+    from shutil import get_archive_formats
+    if 'zip' not in dict(get_archive_formats()):
+        raise RuntimeError('shutil.make_archive does not support zip format, aborting')
+        
     if not (zarr_root.exists() and zarr_root.is_dir()):
         raise RuntimeError('path "%s" does not exist or is not a directory' % (zarr_root))
     if not (zarr_root / '.zgroup').exists():
         warn("did not find .zgroup file in directory, this may not be a zarr directory")
-        
-    archive_name = dest_dir / zarr_root.with_suffix('.zarr').name
 
     if verbose:
         warn("zarr file archive at\n'%s'\n, zipping to dir\n'%s'\n with name '%s'" % (zarr_root,archive_name.parent,archive_name.name))

@@ -609,14 +609,29 @@ class MINFLUXanalyser():
         from pathlib import Path
         zarr_root = Path(fpath)
         dest_dir = zarr_root.parent
-
+        archive_name = dest_dir / zarr_root.with_suffix('.zarr').name # we make archive_name here in the calling routine so that we can check for existence etc
+        
+        if archive_name.with_suffix('.zarr.zip').exists():
+            with wx.FileDialog(self.visFr, 'Select archive name ...',
+                               wildcard='ZIP (*.zip)|*.zip',
+                               defaultFile=str(archive_name.with_suffix('.zarr.zip').name),
+                               defaultDir=str(archive_name.with_suffix('.zarr.zip').parent),
+                               style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fdialog:
+                if fdialog.ShowModal() != wx.ID_OK:
+                    return
+                archive_name = Path(fdialog.GetPath())
+                while archive_name.suffix in {'.zarr', '.zip'}:
+                    archive_name = archive_name.with_suffix('')
+                archive_name = archive_name.with_suffix('.zarr')
+                warn("got back name %s, using archive name %s" % (Path(fdialog.GetPath()).name,archive_name.name))
+                
         progress = wx.ProgressDialog("converting to zarr zip store", "please wait", maximum=1,
                                      parent=self.visFr,
                                      style=wx.PD_SMOOTH | wx.PD_AUTO_HIDE
                                      )
         progress.Update(1)
         
-        created = Path(zarrtozipstore(zarr_root,dest_dir))
+        created = Path(zarrtozipstore(zarr_root,archive_name))
 
         progress.Destroy()
         warn("created new zip store '%s' in directory '%s'" % (created.name,created.parent))
