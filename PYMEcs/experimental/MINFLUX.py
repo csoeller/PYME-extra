@@ -620,21 +620,23 @@ class MINFLUXanalyser():
                 if fdialog.ShowModal() != wx.ID_OK:
                     return
                 archive_name = Path(fdialog.GetPath())
-                while archive_name.suffix in {'.zarr', '.zip'}:
+                while archive_name.suffix in {'.zarr', '.zip'}: # this loop progressively removes the .zarr.zip suffix
                     archive_name = archive_name.with_suffix('')
                 archive_name = archive_name.with_suffix('.zarr')
-                warn("got back name %s, using archive name %s" % (Path(fdialog.GetPath()).name,archive_name.name))
+                # warn("got back name %s, using archive name %s" % (Path(fdialog.GetPath()).name,archive_name.name))
                 
-        progress = wx.ProgressDialog("converting to zarr zip store", "please wait", maximum=1,
+        progress = wx.ProgressDialog("converting to zarr zip store", "please wait", maximum=2,
                                      parent=self.visFr,
                                      style=wx.PD_SMOOTH | wx.PD_AUTO_HIDE
                                      )
         progress.Update(1)
-        
         created = Path(zarrtozipstore(zarr_root,archive_name))
-
+        progress.Update(2)
         progress.Destroy()
-        warn("created new zip store '%s' in directory '%s'" % (created.name,created.parent))
+        
+        from PYMEcs.misc.guiMsgBoxes import Info
+        Info(self.visFr,"created new zip store\n\n'%s'\n\nin directory\n\n'%s'" % (created.name,created.parent),
+             caption="zarr to zipstore conversion")
 
     def OnDensityStats(self, event):
         from PYMEcs.Analysis.MINFLUX import plot_density_stats_sns
