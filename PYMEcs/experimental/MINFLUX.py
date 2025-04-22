@@ -391,20 +391,21 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
     axs[0, 1].set_ylim(-15,15)
     axs[0, 1].set_xlabel('t [s]')
     axs[0, 1].set_ylabel('y [nm]')
-        
-    axs[1, 0].scatter(t_s,p['z_site_nc'],s=0.3,c='black',alpha=0.7)
-    if plotSmoothingCurve:
-        axs[1, 0].plot(t_s,p['z_ori']-p['z'],'r',alpha=0.4)
-    axs[1, 0].set_ylim(-15,15)
-    axs[1, 0].set_xlabel('t [s]')
-    axs[1, 0].set_ylabel('z [nm]')
+
+    if p.mdh['MINFLUX.Is3D']:
+        axs[1, 0].scatter(t_s,p['z_site_nc'],s=0.3,c='black',alpha=0.7)
+        if plotSmoothingCurve:
+            axs[1, 0].plot(t_s,p['z_ori']-p['z'],'r',alpha=0.4)
+        axs[1, 0].set_ylim(-15,15)
+        axs[1, 0].set_xlabel('t [s]')
+        axs[1, 0].set_ylabel('z [nm]')
 
     ax = axs[1,1]
     if plotSmoothingCurve:
         # plot the MBM track
         ax.plot(t_s,p['x_ori']-p['x_nc'],alpha=0.5,label='x')
         plt.plot(t_s,p['y_ori']-p['y_nc'],alpha=0.5,label='y')
-        if 'z_nc' in p.keys():
+        if p.mdh['MINFLUX.Is3D'] and 'z_nc' in p.keys():
             ax.plot(t_s,p['z_ori']-p['z_nc'],alpha=0.5,label='z')
         ax.set_xlabel('t (s)')
         ax.set_ylabel('MBM corr [nm]')
@@ -412,7 +413,8 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
     else:
         axs[1, 1].plot(t_s,p['x_ori']-p['x'])
         axs[1, 1].plot(t_s,p['y_ori']-p['y'])
-        axs[1, 1].plot(t_s,p['z_ori']-p['z'])
+        if p.mdh['MINFLUX.Is3D']:
+            axs[1, 1].plot(t_s,p['z_ori']-p['z'])
         axs[1, 1].set_xlabel('t [s]')
         axs[1, 1].set_ylabel('orig. corr [nm]')
     plt.tight_layout()
@@ -746,6 +748,12 @@ class MINFLUXanalyser():
                     ax.plot(t_s,drift_1stpass, label='site-based 1st pass')
 
         p = self.visFr.pipeline
+        if p.mdh['MINFLUX.Is3D']:
+            axes = ['x','y','z']
+            naxes = 3
+        else:
+            axes = ['x','y']
+            naxes = 2
         has_drift = 'driftx' in p.keys()
         has_drift_ori = 'driftx_ori' in p.keys()
         mbm = findmbm(p,warnings=False)
@@ -761,8 +769,8 @@ class MINFLUXanalyser():
         t_sm = {}
         
         ### Fig 1 ####
-        fig, axs = plt.subplots(nrows=3)
-        for caxis, ax in zip(['x','y','z'],axs):
+        fig, axs = plt.subplots(nrows=naxes)
+        for caxis, ax in zip(axes,axs):
             if has_drift:
                 drift_1stpass, drift_2ndpass = drift_total(p,caxis)
                 plot_drift(p,ax,drift_1stpass, drift_2ndpass)
@@ -782,8 +790,8 @@ class MINFLUXanalyser():
         fig.tight_layout()
         ### Fig 2 ####
         if has_mbm: # also plot a second figure without the non-smoothed MBM track
-            fig, axs = plt.subplots(nrows=3)
-            for caxis, ax in zip(['x','y','z'],axs):
+            fig, axs = plt.subplots(nrows=naxes)
+            for caxis, ax in zip(axes,axs):
                 if has_drift:
                     drift_1stpass, drift_2ndpass = drift_total(p,caxis)
                     plot_drift(p,ax,drift_1stpass, drift_2ndpass)
@@ -796,8 +804,8 @@ class MINFLUXanalyser():
             fig.tight_layout()
         ### Fig 3 ####
         if has_mbm: # also plot a third figure with all MBM tracks
-            fig, axs = plt.subplots(nrows=3)
-            for caxis, ax in zip(['x','y','z'],axs):
+            fig, axs = plt.subplots(nrows=naxes)
+            for caxis, ax in zip(axes,axs):
                 if has_drift:
                     drift_1stpass, drift_2ndpass = drift_total(p,caxis)
                     plot_drift(p,ax,drift_1stpass, drift_2ndpass)
@@ -813,11 +821,11 @@ class MINFLUXanalyser():
         if has_mbm and has_drift: # also plot a fourth figure with a difference track for all axes
             tnew = 1e-3*p['t']
             mbmcorr = {}
-            for axis in ['x','y','z']:
+            for axis in axes:
                 axis_interp_msm = np.interp(tnew,t_sm[caxis],mbm_meansm[axis])          
                 mbmcorr[axis] = axis_interp_msm
-            fig, axs = plt.subplots(nrows=3)
-            for caxis, ax in zip(['x','y','z'],axs):
+            fig, axs = plt.subplots(nrows=naxes)
+            for caxis, ax in zip(axes,axs):
                 drift_1stpass, drift_2ndpass = drift_total(p,caxis)
                 if has_drift:
                     if has_drift_ori:

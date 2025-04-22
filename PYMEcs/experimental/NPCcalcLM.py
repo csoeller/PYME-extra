@@ -179,7 +179,7 @@ class NPCcalc():
         from PYMEcs.Analysis.NPC import NPC3DSet
         pipeline = self.visFr.pipeline
 
-        if findNPCset(pipeline) is not None:
+        if findNPCset(pipeline,warnings=False) is not None:
             npcs = findNPCset(pipeline)
             do_plot = False
         else:
