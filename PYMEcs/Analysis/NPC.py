@@ -960,3 +960,54 @@ def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle,xoffs=0,yoffs=0):
     segments = DictSource(trdict)
 
     return gallery,segments
+
+def mk_npctemplates(npcs):
+    x = np.empty((0))
+    y = np.empty((0))
+    z = np.empty((0))
+    polyIndex = np.empty((0),int)
+    polySize = np.empty((0),int)
+    objectID = np.empty((0),int)
+    NtopLabelled = np.empty((0),int)
+    NbotLabelled = np.empty((0),int)
+    NLabelled = np.empty((0),int)
+    diams = np.empty((0),float)
+    heights = np.empty((0),float)
+    ci = 1
+    for npc in npcs.npcs:
+        nt, nb = (npc.n_top,npc.n_bot)
+        glyph = npc.get_glyph()
+        pars = npc.opt_result.x
+        diam = npc.get_glyph_diam() / (0.01*pars[5])
+        height = npc.get_glyph_height() / (0.01*pars[6])
+        for poly in ['circ_bot','circ_top','axis']:
+            c3 = glyph[poly]
+            xg = c3[:,0]
+            yg = c3[:,1]
+            zg = c3[:,2]
+            x = np.append(x,xg)
+            y = np.append(y,yg)
+            z = np.append(z,zg)
+            polyIndex = np.append(polyIndex,np.full_like(xg,ci,dtype=int))
+            polySize = np.append(polySize,np.full_like(xg,xg.size,dtype=int))
+            ci += 1
+            objectID = np.append(objectID,np.full_like(xg,npc.objectID,dtype=int))
+            NtopLabelled = np.append(NtopLabelled,np.full_like(xg,nt,dtype=int))
+            NbotLabelled = np.append(NbotLabelled,np.full_like(xg,nb,dtype=int))
+            NLabelled = np.append(NLabelled,np.full_like(xg,nt+nb,dtype=int))               
+            diams = np.append(diams,np.full_like(xg,diam,dtype=float))
+            heights = np.append(heights,np.full_like(xg,height,dtype=float))
+    t = np.arange(x.size)
+    A = np.full_like(x,10.0,dtype='f')
+    error_x = np.full_like(x,1.0,dtype='f')
+    error_y = np.full_like(x,1.0,dtype='f')
+    error_z = np.full_like(x,1.0,dtype='f')
+        
+    dsdict = dict(x=x,y=y,z=z,polyIndex=polyIndex,polySize=polySize,
+                  NtopLabelled=NtopLabelled,NbotLabelled=NbotLabelled,NLabelled=NLabelled,
+                  objectID=objectID,t=t,A=A,
+                  error_x=error_x,error_y=error_y,error_z=error_z,
+                  npc_height=heights,npc_diam=diams)
+
+    from PYME.IO.tabular import DictSource
+    return DictSource(dsdict)

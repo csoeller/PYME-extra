@@ -690,10 +690,15 @@ class MINFLUXanalyser():
         progress.Update(2)
         progress.Destroy()
         
-        from PYMEcs.misc.guiMsgBoxes import Info
-        Info(self.visFr,"created new zip store\n\n'%s'\n\nin directory\n\n'%s'" % (created.name,created.parent),
-             caption="zarr to zipstore conversion")
+        from PYMEcs.misc.guiMsgBoxes import YesNo
+        do_open = YesNo(self.visFr,("created new zip store\n\n'%s'\n\nin directory\n\n'%s'"
+                        + "\n\nOpen newly created zipstore data?")
+                        % (created.name,created.parent),
+                        caption="Open new zarr zipstore?")
 
+        if do_open:
+            self.visFr.OpenFile(str(created))
+        
     def OnDensityStats(self, event):
         from PYMEcs.Analysis.MINFLUX import plot_density_stats_sns
         plot_density_stats_sns(self.visFr.pipeline)

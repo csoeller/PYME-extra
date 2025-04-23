@@ -1734,6 +1734,7 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
     output = Output('with_npcs')
     outputGallery = Output('npc_gallery')
     outputSegments = Output('npc_segments')
+    outputTemplates = Output('npc_templates')
     
     NPC_analysis_file = FileOrURI('')
     NPC_Gallery_Arrangement = Enum(['SingleAverageSBS','TopOverBottom','TopBesideBottom','SingleAverage'],
@@ -1774,16 +1775,17 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
             NPCmdh = MetaDataHandler.DictMDHandler()
             NPCmdh['Processing.NPCAnalysisInput.npcs'] = NPCSetContainer(npcs)
 
-            from PYMEcs.Analysis.NPC import mk_NPC_gallery
+            from PYMEcs.Analysis.NPC import mk_NPC_gallery, mk_npctemplates
             outputGallery, outputSegments = mk_NPC_gallery(npcs,self.NPC_Gallery_Arrangement,
                                                            self.Zclip_3D,self.NPCRotationAngle,
                                                            xoffs=self.gallery_x_offset,
                                                            yoffs=self.gallery_y_offset)
+            outputTemplates = mk_npctemplates(npcs)
             return dict(output=mapped_ds, outputGallery=outputGallery,
-                    outputSegments=outputSegments, mdh=NPCmdh)
+                        outputSegments=outputSegments, outputTemplates=outputTemplates, mdh=NPCmdh)
 
         return dict(output=mapped_ds, outputGallery=None,
-                    outputSegments=None, mdh=None)  # return empty slots for outputs etc in this case
+                    outputSegments=None, outputTemplates=None, mdh=None)  # return empty slots for outputs etc in this case
 
 
     @property
