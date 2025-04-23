@@ -67,20 +67,34 @@ def check_npcset_version(npcset,target_version,mode='minimum version'):
     if version is None: # older version, use some heuristics
         if 'n_bysegments' not in dir (npcset):
             version = Version('0.1')
-        elif npcset.n_bysegments() is None: # this can also happy with newer version when not yet fitted, but then we should not have loaded this as a saved object
+        elif npcset.n_bysegments() is None: # this can also happen with newer version when not yet fitted, but then we should not have loaded this as a saved object
             version = Version('0.1')
         else:
             version = Version('0.9')
 
-    if mode == 'minimum version':
-        return Version(version) >= Version(target_version)
-    elif mode == 'exact version':
-        return Version(version) == Version(target_version)
-    elif mode == 'return_version':
+    if mode == 'return_version':
         return version
-    else:
-        raise RuntimeError("unknown mode %s requested" % (mode))
     
-            
+    if not isinstance(version,Version):
+        try:
+            version = Version(version)
+        except:
+            warn("cannot convert version expression '%s' to Version object, giving up and returning True, perhaps tell CS" % version)
+            return True
+
+    if not isinstance(target_version,Version):
+        try:
+            target_version = Version(target_version)
+        except:
+            warn("cannot convert version expression '%s' to Version object, giving up and returning True, perhaps tell CS" % target_version)
+            return True
+
+    if mode == 'minimum version':
+        return version >= target_version
+    elif mode == 'exact version':
+        return version == target_version
+    else: # we have checked for mode return_version above, so should be ok by not testing here
+        raise RuntimeError("unknown mode %s requested" % (mode))
+
     
     
