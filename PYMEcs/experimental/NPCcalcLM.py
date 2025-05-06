@@ -365,9 +365,10 @@ class NPCcalc():
             return
 
         fpath = fdialog.GetPath()
+        meas = np.array(npcs.measurements, dtype='i')
+
         import pandas as pd
         df = pd.DataFrame({'Ntop_NPC3D': meas[:, 0], 'Nbot_NPC3D': meas[:, 1]})
-        meas = np.array(npcs.measurements, dtype='i')
         entries = len(np.unique(pipeline.objectID))
         MINFLUX_filename = [pipeline.mdh.getEntry('MINFLUX.Filename')]*entries
         NPC_threshold = [self.NPCsettings.SegmentThreshold_3D]*entries
