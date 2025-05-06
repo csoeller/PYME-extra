@@ -270,9 +270,15 @@ class NPCcalc():
             plt.hist(nbs['top'].flatten(),bins=np.arange(nbs['top'].max()+2)-0.5,alpha=0.5,label='top',density=True,histtype='step')
             plt.plot([nbs['top'].mean(),nbs['top'].mean()],[0,0.2],'r--')
             plt.legend()
-            plt.text(0.65,0.5,'cytop per site: %.1f' % (0.5*nbs['bottom'].mean()), horizontalalignment='center', # 0.5 to get per site because we have two sites per segment
+            nbsflat = nbs['bottom'].flatten()
+            b_meanall = 0.5*nbsflat.mean() # 0.5 to get per site because we have two sites per segment
+            b_meannz =  0.5*nbsflat[nbsflat>0].mean() # 0.5 to get per site because we have two sites per segment
+            plt.text(0.65,0.5,'cytop per site: %.1f (%.1f per labeled)' % (b_meanall,b_meannz), horizontalalignment='center',
                      verticalalignment='center', color='b', transform=fig.transFigure)
-            plt.text(0.65,0.44,'nucleop per site: %.1f' % (0.5*nbs['top'].mean()), horizontalalignment='center', # 0.5 to get per site because we have two sites per segment
+            nbsflat = nbs['top'].flatten()
+            t_meanall = 0.5*nbsflat.mean() # 0.5 to get per site because we have two sites per segment
+            t_meannz =  0.5*nbsflat[nbsflat>0].mean() # 0.5 to get per site because we have two sites per segment
+            plt.text(0.65,0.44,'nucleop per site: %.1f (%.1f per labeled)' % (t_meanall,t_meannz), horizontalalignment='center',
                      verticalalignment='center', color='r', transform=fig.transFigure)
         else:
             warn("could not find valid NPC set, have you carried out fitting?")

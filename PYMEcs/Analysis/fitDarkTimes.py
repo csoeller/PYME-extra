@@ -200,7 +200,7 @@ def cumuhist(timeintervals):
     ti = timeintervals
     nIntervals = ti.shape[0]
     cumux = np.sort(ti+0.01*np.random.random(nIntervals)) # hack: adding random noise helps us ensure uniqueness of x values
-    cumuy = (1.0+np.arange(nIntervals))/np.float(nIntervals)
+    cumuy = (1.0+np.arange(nIntervals))/float(nIntervals)
     return (cumux,cumuy)
 
 
