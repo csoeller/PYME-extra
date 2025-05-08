@@ -214,8 +214,10 @@ def minflux_npy2pyme_legacy(data,make_clump_index=True,with_cfr_std=False):
         uids,revids = np.unique(rawids,return_inverse=True)
         ids = np.arange(1,uids.size+1,dtype='int32')[revids]
         counts = get_stddev_property(ids,posnm[:,0],statistic='count')
+        posinid = mk_posinid(ids)
         pymedct.update({'clumpIndex': ids,
                         'clumpSize' : counts,
+                        'posInClump': posinid,
                         })
     else:
         ids = rawids
@@ -308,6 +310,20 @@ def mk_seqids_maxpos(data):
         incomplete_seqs = np.append(incomplete_seqs,seqid[-1])
     return seqid, incomplete_seqs
 
+# number the position within clumps from 0 to clumpSize-1
+# here we assume that the data is already strictly orderd by time of occurence
+# this should generally be the case!
+# the implementation is currently not as fast as would ideally be the case (we iterate over all ids)
+# ideally a full vector expression would be used - but need to figure out how
+# however, not yet timed if this computation is rate-limiting for the import, it may not be
+#  in which case no further optimization would be currently needed
+def mk_posinid(ids):
+    posinid = np.zeros_like(ids)
+    for curid in np.unique(ids):
+        isid = ids == curid
+        posinid[isid] = np.arange(int(np.sum(isid)))
+    return posinid
+
 # this one should be able to deal both with 2d and 3D
 def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
     lastits = data['fnl'] == True
@@ -349,9 +365,11 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
         # this works better for clumpIndex assumptions in the end
         uids,revids = np.unique(rawids,return_inverse=True)
         ids = np.arange(1,uids.size+1,dtype='int32')[revids]
+        posinid = mk_posinid(ids)
         counts = get_stddev_property(ids,posnm[:,0],statistic='count')
         pymedct.update({'clumpIndex': ids,
                         'clumpSize' : counts,
+                        'posInClump': posinid,
                         })
     else:
         ids = rawids
