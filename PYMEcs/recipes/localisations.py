@@ -1739,6 +1739,7 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
     NPC_analysis_file = FileOrURI('')
     NPC_Gallery_Arrangement = Enum(['SingleAverageSBS','TopOverBottom','TopBesideBottom','SingleAverage'],
                                    desc="how to arrange 3D NPC parts in NPC gallery; SBS = SideBySide top and bottom")
+    NPC_hide = Bool(False,desc="if true hide this NPCset so you can fit again etc",label='hide NPCset')
 
     NPCRotationAngle = Enum(['positive','negative','zero'],desc="way to treat rotation for NPC gallery")
     Zclip_3D = Float(75.0,label='Z-clip value from center of NPC',
@@ -1798,6 +1799,7 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
                     Item('NPC_analysis_file'),
                     Item('NPC_version_check'),
                     Item('NPC_target_version'),
+                    Item('NPC_hide'),
                     Item('_'),                    
                     Item('NPC_Gallery_Arrangement'),
                     Item('Zclip_3D'),
