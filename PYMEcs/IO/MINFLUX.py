@@ -558,7 +558,8 @@ def _get_mdh_zarr(filename,arch):
         for par in mfx_global_par:
             mdh['MINFLUX.Globals.%s' % par] = mfx_global_par[par]
         for pars in md_by_itrs:
-            mdh['MINFLUX.ByItrs.%s' % pars] = md_by_itrs[pars].to_numpy()
+            # make sure we convert to list; otherwise we cannot easily convert to JSON as JSON does not like ndarray
+            mdh['MINFLUX.ByItrs.%s' % pars] = md_by_itrs[pars].to_numpy().tolist()
         import re
         mdh['MINFLUX.Tracking'] = re.search('tracking', mfx_global_par['ID'], re.IGNORECASE) is not None
     else:
