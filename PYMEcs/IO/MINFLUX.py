@@ -778,21 +778,22 @@ def monkeypatch_npyorzarr_io(visFr):
     def OnOpenFileNPYorZARR(self, event):
         filename = wx.FileSelector("Choose a file to open", 
                                    nameUtils.genResultDirectoryPath(), 
-                                   wildcard='|'.join(['All supported formats|*.h5r;*.txt;*.mat;*.csv;*.hdf;*.3d;*.3dlp;*.npy;*.zip',
+                                   wildcard='|'.join(['All supported formats|*.h5r;*.txt;*.mat;*.csv;*.hdf;*.3d;*.3dlp;*.npy;*.zip;*.pvs',
                                                       'PYME Results Files (*.h5r)|*.h5r',
                                                       'Tab Formatted Text (*.txt)|*.txt',
                                                       'Matlab data (*.mat)|*.mat',
                                                       'Comma separated values (*.csv)|*.csv',
                                                       'HDF Tabular (*.hdf)|*.hdf',
                                                       'MINFLUX NPY (*.npy)|*.npy',
-                                                      'MINFLUX ZARR (*.zip)|*.zip']))
+                                                      'MINFLUX ZARR (*.zip)|*.zip',
+                                                      'Session files (*.pvs)|*.pvs',]))
 
         if not filename == '':
             self.OpenFile(filename)
 
     
     visFr.OnOpenFileNPYorZARR = types.MethodType(OnOpenFileNPYorZARR,visFr)
-    visFr.AddMenuItem('File', "Open MINFLUX NPY or zarr", visFr.OnOpenFileNPYorZARR)
+    visFr.AddMenuItem('File', "Open MINFLUX NPY, zarr or session", visFr.OnOpenFileNPYorZARR)
     
     logger.info("MINFLUX monkeypatching IO completed")
 
