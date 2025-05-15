@@ -531,6 +531,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Util', "Plot temperature record matching current data series",self.OnMINFLUXplotTempData)
         visFr.AddMenuItem('MINFLUX>Util', "Set MINFLUX temperature file location", self.OnMINFLUXsetTempDataFile)
         visFr.AddMenuItem('MINFLUX>Util', "Check if clumpIndex contiguous", self.OnClumpIndexContig)
+        visFr.AddMenuItem('MINFLUX>Util', "Plot event scatter as function of position in clump", self.OnClumpScatterPosPlot)
         visFr.AddMenuItem('MINFLUX>MBM', "Plot mean MBM info (and if present origami info)", self.OnMBMplot)
         visFr.AddMenuItem('MINFLUX>MBM', "Show MBM tracks", self.OnMBMtracks)
         visFr.AddMenuItem('MINFLUX>MBM', "Add MBM track labels to view", self.OnMBMaddTrackLabels)
@@ -561,6 +562,57 @@ class MINFLUXanalyser():
                 ID = visFr.AddMenuItem('MINFLUX>Recipes', r, self.OnLoadCustom).GetId()
                 self.minfluxRIDs[ID] = minfluxRecipes[r]
 
+    def OnClumpScatterPosPlot(self,event):
+        from scipy.stats import binned_statistic
+        from PYMEcs.IO.MINFLUX import get_stddev_property
+        def detect_coalesced(pipeline):
+            # placeholder, to be implemented
+            return False
+
+        bigClumpThreshold = 10
+        pipeline = self.visFr.pipeline
+        if "posInClump" not in pipeline.keys():
+            warn("No posInClump info, is this MINFLUX data imported with recent PAME-extra; aborting...")
+        if detect_coalesced(pipeline):
+            warn("This is coalesced data, need a datasource with non-coalesced clump info, aborting...")
+
+        bigclumps = pipeline['clumpSize'] >= bigClumpThreshold
+        ids = pipeline['clumpIndex'][bigclumps]
+        posIC = pipeline['posInClump'][bigclumps]
+        # uids,revids = np.unique(ids,return_inverse=True)
+        xIC = pipeline['x'][bigclumps]
+        yIC = pipeline['y'][bigclumps]
+        xctrd = get_stddev_property(ids,xIC,statistic='mean')
+        yctrd = get_stddev_property(ids,yIC,statistic='mean')
+        dists = np.sqrt((xIC - xctrd)**2 + (yIC - yctrd)**2)
+        maxpIC = min(int(posIC.max()),500) # we do not use clumps longer than 500
+        edges = -0.5+np.arange(maxpIC+2)
+        idrange = (0,maxpIC)
+        
+        picDists, bin_edge, binno = binned_statistic(posIC, dists, statistic='mean',
+                                                     bins=edges, range=idrange)
+        binctrs = 0.5*(bin_edge[:-1]+bin_edge[1:])
+        plt.figure()
+        plt.plot(binctrs, picDists)
+        plt.xlabel("position in clump")
+        plt.ylabel("lateral distance from ctrd (nm)")
+        plt.xlim(-5,100)
+        plt.ylim(0,None)
+
+        if pipeline.mdh.get('MINFLUX.Is3D'):
+            zIC = pipeline['z'][bigclumps]
+            zctrd = get_stddev_property(ids,zIC,statistic='mean')
+            zdists = np.abs(zIC - zctrd)
+            zpicDists, bin_edge, binno = binned_statistic(posIC, zdists, statistic='mean',
+                                                          bins=edges, range=idrange)
+            binctrs = 0.5*(bin_edge[:-1]+bin_edge[1:])
+            plt.figure()
+            plt.plot(binctrs, zpicDists)
+            plt.xlabel("position in clump")
+            plt.ylabel("z distance from ctrd (nm)")
+            plt.xlim(-5,100)
+            plt.ylim(0,None)
+            
     def OnPlotColourStats(self,event):
         pipeline = self.visFr.pipeline
         chans = pipeline.colourFilter.getColourChans()

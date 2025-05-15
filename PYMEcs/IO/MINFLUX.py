@@ -214,8 +214,10 @@ def minflux_npy2pyme_legacy(data,make_clump_index=True,with_cfr_std=False):
         uids,revids = np.unique(rawids,return_inverse=True)
         ids = np.arange(1,uids.size+1,dtype='int32')[revids]
         counts = get_stddev_property(ids,posnm[:,0],statistic='count')
+        posinid = mk_posinid(ids)
         pymedct.update({'clumpIndex': ids,
                         'clumpSize' : counts,
+                        'posInClump': posinid,
                         })
     else:
         ids = rawids
@@ -308,6 +310,20 @@ def mk_seqids_maxpos(data):
         incomplete_seqs = np.append(incomplete_seqs,seqid[-1])
     return seqid, incomplete_seqs
 
+# number the position within clumps from 0 to clumpSize-1
+# here we assume that the data is already strictly orderd by time of occurence
+# this should generally be the case!
+# the implementation is currently not as fast as would ideally be the case (we iterate over all ids)
+# ideally a full vector expression would be used - but need to figure out how
+# however, not yet timed if this computation is rate-limiting for the import, it may not be
+#  in which case no further optimization would be currently needed
+def mk_posinid(ids):
+    posinid = np.zeros_like(ids)
+    for curid in np.unique(ids):
+        isid = ids == curid
+        posinid[isid] = np.arange(int(np.sum(isid)))
+    return posinid
+
 # this one should be able to deal both with 2d and 3D
 def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
     lastits = data['fnl'] == True
@@ -349,9 +365,11 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
         # this works better for clumpIndex assumptions in the end
         uids,revids = np.unique(rawids,return_inverse=True)
         ids = np.arange(1,uids.size+1,dtype='int32')[revids]
+        posinid = mk_posinid(ids)
         counts = get_stddev_property(ids,posnm[:,0],statistic='count')
         pymedct.update({'clumpIndex': ids,
                         'clumpSize' : counts,
+                        'posInClump': posinid,
                         })
     else:
         ids = rawids
@@ -540,7 +558,8 @@ def _get_mdh_zarr(filename,arch):
         for par in mfx_global_par:
             mdh['MINFLUX.Globals.%s' % par] = mfx_global_par[par]
         for pars in md_by_itrs:
-            mdh['MINFLUX.ByItrs.%s' % pars] = md_by_itrs[pars].to_numpy()
+            # make sure we convert to list; otherwise we cannot easily convert to JSON as JSON does not like ndarray
+            mdh['MINFLUX.ByItrs.%s' % pars] = md_by_itrs[pars].to_numpy().tolist()
         import re
         mdh['MINFLUX.Tracking'] = re.search('tracking', mfx_global_par['ID'], re.IGNORECASE) is not None
     else:
@@ -759,21 +778,22 @@ def monkeypatch_npyorzarr_io(visFr):
     def OnOpenFileNPYorZARR(self, event):
         filename = wx.FileSelector("Choose a file to open", 
                                    nameUtils.genResultDirectoryPath(), 
-                                   wildcard='|'.join(['All supported formats|*.h5r;*.txt;*.mat;*.csv;*.hdf;*.3d;*.3dlp;*.npy;*.zip',
+                                   wildcard='|'.join(['All supported formats|*.h5r;*.txt;*.mat;*.csv;*.hdf;*.3d;*.3dlp;*.npy;*.zip;*.pvs',
                                                       'PYME Results Files (*.h5r)|*.h5r',
                                                       'Tab Formatted Text (*.txt)|*.txt',
                                                       'Matlab data (*.mat)|*.mat',
                                                       'Comma separated values (*.csv)|*.csv',
                                                       'HDF Tabular (*.hdf)|*.hdf',
                                                       'MINFLUX NPY (*.npy)|*.npy',
-                                                      'MINFLUX ZARR (*.zip)|*.zip']))
+                                                      'MINFLUX ZARR (*.zip)|*.zip',
+                                                      'Session files (*.pvs)|*.pvs',]))
 
         if not filename == '':
             self.OpenFile(filename)
 
     
     visFr.OnOpenFileNPYorZARR = types.MethodType(OnOpenFileNPYorZARR,visFr)
-    visFr.AddMenuItem('File', "Open MINFLUX NPY or zarr", visFr.OnOpenFileNPYorZARR)
+    visFr.AddMenuItem('File', "Open MINFLUX NPY, zarr or session", visFr.OnOpenFileNPYorZARR)
     
     logger.info("MINFLUX monkeypatching IO completed")
 

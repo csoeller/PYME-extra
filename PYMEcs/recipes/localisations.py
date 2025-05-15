@@ -1739,6 +1739,7 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
     NPC_analysis_file = FileOrURI('')
     NPC_Gallery_Arrangement = Enum(['SingleAverageSBS','TopOverBottom','TopBesideBottom','SingleAverage'],
                                    desc="how to arrange 3D NPC parts in NPC gallery; SBS = SideBySide top and bottom")
+    NPC_hide = Bool(False,desc="if true hide this NPCset so you can fit again etc",label='hide NPCset')
 
     NPCRotationAngle = Enum(['positive','negative','zero'],desc="way to treat rotation for NPC gallery")
     Zclip_3D = Float(75.0,label='Z-clip value from center of NPC',
@@ -1798,6 +1799,7 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
                     Item('NPC_analysis_file'),
                     Item('NPC_version_check'),
                     Item('NPC_target_version'),
+                    Item('NPC_hide'),
                     Item('_'),                    
                     Item('NPC_Gallery_Arrangement'),
                     Item('Zclip_3D'),
@@ -1974,3 +1976,35 @@ class SiteDensity(ModuleBase):
                                  stdz=polstdz))
         
         return dict(outputName=mapped_ds,outputShapes=dspoly)
+
+# this module regenerates the clump derived properties for MINFLUX after events were remnoved
+# this happens typically after filtering for posInClump
+@register_module('RecalcClumpProperties')
+class RecalcClumpProperties(ModuleBase):
+    """Documentation to be added."""
+    inputLocalisations = Input('Localizations')
+    outputName = Output('Clumprecalc')
+
+    def run(self, inputLocalisations):
+
+        from PYMEcs.IO.MINFLUX import get_stddev_property
+        ids = inputLocalisations['clumpIndex']
+        counts = get_stddev_property(ids,inputLocalisations['clumpSize'],statistic='count')
+        stdx = get_stddev_property(ids,inputLocalisations['x'])
+        # we expect this to only happen when clumpSize == 1, because then std dev comes back as 0
+        stdx[stdx < 1e-3] = 100.0 # if error estimate is too small, replace with 100 as "large" flag
+        stdy = get_stddev_property(ids,inputLocalisations['y'])
+        stdy[stdy < 1e-3] = 100.0
+        if 'error_z' in inputLocalisations.keys():
+            stdz = get_stddev_property(ids,inputLocalisations['z'])
+            stdz[stdz < 1e-3] = 100.0
+
+        mapped_ds = tabular.MappingFilter(inputLocalisations)
+        mapped_ds.addColumn('clumpSize', counts)
+        mapped_ds.addColumn('error_x', stdx)
+        mapped_ds.addColumn('error_y', stdy)
+        if 'error_z' in inputLocalisations.keys():
+            mapped_ds.addColumn('error_z', stdz)
+        
+        return mapped_ds
+    
