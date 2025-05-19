@@ -378,14 +378,14 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
     else:
         fig, axs = plt.subplots(2, 2)
 
-    axs[0, 0].scatter(t_s,p['x_site_nc'],s=0.3,c='black',alpha=0.7)
+    axs[0, 0].scatter(t_s,p['x_site_nc'],s=0.3,c='black',alpha=0.5)
     if plotSmoothingCurve:
         axs[0, 0].plot(t_s,p['x_ori']-p['x'],'r',alpha=0.4)
     axs[0, 0].set_ylim(-15,15)
     axs[0, 0].set_xlabel('t [s]')
     axs[0, 0].set_ylabel('x [nm]')
         
-    axs[0, 1].scatter(t_s,p['y_site_nc'],s=0.3,c='black',alpha=0.7)
+    axs[0, 1].scatter(t_s,p['y_site_nc'],s=0.3,c='black',alpha=0.5)
     if plotSmoothingCurve:
         axs[0, 1].plot(t_s,p['y_ori']-p['y'],'r',alpha=0.4)
     axs[0, 1].set_ylim(-15,15)
@@ -393,7 +393,7 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
     axs[0, 1].set_ylabel('y [nm]')
 
     if p.mdh['MINFLUX.Is3D']:
-        axs[1, 0].scatter(t_s,p['z_site_nc'],s=0.3,c='black',alpha=0.7)
+        axs[1, 0].scatter(t_s,p['z_site_nc'],s=0.3,c='black',alpha=0.5)
         if plotSmoothingCurve:
             axs[1, 0].plot(t_s,p['z_ori']-p['z'],'r',alpha=0.4)
         axs[1, 0].set_ylim(-15,15)
@@ -443,6 +443,8 @@ class MINFLUXSettings(HasTraits):
                                   desc='minimum number of events to classify as large cluster')
     origamiWith_nc = Bool(False,label='add 2nd moduleset (no MBM corr)',
                           desc="if a full second module set is inserted to also analyse the origami data without any MBM corrections")
+    origamiErrorLimit = Float(10.0,label='xLimit when plotting origami errors',
+                              desc="sets the upper limit in x (in nm) when plotting origami site errors")
 
 class DateString(HasTraits):
     TimeStampString = CStr('',label="Time stamp",desc='the time stamp string in format yymmdd-HHMMSS')
@@ -1185,8 +1187,11 @@ class MINFLUXanalyser():
         
         fig, axs = plt.subplots(2, 2,num='origami error estimates %d' % self.origamiErrorFignum)
         plot_errs(axs[0, 0], 'x', ['error_x_ori','error_x_nc','error_x'])
+        axs[0, 0].set_xlim(0,self.analysisSettings.origamiErrorLimit)
         plot_errs(axs[0, 1], 'y', ['error_y_ori','error_y_nc','error_y'])
+        axs[0, 1].set_xlim(0,self.analysisSettings.origamiErrorLimit)
         plot_errs(axs[1, 0], 'z', ['error_z_ori','error_z_nc','error_z'])
+        axs[1, 0].set_xlim(0,self.analysisSettings.origamiErrorLimit)
         ax = axs[1,1]
         # plot the MBM track, this way we know if we are using the _nc data or the MBM corrected data for analysis
         t_s = 1e-3*p['t']
