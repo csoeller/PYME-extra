@@ -2007,4 +2007,25 @@ class RecalcClumpProperties(ModuleBase):
             mapped_ds.addColumn('error_z', stdz)
         
         return mapped_ds
+
+# simple replacement module for full drift correction module
+# this one simply allows manually changing linear drift coefficients
+@register_module("LinearDrift")
+class LinearDrift(ModuleBase):
+    input = Input('localizations')
+    output = Output('driftcorr')
+    
+    a_xlin = Float(0,label='x = x + a*t, a:')
+    b_ylin = Float(0,label='y = y + b*t, b:')
+    c_zlin = Float(0,label='z = z + c*t, c:')
+
+    def run(self, input):
+        output = tabular.MappingFilter(input)
+
+        t = input['t']
+        output.addColumn('x', input['x']+self.a_xlin*t)
+        output.addColumn('y', input['y']+self.b_ylin*t)
+        output.addColumn('z', input['z']+self.c_zlin*t)
+
+        return output
     
