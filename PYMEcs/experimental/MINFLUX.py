@@ -48,7 +48,7 @@ def plot_errors(pipeline):
     
 from PYMEcs.misc.matplotlib import boxswarmplot
 import pandas as pd
-def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', wintitle=None, bigCfraction=None,bigcf_percluster=None, **kwargs):
+def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', wintitle=None, bigCfraction=None,bigcf_percluster=None, plotints=True, **kwargs):
     if 'range' in kwargs:
         enforce_xlims = True
         xlims0=kwargs['range']
@@ -58,32 +58,37 @@ def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', wintitle=None, 
     else:
         enforce_xlims = False
     fig = plt.figure()
-    plt.subplot(321)
+    if (plotints):
+        plotn=300
+    else:
+        plotn=200
+    plt.subplot(plotn+21)
     h = plt.hist(cts,**kwargs,log=True)
     plt.xlabel(xlabel)
     plt.plot([np.mean(cts),np.mean(cts)],[0,h[0].max()])
     plt.plot([np.median(cts),np.median(cts)],[0,h[0].max()],'--')
     if enforce_xlims:
         plt.xlim(*xlims)
-    plt.subplot(322)
+    plt.subplot(plotn+22)
     h = plt.hist(ctsgt1,**kwargs,log=True)
     plt.xlabel('%s ( > 1)' % xlabel)
     plt.plot([np.mean(ctsgt1),np.mean(ctsgt1)],[0,h[0].max()])
     plt.plot([np.median(ctsgt1),np.median(ctsgt1)],[0,h[0].max()],'--')
     if enforce_xlims:
         plt.xlim(*xlims)
-    plt.subplot(323)
+    plt.subplot(plotn+23)
     dfcs = pd.DataFrame.from_dict(dict(SUclusterSize=cts))
     boxswarmplot(dfcs,format="%.1f",swarmsize=5,width=0.2,annotate_means=True,annotate_medians=True,swarmalpha=0.15,strip=True)
-    plt.subplot(324)
+    plt.subplot(plotn+24)
     dfcsgt1 = pd.DataFrame.from_dict(dict(SUclusterSizeGT1=ctsgt1))
     boxswarmplot(dfcsgt1,format="%.1f",swarmsize=5,width=0.2,annotate_means=True,annotate_medians=True,swarmalpha=0.15,strip=True)
-    plt.subplot(325)
-    dfcs = pd.DataFrame.from_dict(dict(RyRclusterSizeInts=np.ceil(0.25*cts)))
-    boxswarmplot(dfcs,format="%.1f",swarmsize=5,width=0.2,annotate_means=True,annotate_medians=True,swarmalpha=0.15,strip=True)
-    plt.subplot(326)
-    dfcsgt1 = pd.DataFrame.from_dict(dict(RyRclusterSizeIntsGT1=np.ceil(0.25*ctsgt1)))
-    boxswarmplot(dfcsgt1,format="%.1f",swarmsize=5,width=0.2,annotate_means=True,annotate_medians=True,swarmalpha=0.15,strip=True)
+    if (plotints):
+        plt.subplot(plotn+25)
+        dfcs = pd.DataFrame.from_dict(dict(RyRclusterSizeInts=np.ceil(0.25*cts)))
+        boxswarmplot(dfcs,format="%.1f",swarmsize=5,width=0.2,annotate_means=True,annotate_medians=True,swarmalpha=0.15,strip=True)
+        plt.subplot(plotn+26)
+        dfcsgt1 = pd.DataFrame.from_dict(dict(RyRclusterSizeIntsGT1=np.ceil(0.25*ctsgt1)))
+        boxswarmplot(dfcsgt1,format="%.1f",swarmsize=5,width=0.2,annotate_means=True,annotate_medians=True,swarmalpha=0.15,strip=True)
 
     largest = cts[np.argsort(cts)][-3:]
     fraction = largest.sum(dtype=float) / cts.sum()
@@ -441,6 +446,8 @@ class MINFLUXSettings(HasTraits):
     
     largeClusterThreshold = Float(50,label='Threshold for large clusters',
                                   desc='minimum number of events to classify as large cluster')
+    clustercountsPlotWithInts = Bool(False,label='Include "integer" plots in cluster stats',
+                                  desc='plot integer quantized cluster stats that avoid counting fractional RyR numbers')
     origamiWith_nc = Bool(False,label='add 2nd moduleset (no MBM corr)',
                           desc="if a full second module set is inserted to also analyse the origami data without any MBM corrections")
     origamiErrorLimit = Float(10.0,label='xLimit when plotting origami errors',
@@ -1008,7 +1015,9 @@ class MINFLUXanalyser():
         plot_errors(self.visFr.pipeline)
 
     def OnCluster3D(self, event):
-        plot_cluster_analysis(self.visFr.pipeline, ds=self.analysisSettings.datasourceForClusterAnalysis,bigc_thresh=self.analysisSettings.largeClusterThreshold)
+        plot_cluster_analysis(self.visFr.pipeline, ds=self.analysisSettings.datasourceForClusterAnalysis,
+                              bigc_thresh=self.analysisSettings.largeClusterThreshold,
+                              plotints=self.analysisSettings.clustercountsPlotWithInts)
 
     def OnCluster2D(self, event):
         plot_cluster_analysis(self.visFr.pipeline, ds='dbscan2D')
