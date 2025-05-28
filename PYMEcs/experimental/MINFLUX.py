@@ -61,6 +61,9 @@ def plot_errors(pipeline):
     plt.tight_layout()
     pipeline.selectDataSource(curds)
     
+    # Save the plot as a png file (Alex B addition)
+    plt.savefig(pipeline.mdh.get('MINFLUX.TimeStamp') + '_loc_error.png', dpi=300, bbox_inches='tight') 
+    
     # --- Calculate the mean and median of the clump size --- (Alex B addition)
     # mean_photon = np.mean(p['nPhotons'])
     median_photon = np.median(p['nPhotons'])
@@ -93,12 +96,11 @@ def plot_errors(pipeline):
     # --- Show the head of df in the console --- (Alex B addition)
     print(df.head())
     
-    # --- Save the dataframe to a csv file in the user specified path --- (Alex B addition)
-    saving_name = input("filename to append to (will be save in the current location)?")
-    # append the data to the csv file
-    df.to_csv(f"{saving_name}.csv", mode='a', header=False, index=False)
-    # # --- Save as a standalone csv file --- (Alex B addition)
-    # df.to_csv(f"{saving_name}_standalone.csv", index=False)
+# --- Save as a csv file --- (Alex B addition)
+    csv_name = pipeline.mdh.get('MINFLUX.TimeStamp')
+    print(f'\ncsv name is: {csv_name}\n') # Used as a reminder for LocRate csv saving 
+    df.to_csv(csv_name + ".csv", index=False, header=True)
+        # By default the file is saved on the Desktop, if a session file is used, it is saved in the same directory as the session file.
     
 from PYMEcs.misc.matplotlib import boxswarmplot
 import pandas as pd

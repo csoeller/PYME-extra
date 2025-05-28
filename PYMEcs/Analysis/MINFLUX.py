@@ -141,12 +141,17 @@ def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, ti
         "Metric": ["TBT (Time Between Traces)", "dimension", "area", "Trace Duration", "Time Between Localizations"],
         "Median": [dtmedian, dimension, area, durmedian * 1e3, tdmedian * 1e3],  # Convert seconds -> milliseconds where needed
         "Unit": ["s","um^2","um^2", "ms", "ms"]    })
+    
     # --- Show the head of df in the console --- (Alex B addition)
     print(df.head())
     
-    # --- Save the dataframe to a csv file in the user specified path --- (Alex B addition)
-    saving_path = input("name the file to save (will be save in the current location):")
-    df.to_csv(saving_path + ".csv", index=False)
+    # --- Append the dataframe to a csv file in the user specified path --- (Alex B addition)
+    saving_name = input("Use the timestamp as a filename for saving (will be save in the current location):")
+    df.to_csv(saving_name + ".csv", mode='a', index=False, header=False)
+    #df.to_csv(saving_name + ".csv", index=False)
+    
+        # --- Save the figure --- (Alex B addition)
+    plt.savefig(saving_name + '_loc_rate.png', dpi=300, bbox_inches='tight')
     
 # this function assumes a pandas dataframe
 # the pandas frame should generally be generated via the function minflux_npy2pyme from PYMEcs.IO.MINFLUX
