@@ -1,9 +1,13 @@
 # This is a comment, to show how #-prefixed lines are ignored.
 # It is possible to specify requirements as plain names.
 
-# for python-microscopy we generally require the latest version
-python-microscopy
+# for python-microscopy we generally require the latest version from github
+python-microscopy # in pratice we build this from latest sources
 statsmodels
 roifile
 circle-fit
 colorcet
+alphashape
+zarr>=2,<3
+seaborn
+mrcfile
