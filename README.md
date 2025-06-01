@@ -2,12 +2,19 @@
 
 Plugins and associated code for PYME (AKA [python-microscopy](https://python-microscopy.org/)).
 
-This is a mixed bag of extensions/additions to standard PYME and also used as a testbed for
+This is a mixed bag of extensions/additions to standard PYME and also used as a testbed/platform for
 
-* the recipe based processing of SMLM data
+* recipe based processing of SMLM data
+* implementing I/O for new formats
 * new ideas for data processing
 
 ### Installation ###
+
+#### PYME-test-env
+
+These days we recommend installing `PYME-extra` as part of a [PYME-test-env](https://github.com/csoeller/PYME-test-env) controlled install. All further details please see there.
+
+#### Manual install
 
 Installation is achieved with
 
@@ -39,6 +46,15 @@ External modules required for full functionality are listed in `requirements.txt
     roifile     # to allow using info from ImageJ/Fiji ROIs
     colorcet    # add some colorcet colour tables in PYME
     circle-fit  # needs pip install to get recent version; for 2D NPC analysis
+    alphashape # for cluster area and densities in clusters
+    zarr>=2,<3 # for MINFLUX I/O
+    seaborn # for some prettier plots
+    mrcfile # to output 3D data for FSC from a EM FSC server
+
+We also often use a couple more dependencies in notebooks, but strictly speaking no functionality in `PYME-extra` depends directly on these:
+
+    openpyxl
+    tabulate
 
 ### Issues ###
 
