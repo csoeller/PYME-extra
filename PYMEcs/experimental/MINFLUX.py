@@ -965,7 +965,7 @@ class MINFLUXanalyser():
                            style=wx.FD_OPEN) as dialog:
             if dialog.ShowModal() == wx.ID_CANCEL:
                 return
-        fname = dialog.GetPath()
+            fname = dialog.GetPath()
         
         if config.get('MINFLUX-temperature_file') == fname:
             warn("config option 'MINFLUX-temperature_file' already set to %s" % fname)
