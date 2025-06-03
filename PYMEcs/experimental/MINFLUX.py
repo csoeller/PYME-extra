@@ -1135,7 +1135,7 @@ class MINFLUXanalyser():
                                filters={'siteClumpSize' : [3,50]}), # need a minimum clumpsize and also maximal to avoid "fused" sites
                    MergeClumps(recipe,inputName=siteClumps,outputName=sites,
                                labelKey='siteID',discardTrivial=True),
-                   OrigamiSiteTrack(recipe,inputClusters=siteClumps,inputSites=sites,outputName=corrSiteClumps,
+                   OrigamiSiteTrack(recipe,inputClusters=siteClumps,inputSites=sites,outputName=corrSiteClumps,smoothingBinWidthsSeconds=400,
                                     outputAllPoints=corrAll,inputAllPoints=curds,labelKey='siteID',binnedStatistic='median'), # median to play it safe
                    MergeClumps(recipe,inputName=corrSiteClumps,outputName=sites_c,
                                labelKey='siteID',discardTrivial=True)]
