@@ -39,64 +39,12 @@ def unique_name(stem,names):
 
 import pandas as pd
 
-# Working solution from ChatGPT
-# import re
-
-# def read_temp_csv(filename, timeformat='%d/%m/%Y %H:%M'):
-#     def remap_names(name):
-#         # Search for known keywords inside the column name
-#         if re.search(r'\bRack\b', name, re.IGNORECASE):
-#             return 'Rack'
-#         elif re.search(r'\bBox\b', name, re.IGNORECASE):
-#             return 'Box'
-#         elif re.search(r'\bStativ\b', name, re.IGNORECASE):
-#             return 'Stand'
-#         else:
-#             return name
-
-#     df = pd.read_csv(filename, encoding="ISO-8859-1")
-#     df.columns = [remap_names(col) for col in df.columns]
-
-#     # Identify time column
-#     time_col = next((col for col in df.columns if 'time' in col.lower()), None)
-#     if time_col is None:
-#         raise ValueError("No column containing 'time' found.")
-
-#     df['datetime'] = pd.to_datetime(df[time_col], format=timeformat)
-#     return df
-
-# Test
-import re
-
-# def read_temp_csv(filename, timeformat='%d/%m/%Y %H:%M'):
-#     # The next function remaps the column names based on known keywords (Rack, Box, Stativ, Time)
-#     def remap_names(name):
-#         if re.search(r'\bRack\b', name, re.IGNORECASE):
-#             return 'Rack'
-#         elif re.search(r'\bBox\b', name, re.IGNORECASE):
-#             return 'Box'
-#         elif re.search(r'\bStativ\b', name, re.IGNORECASE):
-#             return 'Stand'
-#         elif re.search(r'\bTime\b', name, re.IGNORECASE):
-#             return 'Time'
-#         else:
-#             return name
-    
-#     trec = pd.read_csv(filename, encoding="ISO-8859-1")
-#     trec.columns = [remap_names(col) for col in trec.columns]
-#     # Transform the time column to datetime format
-#     trec['datetime'] = pd.to_datetime(trec['Time'], format=timeformat)
-    
-#     # Print statement to check if the renaming worked
-#     print("Renamed columns:", trec.columns.tolist())
-
-#     return trec.rename(columns=remap_names)
-
-
-# Test for different datetime formats
-import re
-
-def read_temp_csv(filename, timeformat):
+# makes the reading a little more flexible
+# contributed by Alex B
+def read_temp_csv(filename, timeformat=['%d.%m.%Y %H:%M:%S', # Newest format
+                                        '%d/%m/%Y %H:%M:%S' # Original format
+                                        ]):
+    import re
     def remap_names(name):
         if re.search(r'\bRack\b', name, re.IGNORECASE):
             return 'Rack'
@@ -123,12 +71,10 @@ def read_temp_csv(filename, timeformat):
             break
         except ValueError:
             continue
-    else:
+    else: # we get here if the for cloop terminates without breaking implying no format matched
         raise ValueError("None of the provided time formats matched the 'Time' column.")
 
     return trec
-
-
 
 def set_diff(trec,t0):
     trec['tdiff'] = trec['datetime'] - t0

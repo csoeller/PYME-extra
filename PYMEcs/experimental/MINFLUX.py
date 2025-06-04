@@ -1038,7 +1038,9 @@ class MINFLUXanalyser():
             return
         from PYMEcs.misc.utils import read_temp_csv, set_diff, timestamp_to_datetime
         mtemps = read_temp_csv(config.get('MINFLUX-temperature_file'),
-                               timeformat=config.get('MINFLUX-temperature_time_format','%d/%m/%Y %H:%M'))
+                               timeformat=config.get('MINFLUX-temperature_time_format',['%d.%m.%Y %H:%M:%S', # Newest format
+                                                                                        '%d/%m/%Y %H:%M:%S' # Original format
+                                                                                        ]))
         if len(self.visFr.pipeline.dataSources) == 0:
             warn("no datasources, this is probably an empty pipeline, have you loaded any data?")
             return
@@ -1051,7 +1053,9 @@ class MINFLUXanalyser():
         range = (1e-3*p['t'].min(),1e-3*p['t'].max())
         sertemps = mtemps[mtemps['tdiff_s'].between(range[0],range[1])]
         if sertemps.empty:
-            warn("no records in requested time window, is series time before or after start/end of available temperature records?")
+            warn("no records in requested time window, is series time before or after start/end of available temperature records?\n" +
+                 ("current records cover %s to %s" % (mtemps['Time'].iloc[0],mtemps['Time'].iloc[-1])) +
+                 ("\nseries starts at %s" % (t0)))
             return
         else:
             # for now we make 2 subplots so that we can provide both s units and actual time
