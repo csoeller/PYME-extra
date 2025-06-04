@@ -39,19 +39,42 @@ def unique_name(stem,names):
 
 import pandas as pd
 
-def read_temp_csv(filename,timeformat='%d/%m/%Y %H:%M'):
-    def remap_names(name): # for slightly more robust comlumn renaming
-        if 'Rack' in name:
+# makes the reading a little more flexible
+# contributed by Alex B
+def read_temp_csv(filename, timeformat=['%d.%m.%Y %H:%M:%S', # Newest format
+                                        '%d/%m/%Y %H:%M:%S' # Original format
+                                        ]):
+    import re
+    def remap_names(name):
+        if re.search(r'\bRack\b', name, re.IGNORECASE):
             return 'Rack'
-        elif 'Box' in name:
+        elif re.search(r'\bBox\b', name, re.IGNORECASE):
             return 'Box'
-        elif 'Stativ' in name:
+        elif re.search(r'\bStativ\b', name, re.IGNORECASE):
             return 'Stand'
+        elif re.search(r'\bTime\b', name, re.IGNORECASE):
+            return 'Time'
         else:
             return name
-    trec = pd.read_csv(filename,encoding = "ISO-8859-1")
-    trec['datetime'] = pd.to_datetime(trec['Time'],format=timeformat)
-    return trec.rename(columns=remap_names)
+        
+    trec = pd.read_csv(filename, encoding="ISO-8859-1")
+    trec.columns = [remap_names(col) for col in trec.columns]
+    
+    # Ensure timeformat is a list (even if only one format is provided)
+    if isinstance(timeformat, str):
+        timeformat = [timeformat]
+        
+    # Try all provided time formats
+    for fmt in timeformat:
+        try:
+            trec['datetime'] = pd.to_datetime(trec['Time'], format=fmt)
+            break
+        except ValueError:
+            continue
+    else: # we get here if the for cloop terminates without breaking implying no format matched
+        raise ValueError("None of the provided time formats matched the 'Time' column.")
+
+    return trec
 
 def set_diff(trec,t0):
     trec['tdiff'] = trec['datetime'] - t0
