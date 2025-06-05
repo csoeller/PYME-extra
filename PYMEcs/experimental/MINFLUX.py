@@ -1017,37 +1017,111 @@ class MINFLUXanalyser():
 
     def OnMINFLUXsetTempDataFile(self, event):
         import PYME.config as config
-        with wx.FileDialog(self.visFr, "Choose Temperature data file", wildcard='CSV (*.csv)|*.csv',
-                           style=wx.FD_OPEN) as dialog:
+        
+        # CS code to find a *.csv file in the config directory
+        # with wx.FileDialog(self.visFr, "Choose Temperature data file", wildcard='CSV (*.csv)|*.csv',
+        #                    style=wx.FD_OPEN) as dialog:
+        #     if dialog.ShowModal() == wx.ID_CANCEL:
+        #         return
+        #     fname = dialog.GetPath()
+        
+        # if config.get('MINFLUX-temperature_file') == fname:
+        #     warn("config option 'MINFLUX-temperature_file' already set to %s" % fname)
+        #     return # already set to this value, return
+
+        # config.update_config({'MINFLUX-temperature_file': fname},
+        #                      config='user', create_backup=True)
+
+        # Modif to look for a folder instead of a file
+        with wx.DirDialog(self.visFr, "Choose folder containing temperature CSV files") as dialog:
             if dialog.ShowModal() == wx.ID_CANCEL:
                 return
-            fname = dialog.GetPath()
-        
-        if config.get('MINFLUX-temperature_file') == fname:
-            warn("config option 'MINFLUX-temperature_file' already set to %s" % fname)
-            return # already set to this value, return
+            folder = dialog.GetPath()
 
-        config.update_config({'MINFLUX-temperature_file': fname},
-                             config='user', create_backup=True)
+        if config.get('MINFLUX-temperature_file') == folder:
+            warn("config option 'MINFLUX-temperature_file' already set to %s" % folder)
+            return
+
+        config.update_config({'MINFLUX-temperature_file': folder},
+                         config='user', create_backup=True)
 
 
     def OnMINFLUXplotTempData(self, event):
         import PYME.config as config
-        if config.get('MINFLUX-temperature_file') is None:
-            warn("Need to set Temperature file location first")
-            return
+        import os
+        from os.path import basename
+        from glob import glob
         from PYMEcs.misc.utils import read_temp_csv, set_diff, timestamp_to_datetime
-        mtemps = read_temp_csv(config.get('MINFLUX-temperature_file'),
-                               timeformat=config.get('MINFLUX-temperature_time_format',['%d.%m.%Y %H:%M:%S', # Newest format
-                                                                                        '%d/%m/%Y %H:%M:%S' # Original format
-                                                                                        ]))
-        if len(self.visFr.pipeline.dataSources) == 0:
-            warn("no datasources, this is probably an empty pipeline, have you loaded any data?")
+
+        # Below commented out original code from CS
+        ################ 
+        # if config.get('MINFLUX-temperature_file') is None:
+        #     warn("Need to set Temperature file location first")
+        #     return
+        ################
+        
+        # New  code from ChatGPT to select directory instead of a file.
+        folder = config.get('MINFLUX-temperature_file')
+        if folder is None or not os.path.isdir(folder):  # ✅ changed: now expects a folder
+            warn("Need to set temperature **folder** location first")
             return
+        
+        # CS code
         t0 = self.visFr.pipeline.mdh.get('MINFLUX.TimeStamp')
         if t0 is None:
             warn("no MINFLUX TimeStamp in metadata, giving up")
             return
+        # ChatGPT addition: convert t0 from timestamp for comparing it with timedates from csv file
+        t0_dt = timestamp_to_datetime(t0)
+        
+        # ChatGPT: Identify the correct temperature CSV files in the folder
+        # Loop over CSVs to find matching file
+        timeformat = config.get('MINFLUX-temperature_time_format', ['%d.%m.%Y %H:%M:%S',
+                                                                    '%d/%m/%Y %H:%M:%S'])
+        candidate_files = sorted(glob(os.path.join(folder, '*.csv')))
+
+        selected = None
+        for f in candidate_files:
+            try:
+                # print(f"\nChecking file: {basename(f)}\n")  # Show which file is being checked
+
+                df = read_temp_csv(f, timeformat=timeformat)
+                
+                if 'datetime' not in df.columns:
+                    print(f"File {f} has no 'datetime' column after parsing, skipping.")
+                    continue
+
+                # print(f"\nMin timestamp in file: {df['datetime'].min()}, Max: {df['datetime'].max()}\n")
+
+                if df['datetime'].min() <= t0_dt <= df['datetime'].max():
+                    selected = f
+                    break
+            except Exception as e:
+                print(f"Error reading {f}: {e}")
+                continue
+        
+        # cs Code
+        if selected is None:
+            warn("No temperature file found that includes the MINFLUX TimeStamp")
+            return
+        
+        # Read temperature data from the correct CSV file
+        mtemps = read_temp_csv(selected, timeformat=timeformat)
+        
+        
+        # Original code from CS to read temperature data
+        ################
+        # mtemps = read_temp_csv(config.get('MINFLUX-temperature_file'),
+        #                        timeformat=config.get('MINFLUX-temperature_time_format',['%d.%m.%Y %H:%M:%S', # Newest format
+        #                                                                                 '%d/%m/%Y %H:%M:%S' # Original format
+        #                                                                                 ]))
+        ################
+        # CS code
+        if len(self.visFr.pipeline.dataSources) == 0:
+            warn("no datasources, this is probably an empty pipeline, have you loaded any data?")
+            return 
+        
+        # Original CS code for processing temperature data
         set_diff(mtemps,timestamp_to_datetime(t0))
         p = self.visFr.pipeline
         range = (1e-3*p['t'].min(),1e-3*p['t'].max())
