@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import wx
+import os
 
 from PYMEcs.pyme_warnings import warn
 
@@ -38,7 +39,14 @@ def plot_errors(pipeline):
     uids, idx = np.unique(p['clumpIndex'],return_index=True)
     #print(f"bp_dict1: {bp_dict1['medians'][0].get_xydata()[0][1]}")
     
-    # --- Plot the error in x, y, (and z if available) ---
+    # Get the median values for photons and background
+    # mean_photon = np.mean(p['nPhotons'])
+    median_photon = np.median(p['nPhotons'])
+    
+    # mean_bg = np.mean(p['fbg'])
+    median_bg = np.median(p['fbg'])
+    
+    # --- Plot the error in x, y, (and z if available) before coalescing, this is done by using [idx] ---
     plt.subplot(223)
     if 'error_z' in pipeline.keys():
         plt.boxplot([p['error_x'][idx],p['error_y'][idx],p['error_z'][idx]],
@@ -64,12 +72,7 @@ def plot_errors(pipeline):
     # Save the plot as a png file (Alex B addition)
     plt.savefig(pipeline.mdh.get('MINFLUX.TimeStamp') + '_loc_error.png', dpi=300, bbox_inches='tight') 
     
-    # --- Calculate the mean and median of the clump size --- (Alex B addition)
-    # mean_photon = np.mean(p['nPhotons'])
-    median_photon = np.median(p['nPhotons'])
-    
-    # mean_bg = np.mean(p['fbg'])
-    median_bg = np.median(p['fbg'])
+    # --- Get the median of the clump size and errors x, y, z coalesced --- (Alex B addition)
     
     # mean_clump = np.mean(p['clumpSize'])
     pipeline.selectDataSource('coalesced_nz')
@@ -97,9 +100,32 @@ def plot_errors(pipeline):
     print(df.head())
     
 # --- Save as a csv file --- (Alex B addition)
+# Here we want to save the LocError, however if LocRate already exists we want to combine both files
+# and ensure that the final csv keeps the organization regrdless on which csv was generated first (locError or LocRate).
+
+    # variables to check if locerror and locrate csv files already exist
     csv_name = pipeline.mdh.get('MINFLUX.TimeStamp')
-    print(f'\ncsv name is: {csv_name}\n') # Used as a reminder for LocRate csv saving 
-    df.to_csv(csv_name + ".csv", index=False, header=True)
+    locerror_file = csv_name + "temp_LocError.csv"
+    locrate_file = csv_name + "temp_LocRate.csv"
+    combined_file = csv_name + ".csv"
+
+    # Save the locerror file
+    df.to_csv(locerror_file, index=False, header=True)
+
+    # If the locrate file already exists, merge:
+    if os.path.exists(locrate_file):
+        df_rate = pd.read_csv(locrate_file)
+        df_error = pd.read_csv(locerror_file)
+
+        # Combine the two dataframes in the desired order
+        df_combined = pd.concat([df_error, df_rate], ignore_index=True)
+        df_combined.to_csv(combined_file, index=False, header=True)
+
+        # Cleanup temp files
+        os.remove(locerror_file)
+        os.remove(locrate_file)
+    
+    print(f'\ncsv name is: {csv_name}\nIf you did not load a session, csv file and figures will be saved on the desktop') # Used as a reminder for LocRate csv saving 
         # By default the file is saved on the Desktop, if a session file is used, it is saved in the same directory as the session file.
     
 from PYMEcs.misc.matplotlib import boxswarmplot
@@ -1181,8 +1207,8 @@ class MINFLUXanalyser():
         pipeline.selectDataSource(self.analysisSettings.defaultDatasourceForAnalysis)
         #Added by Alex B to get timestamp and send it to plot_stats_minflux 
         timestamp = pipeline.mdh.get('MINFLUX.TimeStamp')
-        print("Timestamp from OnLocalisationRate(experimental/MINFLUX.py): ", timestamp)
-        #
+        # print("Timestamp from OnLocalisationRate(experimental/MINFLUX.py): ", timestamp)
+        
         if not 'cfr' in pipeline.keys():
             Error(self.visFr,'no property called "cfr", likely no MINFLUX data - aborting')
             pipeline.selectDataSource(curds)
