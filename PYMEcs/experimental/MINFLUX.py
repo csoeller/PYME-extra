@@ -1179,6 +1179,10 @@ class MINFLUXanalyser():
         pipeline = self.visFr.pipeline
         curds = pipeline.selectedDataSourceKey
         pipeline.selectDataSource(self.analysisSettings.defaultDatasourceForAnalysis)
+        #Added by Alex B to get timestamp and send it to plot_stats_minflux 
+        timestamp = pipeline.mdh.get('MINFLUX.TimeStamp')
+        print("Timestamp from OnLocalisationRate(experimental/MINFLUX.py): ", timestamp)
+        #
         if not 'cfr' in pipeline.keys():
             Error(self.visFr,'no property called "cfr", likely no MINFLUX data - aborting')
             pipeline.selectDataSource(curds)
@@ -1189,7 +1193,7 @@ class MINFLUXanalyser():
             return
         pipeline.selectDataSource(curds)
 
-        analyse_locrate(pipeline,datasource=self.analysisSettings.defaultDatasourceForAnalysis,showTimeAverages=True)
+        analyse_locrate(pipeline,datasource=self.analysisSettings.defaultDatasourceForAnalysis,showTimeAverages=True, timestamp=timestamp)
 
     def OnEfoAnalysis(self, event):
         pipeline = self.visFr.pipeline

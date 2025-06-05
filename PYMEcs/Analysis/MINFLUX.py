@@ -84,7 +84,7 @@ def plot_density_stats_sns(ds,objectID='dbscanClumpID'):
 # this should be a backwards compatible way to access the main filename associated with the pipeline/datasource
 
 def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, times,
-                       showTimeAverages=False, dsKey=None, areaString=None):
+                       showTimeAverages=False, dsKey=None, areaString=None, timestamp=None):
     
     # --- Create the figure (plot with 2x2 subplots) ---
     fig, (ax1, ax2) = plt.subplots(2, 2)
@@ -146,7 +146,11 @@ def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, ti
     print(df.head())
     
     # --- Append the dataframe to a csv file in the user specified path --- (Alex B addition)
-    saving_name = input("Use the timestamp as a filename for saving (will be save in the current location):")
+    
+    if timestamp is None:
+        saving_name = input("Use the timestamp as a filename for saving (will be save in the current location):")
+    else:
+        saving_name = timestamp
     df.to_csv(saving_name + ".csv", mode='a', index=False, header=False)
     #df.to_csv(saving_name + ".csv", index=False)
     
@@ -209,7 +213,7 @@ def analyse_locrate_pdframe(datain,use_invalid=False,showTimeAverages=True):
 
 
 # similar version but now using a pipeline
-def analyse_locrate(data,datasource='Localizations',showTimeAverages=True):
+def analyse_locrate(data,datasource='Localizations',showTimeAverages=True, timestamp=None):
     curds = data.selectedDataSourceKey
     data.selectDataSource(datasource)
     bins = np.arange(int(data['clumpIndex'].max())+1) + 0.5
@@ -237,8 +241,8 @@ def analyse_locrate(data,datasource='Localizations',showTimeAverages=True):
     if showTimeAverages:
         delta_averages, bin_edges, binnumber = binned_statistic(starts[:-1],deltas,statistic='mean', bins=50)
         delta_av_times = 0.5*(bin_edges[:-1] + bin_edges[1:]) # bin centres
-        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, delta_averages, delta_av_times, showTimeAverages=True, dsKey = datasource, areaString=area_string)
+        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, delta_averages, delta_av_times, showTimeAverages=True, dsKey = datasource, areaString=area_string, timestamp=timestamp)
     else:
-        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, data['efo'], None, dsKey = datasource, areaString=area_string)
+        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, data['efo'], None, dsKey = datasource, areaString=area_string, timestamp=timestamp)
 
     return (starts,deltas)
