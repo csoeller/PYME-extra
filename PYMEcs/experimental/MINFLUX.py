@@ -566,7 +566,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX', "Analysis settings", self.OnMINFLUXSettings)
         visFr.AddMenuItem('MINFLUX', "Manually create Colour panel", self.OnMINFLUXColour)
         visFr.AddMenuItem('MINFLUX>Util', "Plot temperature record matching current data series",self.OnMINFLUXplotTempData)
-        visFr.AddMenuItem('MINFLUX>Util', "Set MINFLUX temperature file location", self.OnMINFLUXsetTempDataFile)
+        visFr.AddMenuItem('MINFLUX>Util', "Set MINFLUX temperature folder location", self.OnMINFLUXsetTempDataFolder)
         visFr.AddMenuItem('MINFLUX>Util', "Check if clumpIndex contiguous", self.OnClumpIndexContig)
         visFr.AddMenuItem('MINFLUX>Util', "Plot event scatter as function of position in clump", self.OnClumpScatterPosPlot)
         visFr.AddMenuItem('MINFLUX>MBM', "Plot mean MBM info (and if present origami info)", self.OnMBMplot)
@@ -1041,75 +1041,58 @@ class MINFLUXanalyser():
             self.visFr.add_layer(ll)
             ll.update()
 
-    def OnMINFLUXsetTempDataFile(self, event):
+    def OnMINFLUXsetTempDataFolder(self, event):
         import PYME.config as config
-        
-        # CS code to find a *.csv file in the config directory
-        # with wx.FileDialog(self.visFr, "Choose Temperature data file", wildcard='CSV (*.csv)|*.csv',
-        #                    style=wx.FD_OPEN) as dialog:
-        #     if dialog.ShowModal() == wx.ID_CANCEL:
-        #         return
-        #     fname = dialog.GetPath()
-        
-        # if config.get('MINFLUX-temperature_file') == fname:
-        #     warn("config option 'MINFLUX-temperature_file' already set to %s" % fname)
-        #     return # already set to this value, return
-
-        # config.update_config({'MINFLUX-temperature_file': fname},
-        #                      config='user', create_backup=True)
-
-        # Modif to look for a folder instead of a file
         with wx.DirDialog(self.visFr, "Choose folder containing temperature CSV files") as dialog:
             if dialog.ShowModal() == wx.ID_CANCEL:
                 return
             folder = dialog.GetPath()
+        config_var = 'MINFLUX-temperature_folder'
+        if config.get(config_var) == folder:
+            warn("config option '%s' already set to %s, leaving as is" % (config_var,folder))
+            return # already set to this value, return
 
-        if config.get('MINFLUX-temperature_file') == folder:
-            warn("config option 'MINFLUX-temperature_file' already set to %s" % folder)
-            return
-
-        config.update_config({'MINFLUX-temperature_file': folder},
-                         config='user', create_backup=True)
-
+        config.update_config({config_var: folder},
+                             config='user', create_backup=True)
 
     def OnMINFLUXplotTempData(self, event):
         import PYME.config as config
         import os
         from os.path import basename
         from glob import glob
+
+        configvar = 'MINFLUX-temperature_folder'
+        folder = config.get(configvar)
+        if folder is None:
+            warn("Need to set Temperature file location first by setting config variable %s" % configvar)
+            return
+        elif not os.path.isdir(folder):
+            warn(("Config variable %s is not set to a folder;\n" % (configvar)) +
+                 ("needs to be a **folder** location, currently set to %s" % (folder)))
+            return
+
         from PYMEcs.misc.utils import read_temp_csv, set_diff, timestamp_to_datetime
 
-        # Below commented out original code from CS
-        ################ 
-        # if config.get('MINFLUX-temperature_file') is None:
-        #     warn("Need to set Temperature file location first")
-        #     return
-        ################
-        
-        # New  code from ChatGPT to select directory instead of a file.
-        folder = config.get('MINFLUX-temperature_file')
-        if folder is None or not os.path.isdir(folder):  # ✅ changed: now expects a folder
-            warn("Need to set temperature **folder** location first")
+        if len(self.visFr.pipeline.dataSources) == 0:
+            warn("no datasources, this is probably an empty pipeline, have you loaded any data?")
             return
         
-        # CS code
         t0 = self.visFr.pipeline.mdh.get('MINFLUX.TimeStamp')
         if t0 is None:
             warn("no MINFLUX TimeStamp in metadata, giving up")
             return
-        # ChatGPT addition: convert t0 from timestamp for comparing it with timedates from csv file
+        # Convert t0 from timestamp for comparing it with timedates from csv file
         t0_dt = timestamp_to_datetime(t0)
         
-        # ChatGPT: Identify the correct temperature CSV files in the folder
+                # Identify the correct temperature CSV files in the folder
         # Loop over CSVs to find matching file
         timeformat = config.get('MINFLUX-temperature_time_format', ['%d.%m.%Y %H:%M:%S',
                                                                     '%d/%m/%Y %H:%M:%S'])
         candidate_files = sorted(glob(os.path.join(folder, '*.csv')))
 
-        selected = None
         for f in candidate_files:
             try:
-                # print(f"\nChecking file: {basename(f)}\n")  # Show which file is being checked
+                # print(f"\nChecking file: {basename(f)}\n")  # Debugging, Show which file is being checked
 
                 df = read_temp_csv(f, timeformat=timeformat)
                 
@@ -1117,37 +1100,21 @@ class MINFLUXanalyser():
                     print(f"File {f} has no 'datetime' column after parsing, skipping.")
                     continue
 
-                # print(f"\nMin timestamp in file: {df['datetime'].min()}, Max: {df['datetime'].max()}\n")
+                # print(f"\nMin timestamp in file: {df['datetime'].min()}, Max: {df['datetime'].max()}\n") # Debugging
 
                 if df['datetime'].min() <= t0_dt <= df['datetime'].max():
-                    selected = f
+                    selected_file = f
                     break
             except Exception as e:
-                print(f"Error reading {f}: {e}")
+                logger.debug(f"Error reading {f}: {e}")
                 continue
-        
-        # cs Code
-        if selected is None:
+        else:
             warn("No temperature file found that includes the MINFLUX TimeStamp")
             return
-        
+
         # Read temperature data from the correct CSV file
-        mtemps = read_temp_csv(selected, timeformat=timeformat)
+        mtemps = read_temp_csv(selected_file, timeformat=timeformat)
         
-        
-        # Original code from CS to read temperature data
-        ################
-        # mtemps = read_temp_csv(config.get('MINFLUX-temperature_file'),
-        #                        timeformat=config.get('MINFLUX-temperature_time_format',['%d.%m.%Y %H:%M:%S', # Newest format
-        #                                                                                 '%d/%m/%Y %H:%M:%S' # Original format
-        #                                                                                 ]))
-        ################
-        # CS code
-        if len(self.visFr.pipeline.dataSources) == 0:
-            warn("no datasources, this is probably an empty pipeline, have you loaded any data?")
-            return 
-        
-        # Original CS code for processing temperature data
         set_diff(mtemps,timestamp_to_datetime(t0))
         p = self.visFr.pipeline
         range = (1e-3*p['t'].min(),1e-3*p['t'].max())
