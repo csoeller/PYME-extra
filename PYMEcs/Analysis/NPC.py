@@ -334,6 +334,49 @@ def fpinterpolate(fp3d,x,y,z,method='linear', bounds_error=True, fill_value=np.n
     fpinterp = RegularGridInterpolator((x,y,z), fp3d, method=method, bounds_error=bounds_error, fill_value=fill_value)
     return fpinterp
 
+# variation on makeNPC function in SimuFLUX by Marin & Ries (https://github.com/ries-lab/SimuFLUX)
+def makeNPC(center=[0,0,0], R=50, copynumber=32, dz=50, rotation=0, twistangle=np.pi/32, shiftangle=np.pi/16, dR=3, dzpair=3.2):
+    if not isinstance(center, np.ndarray):
+        center = np.array(center, dtype=float)
+
+    dphi = np.pi/4
+    maxphi = 2 * np.pi - dphi - rotation
+    nphi = int(maxphi / dphi)
+    phi = np.arange(nphi+1)*dphi
+    v0 = np.zeros_like(phi)
+
+    if copynumber == 8:
+        phiall = phi
+        zall = v0
+        Rall = v0 + R
+    elif copynumber == 16:
+        phiall = np.hstack([phi, -phi+twistangle])
+        zall = np.hstack([v0+dz/2, v0-dz/2])
+        Rall = np.hstack([v0,v0]) + R
+    elif copynumber == 32:
+        phiall = np.hstack([phi, phi+shiftangle, -phi+twistangle, -phi + twistangle - shiftangle])
+        zall = np.hstack([v0+dz/2+dzpair/2, v0+dz/2-dzpair/2, v0-dz/2-dzpair/2, v0-dz/2+dzpair/2])
+        Rall = np.hstack([v0+R+dR, v0+R, v0+R+dR, v0+R])
+    else:
+        raise ValueError("NPC copy number: must be 8, 16 or 32, is: %d" % copynumber)
+
+    posnpc = np.vstack([Rall*np.cos(phiall), Rall*np.sin(phiall), zall]).T
+    posnpc += center
+
+    return posnpc
+
+def npctemplate_detailed(x3d,y3d,z3d,npcgeometry,sigma=5.0):
+    vol = np.zeros_like(x3d)
+    d0, h0 = npcgeometry
+    npcpts = makeNPC(R=d0/2, dz=h0)
+    x=npcpts[:,0]
+    y=npcpts[:,1]
+    z=npcpts[:,2]
+    for i in range(x.size):
+        vol += np.exp(-((x3d-x[i])**2+(y3d-y[i])**2+(z3d-z[i])**2)/(2*sigma*sigma))
+
+    return vol
+
 # we may rewrite this for our purpose if bounds violations become a problem
 # code from https://stackoverflow.com/questions/21670080/how-to-find-global-minimum-in-python-optimization-with-bounds
 class RandomDisplacementBounds(object):
@@ -360,23 +403,34 @@ class RandomDisplacementBounds(object):
 maxshift = 50.0
 class LLmaximizerNPC3D(object):
     # the bgprop value needs a little more thought, it could be specific for this set of parameters
-    def __init__(self, npcgeometry, extent_nm=150.0, voxelsize_nm=2.0, eps=15.0, sigma=5.0, bgprob=1e-9):
+    def __init__(self, npcgeometry, extent_nm=150.0, voxelsize_nm=2.0, sigma=5.0, bgprob=1e-9,volcallback=None):
         self.x = np.arange(-extent_nm/2.0, extent_nm/2.0+1.0, voxelsize_nm, dtype='f')
         self.y = self.x.copy()
         self.z = self.x.copy()
         self.npcgeometry = npcgeometry
-        d0, h0 = npcgeometry # diameter of ring and ring spacing
+        self.sigma = sigma
+        self.bgprob = bgprob
+        self.volcallback = volcallback
+        
         x2d,y2d = np.meshgrid(self.x,self.y)
         x3d,y3d, z3d = np.meshgrid(self.x,self.y,self.z)
-        self.circ2d = (x2d**2 + y2d**2 -0.25*d0**2 <= eps**2) & (x2d**2 + y2d**2 -0.25*d0**2 >= -eps**2)
-        self.g3d = np.exp(-(x3d**2+y3d**2+z3d**2)/2.0/(sigma**2))
-        self.fp3d = np.zeros_like(x3d)
-        idz = np.argmin(np.abs(self.z-h0/2))
-        self.fp3d[:,:,idz] = self.circ2d
-        idz = np.argmin(np.abs(self.z-(-h0/2)))
-        self.fp3d[:,:,idz] = self.circ2d
 
-        self.fpg3d = np.clip(fftconvolve(self.fp3d,self.g3d,mode='same'),0,None)
+        if volcallback is not None:
+            if not callable(volcallback):
+                raise RuntimeError("volcallback option is not callable")
+            self.fpg3d = volcallback(x3d,y3d,z3d,npcgeometry,sigma=sigma)
+        else:
+            eps=15.0 # we have removed the eps variable as input, set it here
+            d0, h0 = npcgeometry # diameter of ring and ring spacing
+            self.circ2d = (x2d**2 + y2d**2 -0.25*d0**2 <= eps**2) & (x2d**2 + y2d**2 -0.25*d0**2 >= -eps**2)
+            self.g3d = np.exp(-(x3d**2+y3d**2+z3d**2)/2.0/(sigma**2))
+            self.fp3d = np.zeros_like(x3d)
+            idz = np.argmin(np.abs(self.z-h0/2))
+            self.fp3d[:,:,idz] = self.circ2d
+            idz = np.argmin(np.abs(self.z-(-h0/2)))
+            self.fp3d[:,:,idz] = self.circ2d
+            self.fpg3d = np.clip(fftconvolve(self.fp3d,self.g3d,mode='same'),0,None)
+
         self.fpg3d += bgprob # add background probability
         self.fpg3d /= self.fpg3d.sum()
         self.nllfp = -np.log10(self.fpg3d)
@@ -429,13 +483,13 @@ class LLmaximizerNPC3D(object):
         self._lastpars = pars
         return self.c3dr
 
-    def transform_coords_inv(self,pars):
+    def transform_coords_inv(self,pars): # this is apparently currently not used and needs to be debugged before use
         if 'c3dr' not in dir(self) or self.c3dr is None:
             raise RuntimeError("need transformed points to start with")
         c3dr = self.c3dr.copy()
         c3dr[:,0:2] /= 0.01*pars[5]
         c3dr[:,2]   /= 0.01*pars[6]
-        c3di = R.from_euler('zy', [pars[3],pars[4]], degrees=True).inv.apply(c3d)
+        c3di = R.from_euler('zy', [pars[3],pars[4]], degrees=True).inv().apply(c3dr)
         c3di -= [pars[0],pars[1],pars[2]]
         self.c3di = c3di
         return self.c3di
@@ -675,16 +729,14 @@ class NPC3D(object):
         return ax
         
 
-    def nlabeled(self,nthresh=1,r0=50.0,dr=25.0,do_plot=False,rotlocked=True,zrange=150.0,analysis2d=False):
+    def nlabeled(self,nthresh=1,r0=50.0,dr=25.0,do_plot=False,rotlocked=True,zrange=150.0,analysis2d=False,rotation=None):
         zrangeabs = abs(zrange)
-        if rotlocked:
+        if rotlocked and rotation is None:
             self.filter('z',-zrangeabs,zrangeabs)
             if self.filtered_pts.size > 0:
                 rotation = estimate_rotation2(self.filtered_pts[:,0],self.filtered_pts[:,1])
             else:
                 rotation=None
-        else:
-            rotation=None
         self.rotation = rotation # remember rotation
 
         if analysis2d:
@@ -718,7 +770,8 @@ class NPC3D(object):
             return (self.n_top,self.n_bot)
 
 class NPC3DSet(object):
-    def __init__(self,filename=None,zclip=75.0,offset_mode='median',NPCdiam=100.0,NPCheight=70.0,foreshortening=1.0, known_number=-1):
+    def __init__(self,filename=None,zclip=75.0,offset_mode='median',NPCdiam=100.0,NPCheight=70.0,
+                 foreshortening=1.0,known_number=-1,templatemode='standard'):
         self.filename=filename
         self.zclip = zclip
         self.offset_mode = offset_mode
@@ -727,11 +780,21 @@ class NPC3DSet(object):
         self.npcs = []
         self.foreshortening=foreshortening # we just record this for reference
         # TODO: expose llm parameters to this init method as needed in practice!
-        self.llm = LLmaximizerNPC3D([self.npcdiam,self.npcheight],eps=15.0,sigma=7.0,bgprob=1e-9,extent_nm=300.0)
+        self.templatemode = templatemode
+        if templatemode == 'standard':
+            volcallback=None
+            sigma = 7.0
+        elif templatemode == 'detailed':
+            volcallback=npctemplate_detailed
+            sigma = 7.0 # this value may need a little testing
+        self.llm = LLmaximizerNPC3D([self.npcdiam,self.npcheight],sigma=sigma,bgprob=1e-9,extent_nm=300.0,volcallback=volcallback)
         self.measurements = []
         self.known_number = known_number # only considered if > 0
-        
-        self._version='1.0' # REMEMBER to increment version when changing this object or the underlying npc object definitions
+
+        # v1.1
+        # - has templatemode added
+        # - has more complete recording of llm initialization parameters
+        self._version='1.1' # REMEMBER to increment version when changing this object or the underlying npc object definitions
 
     def registerNPC(self,npc):
         self.npcs.append(npc)

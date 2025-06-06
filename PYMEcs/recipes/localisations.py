@@ -1520,8 +1520,8 @@ class MBMcorrection(ModuleBaseMDHmod):
     outputTracks = Output('mbm_tracks')
     outputTracksCorr = Output('mbm_tracks_corrected')
     
-    mbmfile = FileOrURI('')
-    mbmsettings = FileOrURI('')
+    mbmfile = FileOrURI('') # ,filter=['*.npz','*.zip'] we want a filter with two possible extensions but in tests only the last extension is considered
+    mbmsettings = FileOrURI('',filter=['*.json'])
     mbmfilename_checks = Bool(True)
     
     Median_window = Int(5)
@@ -1736,7 +1736,7 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
     outputSegments = Output('npc_segments')
     outputTemplates = Output('npc_templates')
     
-    NPC_analysis_file = FileOrURI('')
+    NPC_analysis_file = FileOrURI('',filter = ['*.pickle'])
     NPC_Gallery_Arrangement = Enum(['SingleAverageSBS','TopOverBottom','TopBesideBottom','SingleAverage'],
                                    desc="how to arrange 3D NPC parts in NPC gallery; SBS = SideBySide top and bottom")
     NPC_hide = Bool(False,desc="if true hide this NPCset so you can fit again etc",label='hide NPCset')
@@ -1764,7 +1764,7 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
                 mdh = inputLocalizations.mdh
                 npcs = load_NPC_set(self.NPC_analysis_file,ts=mdh.get('MINFLUX.TimeStamp'),
                                      foreshortening=mdh.get('MINFLUX.Foreshortening',1.0))
-                logger.debug("reading in npcset object from file")
+                logger.debug("reading in npcset object from file %s" % self.NPC_analysis_file)
                 if self.NPC_version_check != 'no check' and not check_npcset_version(npcs,self.NPC_target_version,mode=self.NPC_version_check):
                     warn('requested npcset object version %s, got version %s' %
                          (self.NPC_target_version,check_npcset_version(npcs,self.NPC_target_version,mode='return_version')))

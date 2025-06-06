@@ -66,6 +66,7 @@ class NPCsettings(HasTraits):
     StartDiam_3D = Float(107.0,label='Starting ring diameter for 3D fitting',
                            desc="starting ring diameter value for the 3D fit; note only considered when doing the initial full fit; "+
                            "not considered when re-evaluating existing fit")
+    TemplateMode_3D = Enum(['standard','detailed'],desc="standard or detailed NPC template")
     FitMode = Enum(['abs','square'],label='Fit mode for NPC rotation',
                    desc="fit mode for NPC rotation; in 2D and 3D estimation of the NPC lateral rotation a simple algorithm is used to find the start of the 'pizza pieces'; "+
                    "this mode refers to use of absolute or squared differences in the calculation; default should be ok")
@@ -190,7 +191,8 @@ class NPCcalc():
                             NPCdiam=self.NPCsettings.StartDiam_3D,
                             NPCheight=self.NPCsettings.StartHeight_3D,
                             foreshortening=pipeline.mdh.get('MINFLUX.Foreshortening',1.0),
-                            known_number=self.NPCsettings.KnownNumber_3D)
+                            known_number=self.NPCsettings.KnownNumber_3D,
+                            templatemode=self.NPCsettings.TemplateMode_3D)
             do_plot = True
             for oid in np.unique(pipeline['objectID']):
                 npcs.addNPCfromPipeline(pipeline,oid)
@@ -208,13 +210,22 @@ class NPCcalc():
             fig, axes=plt.subplots(2,3)
         cancelled = False
         npcs.measurements = []
+        if 'templatemode' in dir(npcs) and npcs.templatemode == 'detailed':
+            rotation = 22.5 # this value may need adjustment
+        else:
+            rotation = None
+
+        # check if any fits were performed
+        anyfits = False
         for i,npc in enumerate(npcs.npcs):
             if not npc.fitted:
                 npc.fitbymll(npcs.llm,plot=True,printpars=False,axes=axes)
+                anyfits = True
             nt,nb = npc.nlabeled(nthresh=self.NPCsettings.SegmentThreshold_3D,
                                  dr=self.NPCsettings.RadiusUncertainty_3D,
                                  rotlocked=self.NPCsettings.RotationLocked_3D,
-                                 zrange=self.NPCsettings.Zclip_3D)
+                                 zrange=self.NPCsettings.Zclip_3D,
+                                 rotation=rotation)
             if self.NPCsettings.SkipEmptyTopOrBottom_3D and (nt == 0 or nb == 0):
                 pass # we skip NPCs with empty rings in this case
             else:
@@ -228,11 +239,13 @@ class NPCcalc():
                 # Cancelled by user.
                 break
             wx.Yield()
+        else:
+            if anyfits:
+                pipeline.npcs = npcs # we update the pipeline npcs attribute only if the for loop completed normally and we fitted
 
         if cancelled:
             return
         
-        pipeline.npcs = npcs # overwriting with the same object should be fine if pipeline.npcs already existed
         npcs.plot_labeleff(thresh=self.NPCsettings.SegmentThreshold_3D)
 
 
