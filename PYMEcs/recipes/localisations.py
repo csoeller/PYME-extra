@@ -1520,8 +1520,8 @@ class MBMcorrection(ModuleBaseMDHmod):
     outputTracks = Output('mbm_tracks')
     outputTracksCorr = Output('mbm_tracks_corrected')
     
-    mbmfile = FileOrURI('') # ,filter=['*.npz','*.zip'] we want a filter with two possible extensions but in tests only the last extension is considered
-    mbmsettings = FileOrURI('',filter=['*.json'])
+    mbmfile = FileOrURI('',filter=['Npz (*.npz)|*.npz','Zip (*.zip)|*.zip'])
+    mbmsettings = FileOrURI('',filter=['Json (*.json)|*.json'])
     mbmfilename_checks = Bool(True)
     
     Median_window = Int(5)
@@ -1736,7 +1736,7 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
     outputSegments = Output('npc_segments')
     outputTemplates = Output('npc_templates')
     
-    NPC_analysis_file = FileOrURI('',filter = ['*.pickle'])
+    NPC_analysis_file = FileOrURI('',filter = ['Pickle (*.pickle)|*.pickle'])
     NPC_Gallery_Arrangement = Enum(['SingleAverageSBS','TopOverBottom','TopBesideBottom','SingleAverage'],
                                    desc="how to arrange 3D NPC parts in NPC gallery; SBS = SideBySide top and bottom")
     NPC_hide = Bool(False,desc="if true hide this NPCset so you can fit again etc",label='hide NPCset')

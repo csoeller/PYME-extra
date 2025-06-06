@@ -47,6 +47,8 @@ def findNPCset(pipeline,return_mod=False,warnings=True):
             module = mod
             break
     if hideNPC: # the module is deliberately hiding the NPCset associated with it
+        if warnings:
+            warn("NPCset has been marked as hidden in NPCAnalysisInput output, assuming this is deliberate")
         return None
     if dsname is None:
         if warnings:
