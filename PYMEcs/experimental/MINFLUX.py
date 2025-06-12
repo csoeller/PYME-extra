@@ -715,34 +715,68 @@ class MINFLUXanalyser():
                 dlg.ShowModal()
         else:
             warn("could not find zarr attribute - is this a MFX zarr file?")
-
+    
     def OnMFXInfo(self, event):
         import io
-        from  wx.lib.dialogs import ScrolledMessageDialog
+        import wx.html
         fres = self.visFr.pipeline.dataSources['FitResults']
         if 'zarr' not in dir(fres):
             warn("could not find zarr attribute - is this a MFX zarr file?")
             return
-        else:
-            try:
-                mfx_attrs = fres.zarr['mfx'].attrs.asdict()
-            except AttributeError:
-                warn("could not access MFX attributes - do we have MFX data in zarr?")
-                return
-            if '_legacy' in mfx_attrs:
-                warn("legacy data detected - no useful MFX metadata in legacy data")
-                return
-            from PYMEcs.IO.MINFLUX import get_metadata_from_mfx_attrs
-            md_itr_info, md_globals = get_metadata_from_mfx_attrs(mfx_attrs)
-            import pprint
-            with io.StringIO() as output:
-                print(md_itr_info.to_string(show_dimensions=False,index=True,line_width=80),file=output)
-                print('\nMFX Globals:',file=output)
-                print(pprint.pformat(md_globals,indent=4),file=output)
-                mfx_info_str = output.getvalue()
-            with ScrolledMessageDialog(self.visFr, mfx_info_str, "MFX info (tentative)", size=(900,400),
-                                        style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE ) as dlg:
-                dlg.ShowModal()            
+        
+        # Get the metadata as before
+        try:
+            mfx_attrs = fres.zarr['mfx'].attrs.asdict()
+        except AttributeError:
+            warn("could not access MFX attributes - do we have MFX data in zarr?")
+            return
+        if '_legacy' in mfx_attrs:
+            warn("legacy data detected - no useful MFX metadata in legacy data")
+            return
+        
+        from PYMEcs.IO.MINFLUX import get_metadata_from_mfx_attrs
+        md_itr_info, md_globals = get_metadata_from_mfx_attrs(mfx_attrs)
+        
+        # Create an HTML dialog
+        dlg = wx.Dialog(self.visFr, title="MINFLUX Metadata Information", 
+                       size=(950, 600), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        
+        # Create HTML content
+        html_window = wx.html.HtmlWindow(dlg, style=wx.html.HW_SCROLLBAR_AUTO)
+        
+        # Format the DataFrame as an HTML table
+        html_content = "<html><body>"
+        html_content += "<h2>MINFLUX Iteration Parameters</h2>"
+        html_content += md_itr_info.to_html(
+            classes='table table-striped',
+            float_format=lambda x: f"{x:.2f}" if isinstance(x, float) else x
+        )
+        
+        # Format global parameters
+        html_content += "<h2>MINFLUX Global Parameters</h2>"
+        html_content += "<table border=1 class='table table-striped'>"
+        for key, value in sorted(md_globals.items()):
+            html_content += f"<tr><td><b>{key}</b></td><td>{value}</td></tr>"
+        html_content += "</table>"
+        html_content += "</body></html>"
+        
+        html_window.SetPage(html_content)
+        
+        # Add OK button
+        btn_sizer = wx.StdDialogButtonSizer()
+        btn = wx.Button(dlg, wx.ID_OK)
+        btn.SetDefault()
+        btn_sizer.AddButton(btn)
+        btn_sizer.Realize()
+        
+        # Layout
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(html_window, 1, wx.EXPAND | wx.ALL, 5)
+        sizer.Add(btn_sizer, 0, wx.ALIGN_CENTER | wx.ALL, 5)
+        dlg.SetSizer(sizer)
+        
+        dlg.ShowModal()
+        dlg.Destroy()
 
     def OnZarrToZipStore(self, event):
         with wx.DirDialog(self.visFr, 'Zarr to convert ...',
@@ -1300,6 +1334,7 @@ class MINFLUXanalyser():
         
             recipe.add_modules_and_execute(modules)
         
+               
         pipeline.selectDataSource(corrSiteClumps)
 
     def OnOrigamiSiteTrackPlot(self, event):
