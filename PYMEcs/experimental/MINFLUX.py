@@ -938,7 +938,9 @@ class MINFLUXanalyser():
             naxes = 2
         has_drift = 'driftx' in p.keys()
         has_drift_ori = 'driftx_ori' in p.keys()
-        mbm = findmbm(p,warnings=False)
+        mbm = findmbm(pipeline)
+        if mbm is None:
+            return
         has_mbm = mbm is not None
         has_mbm2 = 'mbmx' in p.keys()
 
@@ -1226,14 +1228,20 @@ class MINFLUXanalyser():
         pipeline = self.visFr.pipeline
         curds = pipeline.selectedDataSourceKey
         pipeline.selectDataSource(self.analysisSettings.defaultDatasourceForAnalysis)
+        #Added by Alex B to get timestamp and send it to plot_stats_minflux 
+        timestamp = pipeline.mdh.get('MINFLUX.TimeStamp')
         if not 'efo' in pipeline.keys():
             Error(self.visFr,'no property called "efo", likely no MINFLUX data or wrong datasource (CHECK) - aborting')
             return
         plt.figure()
-        h = plt.hist(1e-3*pipeline['efo'],bins='auto',range=(0,200))
+        # Convert efo to kHz and create bins of 5 kHz (5000 Hz)
+        efo_khz = 1e-3*pipeline['efo']
+        bins = np.arange(0, 200, 5)  # Bins from 0 to 200 kHz in 5 kHz steps
+        h = plt.hist(efo_khz, bins=bins, range=(0,200), edgecolor='white', linewidth=0.5)
         dskey = pipeline.selectedDataSourceKey
         plt.xlabel('efo (photon rate in kHz)')
-        plt.title("EFO stats, using datasource '%s'" % dskey)
+        plt.xlim(0, 200)  # Limit X axis to 200 kHz (200,000 Hz)
+        plt.title(f"EFO stats for {timestamp}, using datasource '{dskey}'")
 
         pipeline.selectDataSource(curds)
 
