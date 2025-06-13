@@ -66,7 +66,7 @@ class NPCsettings(HasTraits):
     StartDiam_3D = Float(107.0,label='Starting ring diameter for 3D fitting',
                            desc="starting ring diameter value for the 3D fit; note only considered when doing the initial full fit; "+
                            "not considered when re-evaluating existing fit")
-    TemplateMode_3D = Enum(['standard','detailed'],desc="standard or detailed NPC template")
+    TemplateMode_3D = Enum(['standard','detailed','twostage'],desc="standard or detailed NPC template")
     FitMode = Enum(['abs','square'],label='Fit mode for NPC rotation',
                    desc="fit mode for NPC rotation; in 2D and 3D estimation of the NPC lateral rotation a simple algorithm is used to find the start of the 'pizza pieces'; "+
                    "this mode refers to use of absolute or squared differences in the calculation; default should be ok")
@@ -208,6 +208,8 @@ class NPCcalc():
                                      | wx.PD_REMAINING_TIME)
         if do_plot:
             fig, axes=plt.subplots(2,3)
+            if 'templatemode' in dir(npcs) and npcs.templatemode == 'twostage':
+                figpre, axespre=plt.subplots(2,3,label='pre-llm')
         cancelled = False
         npcs.measurements = []
         if 'templatemode' in dir(npcs) and npcs.templatemode == 'detailed':
@@ -219,7 +221,10 @@ class NPCcalc():
         anyfits = False
         for i,npc in enumerate(npcs.npcs):
             if not npc.fitted:
-                npc.fitbymll(npcs.llm,plot=True,printpars=False,axes=axes)
+                if 'templatemode' in dir(npcs) and npcs.templatemode == 'twostage':
+                    npc.fitbymll(npcs.llm,plot=True,printpars=False,axes=axes,preminimizer=npcs.llmpre,axespre=axespre)
+                else:
+                    npc.fitbymll(npcs.llm,plot=True,printpars=False,axes=axes)
                 anyfits = True
             nt,nb = npc.nlabeled(nthresh=self.NPCsettings.SegmentThreshold_3D,
                                  dr=self.NPCsettings.RadiusUncertainty_3D,

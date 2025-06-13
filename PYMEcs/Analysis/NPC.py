@@ -494,13 +494,19 @@ class LLmaximizerNPC3D(object):
         self.c3di = c3di
         return self.c3di
 
-    def plot_points(self,mode='transformed',external_pts=None,axes=None): # supported modes should be 'original', 'transformed', 'both', external
+    def plot_points(self,mode='transformed',external_pts=None,axes=None,p0=None): # supported modes should be 'original', 'transformed', 'both', external
         if mode == 'transformed':
             x,y,z = xyzfrom3vec(self.c3dr)
         elif mode == 'original':
             x,y,z = xyzfrom3vec(self.points)
         elif mode == 'both':
-            x,y,z = xyzfrom3vec(self.points)
+            if p0 is not None: # in this mode we consider a p0 as initial transform if provided
+                plast = self._lastpars # perhaps better to use opt_result.x?
+                self.transform_coords(p0)
+                x,y,z = xyzfrom3vec(self.c3dr)
+                self.transform_coords(plast) # restore transformed coords to what they were at the start
+            else:
+                x,y,z = xyzfrom3vec(self.points)
             x1,y1,z1 = xyzfrom3vec(self.c3dr)
         elif mode == 'external':
             if external_pts is None:
@@ -563,11 +569,17 @@ class LLmaximizerNPC3D(object):
     # minimize the negative log likelihood
     def nllminimize(self,p0=(0,0,0,0,0,100.0,100.0),method='L-BFGS-B'):
         from scipy.optimize import minimize
+        self.p0 = p0
+        self.minmethod = method
         self.opt_result = minimize(self.function_to_minimize(),p0,method=method,bounds=self.bounds)
 
-    def nll_basin_hopping(self,p0,method='L-BFGS-B'):
+    def nll_basin_hopping(self,p0,method='L-BFGS-B',bounds=None):
         from scipy.optimize import basinhopping
-        minimizer_kwargs = dict(method=method, bounds=self.bounds)
+        self.p0 = p0 # we record as p0 since pars0 is used at the time of "registerPoints"; will cause issues as nllm object is reused
+        self.minmethod = "basinhopping with %s" % method
+        if bounds is None:
+            bounds=self.bounds # default bounds
+        minimizer_kwargs = dict(method=method, bounds=bounds)
         self.opt_result = basinhopping(self.function_to_minimize(), p0, minimizer_kwargs=minimizer_kwargs)
 
     def pprint_lastpars(self):
@@ -605,19 +617,50 @@ class NPC3D(object):
             npts = npts[zgood,:]
         self.npts = npts
 
-    def fitbymll(self,nllminimizer,plot=True,printpars=True,axes=None):
+    def fitbymll(self,nllminimizer,plot=True,printpars=True,axes=None,preminimizer=None,axespre=None):
         nllm = nllminimizer
         self.nllminimizer = nllm
-        
-        nllm.registerPoints(self.npts)
-        nllm.nll_basin_hopping(p0=(0,0,0,0,0,100.0,100.0))
-        self.opt_result = nllm.opt_result
-        self.transformed_pts = nllm.c3dr
+        self.preminimizer = preminimizer
+
+        if preminimizer is not None:
+            preminimizer.registerPoints(self.npts)
+            preminimizer.nll_basin_hopping(p0=(0,0,0,0,0,100.0,100.0))
+            self.opt_result_pre = preminimizer.opt_result
+            self.transformed_pts_pre = preminimizer.c3dr
+            # in the second stage llm minimizing stage start with best fit from previous fit as p0
+            # and allow mainly variation in rotation angles 
+            # for other parameters only allow deviation from robust fitting in quite narrow range
+            p0 = self.opt_result_pre.x
+            dc = 3.0 # max deviation in coordinates (in nm)
+            dperc = 2.0 # max deviation in scaling percentage
+            bounds = (
+                (max(-maxshift,p0[0]-dc),min(maxshift,p0[0]+dc)), # p[0]
+                (max(-maxshift,p0[1]-dc),min(maxshift,p0[1]+dc)), # p[1]
+                (max(-maxshift,p0[2]-dc),min(maxshift,p0[2]+dc)), # p[2]
+                (-90.0,90.0), # p[3]
+                (-35.0,35.0), # p[4]
+                (max(80.0,p0[5]-dperc),min(120.0,p0[5]+dperc)), # p[5] - limit to 20% variation to avoid misfits
+                (max(80.0,p0[6]-dperc),min(120.0,p0[6]+dperc)) # p[6]  - limit to 20% variation to avoid misfits
+            )
+            nllm.registerPoints(self.npts)
+            nllm.nll_basin_hopping(p0=p0,bounds=bounds)
+            self.opt_result = nllm.opt_result
+            self.transformed_pts = nllm.c3dr
+        else:
+            nllm.registerPoints(self.npts)
+            nllm.nll_basin_hopping(p0=(0,0,0,0,0,100.0,100.0))
+            self.opt_result = nllm.opt_result
+            self.transformed_pts = nllm.c3dr
         self.fitted = True
         if printpars:
             nllm.pprint_lastpars()
         if plot:
-            nllm.plot_points(mode='both',axes=axes)
+            if preminimizer is not None:
+                preminimizer.plot_points(mode='both',axes=axespre)
+                p0 = nllm.p0
+            else:
+                p0 = None
+            nllm.plot_points(mode='both',axes=axes,p0=p0) # if a prefit was done we use its p0
 
     def filter(self,axis='z',minval=0, maxval=100):
         if axis == 'x':
@@ -784,17 +827,23 @@ class NPC3DSet(object):
         if templatemode == 'standard':
             volcallback=None
             sigma = 7.0
-        elif templatemode == 'detailed':
+        elif templatemode == 'detailed' or templatemode == 'twostage':
             volcallback=npctemplate_detailed
             sigma = 7.0 # this value may need a little testing
         self.llm = LLmaximizerNPC3D([self.npcdiam,self.npcheight],sigma=sigma,bgprob=1e-9,extent_nm=300.0,volcallback=volcallback)
+        if templatemode == 'twostage':
+            self.llmpre = LLmaximizerNPC3D([self.npcdiam,self.npcheight],sigma=7.0,bgprob=1e-9,extent_nm=300.0,volcallback=None)
+        else:
+            self.llmpre = None
         self.measurements = []
         self.known_number = known_number # only considered if > 0
 
         # v1.1
         # - has templatemode added
         # - has more complete recording of llm initialization parameters
-        self._version='1.1' # REMEMBER to increment version when changing this object or the underlying npc object definitions
+        # v1.2
+        # - twostage mode introduced with prefitting with robust followed by detailed
+        self._version='1.2' # REMEMBER to increment version when changing this object or the underlying npc object definitions
 
     def registerNPC(self,npc):
         self.npcs.append(npc)
