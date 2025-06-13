@@ -1234,9 +1234,9 @@ class MINFLUXanalyser():
             Error(self.visFr,'no property called "efo", likely no MINFLUX data or wrong datasource (CHECK) - aborting')
             return
         plt.figure()
-        # Convert efo to kHz and create bins of 5 kHz (5000 Hz)
+        # Convert efo to kHz and create bins of 1 kHz (1000 Hz)
         efo_khz = 1e-3*pipeline['efo']
-        bins = np.arange(0, 200, 5)  # Bins from 0 to 200 kHz in 5 kHz steps
+        bins = np.arange(0, 200, 1)  # Bins from 0 to 200 kHz in 1 kHz steps
         h = plt.hist(efo_khz, bins=bins, range=(0,200), edgecolor='white', linewidth=0.5)
         dskey = pipeline.selectedDataSourceKey
         plt.xlabel('efo (photon rate in kHz)')
