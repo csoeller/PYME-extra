@@ -1782,6 +1782,18 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
                                                            xoffs=self.gallery_x_offset,
                                                            yoffs=self.gallery_y_offset)
             outputTemplates = mk_npctemplates(npcs)
+            
+            if npcs is not None and 'objectID' in inputLocalizations.keys():
+                ids = inputLocalizations['objectID']
+                fitminperloc = np.zeros_like(ids,dtype='f')
+                for npc in npcs.npcs:
+                    if not npc.fitted:
+                        continue
+                    roi = ids==npc.objectID
+                    if np.any(roi):
+                        fitminperloc[roi] = npc.opt_result.fun/npc.npts.shape[0]
+                mapped_ds.addColumn('npc_fitminperloc',fitminperloc)            
+
             return dict(output=mapped_ds, outputGallery=outputGallery,
                         outputSegments=outputSegments, outputTemplates=outputTemplates, mdh=NPCmdh)
 

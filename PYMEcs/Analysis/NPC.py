@@ -595,6 +595,7 @@ class NPC3D(object):
                 raise RuntimeError("need an objectID to set points from pipeline, None was given")
             npcidx = pipeline['objectID'] == objectID
             self.points = to3vecs(pipeline['x'][npcidx],pipeline['y'][npcidx],pipeline['z'][npcidx])
+            self.t = pipeline['t'][npcidx]
             self.objectID = objectID
         self.npts = None
         if self.points is not None:
@@ -612,10 +613,13 @@ class NPC3D(object):
         else:
             raise RuntimeError("unknown mode '%s', should be mean or median" % mode)
         npts = self.points - self.offset
+        nt = self.t
         if not zclip is None:
             zgood = (npts[:,2] > -zclip)*(npts[:,2] < zclip)
             npts = npts[zgood,:]
+            nt = nt[zgood]
         self.npts = npts
+        self.nt = nt
 
     def fitbymll(self,nllminimizer,plot=True,printpars=True,axes=None,preminimizer=None,axespre=None):
         nllm = nllminimizer
@@ -674,8 +678,11 @@ class NPC3D(object):
 
         goodidx = (coords >= minval)*(coords <= maxval)
         self.filtered_pts = self.transformed_pts[goodidx,:]
-
-
+        try:
+            self.filtered_t = self.nt[goodidx]
+        except AttributeError: # ignore if we do not have the 'nt' attribute
+            pass
+        
     def plot_points(self,mode='transformed'):
         if mode == 'normalized':
             pts = self.npts
@@ -843,7 +850,9 @@ class NPC3DSet(object):
         # - has more complete recording of llm initialization parameters
         # v1.2
         # - twostage mode introduced with prefitting with robust followed by detailed
-        self._version='1.2' # REMEMBER to increment version when changing this object or the underlying npc object definitions
+        # v1.3
+        # - add time from original points
+        self._version='1.3' # REMEMBER to increment version when changing this object or the underlying npc object definitions
 
     def registerNPC(self,npc):
         self.npcs.append(npc)
@@ -937,12 +946,12 @@ def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle,xoffs=0,yoffs=0):
     x = np.empty((0))
     y = np.empty((0))
     z = np.empty((0))
+    t = np.empty((0),int)
     objectID = np.empty((0),int)
     is_top = np.empty((0),int)
     segmentID = np.empty((0),int)
     phi = np.empty((0))
 
-    
     if mode == 'TopOverBottom':
         gspx = 180
         gspy = 180
@@ -989,6 +998,12 @@ def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle,xoffs=0,yoffs=0):
     polyidx = np.array(pi_base,dtype='i')
     xga = np.array(xg)
     yga = np.array(yg)
+
+    def filtered_t(npc):
+        if 'filtered_t' in dir(npc):
+            return npc.filtered_t
+        else:
+            return range(npc.filtered_pts.shape[0])
         
     for i,npc in enumerate(npcs.npcs):
         if not npc.fitted:
@@ -1001,9 +1016,12 @@ def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle,xoffs=0,yoffs=0):
             
         npc.filter('z',0,zclip3d)
         ptst = npc.filtered_pts
+        tt = filtered_t(npc)
+        
         npc.filter('z',-zclip3d,0)
         ptsb = npc.filtered_pts
-
+        tb = filtered_t(npc)
+        
         from scipy.spatial.transform import Rotation as R
         if npc.rotation is not None:
             if NPCRotationAngle == 'negative':
@@ -1023,13 +1041,14 @@ def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle,xoffs=0,yoffs=0):
         z = np.append(z,ptst[:,2])
         phi = np.append(phi, phit)
         segmentID = np.append(segmentID, ((phit+np.pi)/piover4).astype(int))
-        
+        t = np.append(t,tt)
 
         x = np.append(x,ptsb[:,0] + gxb)
         y = np.append(y,ptsb[:,1] + gy)
         z = np.append(z,ptsb[:,2])
         phi = np.append(phi, phib)
         segmentID = np.append(segmentID, ((phib+np.pi)/piover4).astype(int))
+        t = np.append(t,tb)
         
         objectID = np.append(objectID,np.full_like(ptst[:,0],npc.objectID,dtype=int))
         objectID = np.append(objectID,np.full_like(ptsb[:,0],npc.objectID,dtype=int))
@@ -1053,7 +1072,7 @@ def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle,xoffs=0,yoffs=0):
         polyidtr = np.append(polyidtr, polyidx)
         polyidx += 8            
 
-    t = np.arange(x.size)
+    # t = np.arange(x.size)
     A = np.full_like(x,10.0,dtype='f')
     error_x = np.full_like(x,1.0,dtype='f')
     error_y = np.full_like(x,1.0,dtype='f')

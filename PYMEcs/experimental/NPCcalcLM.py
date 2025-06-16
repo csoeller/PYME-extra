@@ -115,6 +115,7 @@ class NPCcalc():
         visFr.AddMenuItem('Experimental>NPC3D', "Save Measurements Only (csv, no fit info saved)",self.OnNPC3DSaveMeasurements)
         visFr.AddMenuItem('Experimental>NPC3D', "Load and display saved Measurements (from csv)",self.OnNPC3DLoadMeasurements)
         visFr.AddMenuItem('Experimental>NPC3D', "Show NPC geometry statistics",self.OnNPC3DGeometryStats)
+        visFr.AddMenuItem('Experimental>NPC3D', "Show NPC template fit statistics",self.OnNPC3DTemplateFitStats)
         visFr.AddMenuItem('Experimental>NPC2D', 'NPC Analysis settings', self.OnNPCsettings)
         visFr.AddMenuItem('Experimental>NPC3D', 'NPC Analysis settings', self.OnNPCsettings)
         visFr.AddMenuItem('Experimental>NPC3D', 'Add NPC Gallery', self.On3DNPCaddGallery)
@@ -461,6 +462,22 @@ class NPCcalc():
         plt.title("NPC mean diam %.0f nm, mean ring spacing %.0f nm" % (diams.mean(),heights.mean()), fontsize=11)
         plt.ylim(0,150)
 
+    def OnNPC3DTemplateFitStats(self,event=None):
+        pipeline = self.visFr.pipeline
+        npcs = findNPCset(pipeline)
+        if npcs is None:
+            warn('no valid NPC measurements found, thus no geometry info available...')
+            return
+        import pandas as pd
+        from PYMEcs.misc.matplotlib import boxswarmplot, figuredefaults
+        id = [npc.objectID for npc in npcs.npcs] # not used right now
+        llperloc = [npc.opt_result.fun/npc.npts.shape[0] for npc in npcs.npcs]
+        ll_df = pd.DataFrame.from_dict(dict(llperloc=llperloc))
+        figuredefaults(fontsize=12)
+        plt.figure()
+        bp = boxswarmplot(ll_df,width=0.35,annotate_medians=True,annotate_means=True,showmeans=True,swarmalpha=0.6,swarmsize=5)
+        plt.title("NPC neg-log-likelihood per localization")
+        
     def OnSelectNPCsByMask(self,event=None):
         from PYME.DSView import dsviewer
 
