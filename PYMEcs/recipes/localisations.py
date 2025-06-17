@@ -1749,6 +1749,19 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
     NPC_version_check = Enum(['minimum version','exact version','no check'])
     NPC_target_version = CStr('0.9')
     
+    filter_npcs = Bool(False)
+    fitmin_max = Float(5.99)
+    min_labeled = Int(1)
+    labeling_threshold = Int(1)
+    rotation_locked = Bool(True,label='NPC rotation estimate locked (3D)',
+                           desc="when estimating the NPC rotation (pizza slice boundaries), the top and bottom rings in 3D should be locked, "+
+                           "i.e. have the same rotation from the underlying structure")
+    radius_uncertainty = Float(20.0,label="Radius scatter in nm",
+                               desc="a radius scatter that determines how much localisations can deviate from the mean ring radius "+
+                               "and still be accepted as part of the NPC; allows for distortions of NPCs and localisation errors")
+    zclip = Float(75.0,label='Z-clip value from center of NPC',
+                  desc='the used zrange from the (estimated) center of the NPC, from (-zclip..+zclip) in 3D fitting')
+    
     _npc_cache = {}
 
     def run(self,inputLocalizations):
@@ -1775,24 +1788,51 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
             from PYME.IO import MetaDataHandler
             NPCmdh = MetaDataHandler.DictMDHandler()
             NPCmdh['Processing.NPCAnalysisInput.npcs'] = NPCSetContainer(npcs)
-
+            if self.filter_npcs:
+                if 'templatemode' in dir(npcs) and npcs.templatemode == 'detailed':
+                    rotation = 22.5 # this value may need adjustment
+                else:
+                    rotation = None
+                for npc in npcs.npcs:
+                    nt,nb = npc.nlabeled(nthresh=self.labeling_threshold,
+                                 dr=self.radius_uncertainty,
+                                 rotlocked=self.rotation_locked,
+                                 zrange=self.zclip,
+                                 rotation=rotation)
+                    npc.measures = [nt,nb]
+                import copy
+                npcs_filtered = copy.copy(npcs)
+                vnpcs = [npc for npc in npcs.npcs if npc.opt_result.fun/npc.npts.shape[0] < self.fitmin_max]
+                vnpcs = [npc for npc in vnpcs if np.sum(npc.measures) >= self.min_labeled]
+                npcs_filtered.npcs = vnpcs
+                NPCmdh['Processing.NPCAnalysisInput.npcs_filtered'] = NPCSetContainer(npcs_filtered)
+            else:
+                # so we can pass this variable to a few calls and be sure to get the filtered version if filtering is requested
+                # as not requested use the original npcs in place of filtered subset
+                npcs_filtered = npcs
             from PYMEcs.Analysis.NPC import mk_NPC_gallery, mk_npctemplates
-            outputGallery, outputSegments = mk_NPC_gallery(npcs,self.NPC_Gallery_Arrangement,
+            outputGallery, outputSegments = mk_NPC_gallery(npcs_filtered,self.NPC_Gallery_Arrangement,
                                                            self.Zclip_3D,self.NPCRotationAngle,
                                                            xoffs=self.gallery_x_offset,
                                                            yoffs=self.gallery_y_offset)
-            outputTemplates = mk_npctemplates(npcs)
+            outputTemplates = mk_npctemplates(npcs_filtered)
             
             if npcs is not None and 'objectID' in inputLocalizations.keys():
                 ids = inputLocalizations['objectID']
                 fitminperloc = np.zeros_like(ids,dtype='f')
+                if self.filter_npcs: # we only carry out the n_labeled measuring if we are asked to filter
+                    nlabeled = np.zeros_like(ids,dtype='i')
                 for npc in npcs.npcs:
                     if not npc.fitted:
                         continue
                     roi = ids==npc.objectID
                     if np.any(roi):
                         fitminperloc[roi] = npc.opt_result.fun/npc.npts.shape[0]
-                mapped_ds.addColumn('npc_fitminperloc',fitminperloc)            
+                        if self.filter_npcs:
+                            nlabeled[roi] = np.sum(npc.measures)
+                mapped_ds.addColumn('npc_fitminperloc',fitminperloc)
+                if self.filter_npcs:
+                    mapped_ds.addColumn('npc_nlabeled',nlabeled)
 
             return dict(output=mapped_ds, outputGallery=outputGallery,
                         outputSegments=outputSegments, outputTemplates=outputTemplates, mdh=NPCmdh)
@@ -1812,6 +1852,14 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
                     Item('NPC_version_check'),
                     Item('NPC_target_version'),
                     Item('NPC_hide'),
+                    Item('_'),
+                    Item('filter_npcs'),
+                    Item('fitmin_max'),
+                    Item('min_labeled'),
+                    Item('labeling_threshold'),
+                    Item('rotation_locked'),
+                    Item('radius_uncertainty'),
+                    Item('zclip'),
                     Item('_'),                    
                     Item('NPC_Gallery_Arrangement'),
                     Item('Zclip_3D'),

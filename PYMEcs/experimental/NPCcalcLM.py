@@ -218,7 +218,7 @@ class NPCcalc():
         else:
             rotation = None
 
-        # check if any fits were performed
+        # keep track if any fits were performed
         anyfits = False
         for i,npc in enumerate(npcs.npcs):
             if not npc.fitted:
