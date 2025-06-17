@@ -1742,8 +1742,6 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
     NPC_hide = Bool(False,desc="if true hide this NPCset so you can fit again etc",label='hide NPCset')
 
     NPCRotationAngle = Enum(['positive','negative','zero'],desc="way to treat rotation for NPC gallery")
-    Zclip_3D = Float(75.0,label='Z-clip value from center of NPC',
-                     desc='the used zrange from the (estimated) center of the NPC, from (-zclip..+zclip) in generating gallery')
     gallery_x_offset = Float(0)
     gallery_y_offset = Float(0)
     NPC_version_check = Enum(['minimum version','exact version','no check'])
@@ -1759,7 +1757,7 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
     radius_uncertainty = Float(20.0,label="Radius scatter in nm",
                                desc="a radius scatter that determines how much localisations can deviate from the mean ring radius "+
                                "and still be accepted as part of the NPC; allows for distortions of NPCs and localisation errors")
-    zclip = Float(75.0,label='Z-clip value from center of NPC',
+    zclip = Float(55.0,label='Z-clip value from center of NPC',
                   desc='the used zrange from the (estimated) center of the NPC, from (-zclip..+zclip) in 3D fitting')
     
     _npc_cache = {}
@@ -1812,7 +1810,7 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
                 npcs_filtered = npcs
             from PYMEcs.Analysis.NPC import mk_NPC_gallery, mk_npctemplates
             outputGallery, outputSegments = mk_NPC_gallery(npcs_filtered,self.NPC_Gallery_Arrangement,
-                                                           self.Zclip_3D,self.NPCRotationAngle,
+                                                           self.zclip,self.NPCRotationAngle,
                                                            xoffs=self.gallery_x_offset,
                                                            yoffs=self.gallery_y_offset)
             outputTemplates = mk_npctemplates(npcs_filtered)
@@ -1862,7 +1860,6 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
                     Item('zclip'),
                     Item('_'),                    
                     Item('NPC_Gallery_Arrangement'),
-                    Item('Zclip_3D'),
                     Item('NPCRotationAngle'),
                     Item('gallery_x_offset'),
                     Item('gallery_y_offset'),

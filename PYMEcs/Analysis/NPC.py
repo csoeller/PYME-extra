@@ -636,7 +636,7 @@ class NPC3D(object):
             # for other parameters only allow deviation from robust fitting in quite narrow range
             p0 = self.opt_result_pre.x
             dc = 3.0 # max deviation in coordinates (in nm)
-            dperc = 2.0 # max deviation in scaling percentage
+            dperc = 5.0 # max deviation in scaling percentage
             bounds = (
                 (max(-maxshift,p0[0]-dc),min(maxshift,p0[0]+dc)), # p[0]
                 (max(-maxshift,p0[1]-dc),min(maxshift,p0[1]+dc)), # p[1]
