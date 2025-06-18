@@ -631,6 +631,7 @@ class NPC3D(object):
             preminimizer.nll_basin_hopping(p0=(0,0,0,0,0,100.0,100.0))
             self.opt_result_pre = preminimizer.opt_result
             self.transformed_pts_pre = preminimizer.c3dr
+            self.bounds_pre = preminimizer.bounds
             # in the second stage llm minimizing stage start with best fit from previous fit as p0
             # and allow mainly variation in rotation angles 
             # for other parameters only allow deviation from robust fitting in quite narrow range
@@ -650,11 +651,13 @@ class NPC3D(object):
             nllm.nll_basin_hopping(p0=p0,bounds=bounds)
             self.opt_result = nllm.opt_result
             self.transformed_pts = nllm.c3dr
+            self.bounds = bounds
         else:
             nllm.registerPoints(self.npts)
             nllm.nll_basin_hopping(p0=(0,0,0,0,0,100.0,100.0))
             self.opt_result = nllm.opt_result
             self.transformed_pts = nllm.c3dr
+            self.bounds = nllm.bounds
         self.fitted = True
         if printpars:
             nllm.pprint_lastpars()
@@ -849,10 +852,12 @@ class NPC3DSet(object):
         # - has templatemode added
         # - has more complete recording of llm initialization parameters
         # v1.2
-        # - twostage mode introduced with prefitting with robust followed by detailed
+        # - twostage mode introduced with prefitting with robust template followed by detailed template
         # v1.3
         # - add time from original points
-        self._version='1.3' # REMEMBER to increment version when changing this object or the underlying npc object definitions
+        # v1.4
+        # - add bounds info to npc object when fitting
+        self._version='1.4' # REMEMBER to increment version when changing this object or the underlying npc object definitions
 
     def registerNPC(self,npc):
         self.npcs.append(npc)
