@@ -947,7 +947,7 @@ class NPCSetContainer(object):
         warn("NPCset is being unpickled - this is just a dummy unpickle, won't be usable after unpickling")
         self._unpickled = d
 
-def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle,xoffs=0,yoffs=0):
+def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle,xoffs=0,yoffs=0,enforce_8foldsym=False):
     x = np.empty((0))
     y = np.empty((0))
     z = np.empty((0))
@@ -1009,7 +1009,12 @@ def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle,xoffs=0,yoffs=0):
             return npc.filtered_t
         else:
             return range(npc.filtered_pts.shape[0])
-        
+
+    if enforce_8foldsym:
+        angled_repeats = 8
+    else:
+        angled_repeats = 1
+
     for i,npc in enumerate(npcs.npcs):
         if not npc.fitted:
             warn("NPC not yet fitted, please call only after fitting")
@@ -1026,41 +1031,43 @@ def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle,xoffs=0,yoffs=0):
         npc.filter('z',-zclip3d,0)
         ptsb = npc.filtered_pts
         tb = filtered_t(npc)
-        
+
         from scipy.spatial.transform import Rotation as R
-        if npc.rotation is not None:
-            if NPCRotationAngle == 'negative':
-                factor = -1.0
-            elif NPCRotationAngle == 'positive':
-                factor = 1.0
-            else:
-                factor = 0.0
-            ptst = R.from_euler('z', factor*npc.rotation, degrees=False).apply(ptst)
-            ptsb = R.from_euler('z', factor*npc.rotation, degrees=False).apply(ptsb)
+        for i in range(angled_repeats):
+            if npc.rotation is not None:
+                if NPCRotationAngle == 'negative':
+                    factor = -1.0
+                elif NPCRotationAngle == 'positive':
+                    factor = 1.0
+                else:
+                    factor = 0.0
+                ptst_t = R.from_euler('z', factor*npc.rotation + i*piover4, degrees=False).apply(ptst)
+                ptsb_t = R.from_euler('z', factor*npc.rotation + i*piover4, degrees=False).apply(ptsb)
 
-        phit = phi_from_coords(ptst[:,0],ptst[:,1])
-        phib = phi_from_coords(ptsb[:,0],ptsb[:,1])
+            phit = phi_from_coords(ptst_t[:,0],ptst_t[:,1])
+            phib = phi_from_coords(ptsb_t[:,0],ptsb_t[:,1])
         
-        x = np.append(x,ptst[:,0] + gxt)
-        y = np.append(y,ptst[:,1] + gy)
-        z = np.append(z,ptst[:,2])
-        phi = np.append(phi, phit)
-        segmentID = np.append(segmentID, ((phit+np.pi)/piover4).astype(int))
-        t = np.append(t,tt)
+            x = np.append(x,ptst_t[:,0] + gxt)
+            y = np.append(y,ptst_t[:,1] + gy)
+            z = np.append(z,ptst_t[:,2])
+            phi = np.append(phi, phit)
+            segmentID = np.append(segmentID, ((phit+np.pi)/piover4).astype(int))
+            t = np.append(t,tt)
 
-        x = np.append(x,ptsb[:,0] + gxb)
-        y = np.append(y,ptsb[:,1] + gy)
-        z = np.append(z,ptsb[:,2])
-        phi = np.append(phi, phib)
-        segmentID = np.append(segmentID, ((phib+np.pi)/piover4).astype(int))
-        t = np.append(t,tb)
+            x = np.append(x,ptsb_t[:,0] + gxb)
+            y = np.append(y,ptsb_t[:,1] + gy)
+            z = np.append(z,ptsb_t[:,2])
+            phi = np.append(phi, phib)
+            segmentID = np.append(segmentID, ((phib+np.pi)/piover4).astype(int))
+            t = np.append(t,tb)
         
-        objectID = np.append(objectID,np.full_like(ptst[:,0],npc.objectID,dtype=int))
-        objectID = np.append(objectID,np.full_like(ptsb[:,0],npc.objectID,dtype=int))
+            objectID = np.append(objectID,np.full_like(ptst[:,0],npc.objectID,dtype=int))
+            objectID = np.append(objectID,np.full_like(ptsb[:,0],npc.objectID,dtype=int))
 
-        is_top = np.append(is_top,np.ones_like(phit,dtype=int))
-        is_top = np.append(is_top,np.zeros_like(phib,dtype=int))
-        
+            is_top = np.append(is_top,np.ones_like(phit,dtype=int))
+            is_top = np.append(is_top,np.zeros_like(phib,dtype=int))
+
+        # remaining stuff for trace dict which shows segment boundaries
         xtr = np.append(xtr,xga + gxt)
         ytr = np.append(ytr,yga + gy)
         ztr = np.append(ztr,zt)

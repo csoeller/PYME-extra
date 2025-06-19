@@ -1740,7 +1740,7 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
     NPC_Gallery_Arrangement = Enum(['SingleAverageSBS','TopOverBottom','TopBesideBottom','SingleAverage'],
                                    desc="how to arrange 3D NPC parts in NPC gallery; SBS = SideBySide top and bottom")
     NPC_hide = Bool(False,desc="if true hide this NPCset so you can fit again etc",label='hide NPCset')
-
+    NPC_enforce_8foldsym = Bool(False,desc="if set enforce 8-fold symmetry by adding 8 rotated copies of each NPC",label='enforce 8-fold symmetry')
     NPCRotationAngle = Enum(['positive','negative','zero'],desc="way to treat rotation for NPC gallery")
     gallery_x_offset = Float(0)
     gallery_y_offset = Float(0)
@@ -1812,7 +1812,8 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
             outputGallery, outputSegments = mk_NPC_gallery(npcs_filtered,self.NPC_Gallery_Arrangement,
                                                            self.zclip,self.NPCRotationAngle,
                                                            xoffs=self.gallery_x_offset,
-                                                           yoffs=self.gallery_y_offset)
+                                                           yoffs=self.gallery_y_offset,
+                                                           enforce_8foldsym=self.NPC_enforce_8foldsym)
             outputTemplates = mk_npctemplates(npcs_filtered)
             
             if npcs is not None and 'objectID' in inputLocalizations.keys():
@@ -1860,6 +1861,7 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
                     Item('zclip'),
                     Item('_'),                    
                     Item('NPC_Gallery_Arrangement'),
+                    Item('NPC_enforce_8foldsym'),
                     Item('NPCRotationAngle'),
                     Item('gallery_x_offset'),
                     Item('gallery_y_offset'),
