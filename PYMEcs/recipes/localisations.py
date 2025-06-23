@@ -2087,4 +2087,36 @@ class LinearDrift(ModuleBase):
         output.addColumn('z', input['z']+self.c_zlin*t)
 
         return output
+
+
+@register_module("TrackProps")
+class TrackProps(ModuleBase):
+    input = Input('localizations')
+    output = Output('with_trackprops')
+    
+    IDkey = CStr('clumpIndex')
+
+    def run(self, input):
+        from PYMEcs.IO.MINFLUX import get_stddev_property
+        ids = input[self.IDkey]
+        tracexmin = get_stddev_property(ids,input['x'],statistic='min')
+        tracexmax = get_stddev_property(ids,input['x'],statistic='max')
+        traceymin = get_stddev_property(ids,input['y'],statistic='min')
+        traceymax = get_stddev_property(ids,input['y'],statistic='max')
+
+        tracebbx = tracexmax - tracexmin
+        tracebby = traceymax - traceymin
+        tracebbdiag = np.sqrt(tracebbx**2 + tracebby**2)
+            
+        mapped_ds = tabular.MappingFilter(input)
+        mapped_ds.addColumn('trace_bbx',tracebbx)
+        mapped_ds.addColumn('trace_bby',tracebby)
+        mapped_ds.addColumn('trace_bbdiag',tracebbdiag)
+        if 'error_z' in input.keys():
+            tracezmin = get_stddev_property(ids,input['z'],statistic='min')
+            tracezmax = get_stddev_property(ids,input['z'],statistic='max')
+            tracebbz = tracezmax - tracezmin
+            mapped_ds.addColumn('trace_bbz',tracebbz)
+        
+        return mapped_ds
     
