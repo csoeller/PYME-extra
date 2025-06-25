@@ -2117,6 +2117,7 @@ class TrackProps(ModuleBase):
             tracezmax = get_stddev_property(ids,input['z'],statistic='max')
             tracebbz = tracezmax - tracezmin
             mapped_ds.addColumn('trace_bbz',tracebbz)
-        
+            tracebbspcdiag = np.sqrt(tracebbdiag**2 + tracebbz**2)
+            mapped_ds.addColumn('trace_bbspcdiag',tracebbspcdiag)
         return mapped_ds
     
