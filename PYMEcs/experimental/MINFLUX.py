@@ -1244,8 +1244,9 @@ class MINFLUXanalyser():
         axs[0, 0].set_xlim(0,self.analysisSettings.origamiErrorLimit)
         plot_errs(axs[0, 1], 'y', ['error_y_ori','error_y_nc','error_y'])
         axs[0, 1].set_xlim(0,self.analysisSettings.origamiErrorLimit)
-        plot_errs(axs[1, 0], 'z', ['error_z_ori','error_z_nc','error_z'])
-        axs[1, 0].set_xlim(0,self.analysisSettings.origamiErrorLimit)
+        if p.mdh.get('MINFLUX.Is3D'):
+            plot_errs(axs[1, 0], 'z', ['error_z_ori','error_z_nc','error_z'])
+            axs[1, 0].set_xlim(0,self.analysisSettings.origamiErrorLimit)
         ax = axs[1,1]
         # plot the MBM track, this way we know if we are using the _nc data or the MBM corrected data for analysis
         t_s = 1e-3*p['t']
