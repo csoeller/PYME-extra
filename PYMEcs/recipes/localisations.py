@@ -2120,4 +2120,23 @@ class TrackProps(ModuleBase):
             tracebbspcdiag = np.sqrt(tracebbdiag**2 + tracebbz**2)
             mapped_ds.addColumn('trace_bbspcdiag',tracebbspcdiag)
         return mapped_ds
+
+@register_module("SimulateSiteloss")
+class SimulateSiteloss(ModuleBase):
+    input = Input('localizations')
+    output = Output('with_retainprop')
+    
+    Seed = Int(42)
+    TimeConstant = Float(1000) # time course in seconds
+
+    def run(self, input):
+        tim = 1e-3*input['t'] # t should be in ms and we use t rather than tim as it is guarnteed to be there (more or less)
+        prob = np.exp(-tim/self.TimeConstant)
+        rng = np.random.default_rng(seed=self.Seed)
+        retained = rng.random(tim.shape) <= prob
+        
+        mapped_ds = tabular.MappingFilter(input)
+        mapped_ds.addColumn('p_simloss',prob)
+        mapped_ds.addColumn('retain',retained)
+        return mapped_ds
     
