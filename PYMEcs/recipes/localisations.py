@@ -9,6 +9,29 @@ from PYMEcs.pyme_warnings import warn
 import logging
 logger = logging.getLogger(__file__)
 
+@register_module('CorrectForeshortening')
+class CorrectForeshortening(ModuleBase):
+
+    inputName = Input('localisations')
+    outputName = Output('corrected_f')
+
+    foreshortening = Float(1.0)
+
+    def run(self, inputName):
+        from PYME.IO import tabular
+        locs = inputName
+
+        out = tabular.MappingFilter(locs)
+        out.addColumn('z',locs['z']*self.foreshortening)
+        out.addColumn('error_z',locs['error_z']*self.foreshortening)
+
+        from PYME.IO import MetaDataHandler
+        mdh = MetaDataHandler.DictMDHandler(locs.mdh)
+        mdh['CorrectForeshortening.foreshortening'] = self.foreshortening
+        out.mdh = mdh
+
+        return out
+    
 @register_module('NNdist')
 class NNdist(ModuleBase):
 

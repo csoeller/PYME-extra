@@ -2,6 +2,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import wx
 
+import logging
+logger = logging.getLogger(__file__)
+
 from PYMEcs.pyme_warnings import warn
 def plot_errors(pipeline):
     if not 'coalesced_nz' in pipeline.dataSources:
@@ -961,11 +964,16 @@ class MINFLUXanalyser():
 
     def OnMINFLUXsetTempDataFolder(self, event):
         import PYME.config as config
+        config_var = 'MINFLUX-temperature_folder'
+        curfolder = config.get(config_var)
+        if curfolder is None:
+            warn("currently the MINFLUX temperature file folder is not set. Set the path in the following file dialog")
+        else:
+            warn("MINFLUX temperature file folder currently set to '%s'.\n\nAlter in the following dialog if needed or cancel that dialog if want to leave as is" % curfolder)
         with wx.DirDialog(self.visFr, "Choose folder containing temperature CSV files") as dialog:
             if dialog.ShowModal() == wx.ID_CANCEL:
                 return
             folder = dialog.GetPath()
-        config_var = 'MINFLUX-temperature_folder'
         if config.get(config_var) == folder:
             warn("config option '%s' already set to %s, leaving as is" % (config_var,folder))
             return # already set to this value, return
@@ -1018,10 +1026,11 @@ class MINFLUXanalyser():
                     print(f"File {f} has no 'datetime' column after parsing, skipping.")
                     continue
 
-                # print(f"\nMin timestamp in file: {df['datetime'].min()}, Max: {df['datetime'].max()}\n") # Debugging
+                logger.debug(f"successfully read and parsed temperature file {f}")
 
                 if df['datetime'].min() <= t0_dt <= df['datetime'].max():
                     selected_file = f
+                    logger.debug(f"found relevant time period in file {f}")
                     break
             except Exception as e:
                 logger.debug(f"Error reading {f}: {e}")

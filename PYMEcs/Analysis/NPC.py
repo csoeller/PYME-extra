@@ -446,7 +446,7 @@ class LLmaximizerNPC3D(object):
             (-90.0,90.0), # p[3]
             (-35.0,35.0), # p[4]
             (80.0,120.0), # p[5] - limit to 20% variation to avoid misfits
-            (80.0,120.0) # p[6]  - limit to 20% variation to avoid misfits
+            (50.0,150.0) # p[6]  - limit to 50% variation to avoid misfits
         )
 
     def registerPoints(self,pts): # register candidate points for fitting
@@ -824,7 +824,7 @@ class NPC3D(object):
 
 class NPC3DSet(object):
     def __init__(self,filename=None,zclip=75.0,offset_mode='median',NPCdiam=100.0,NPCheight=70.0,
-                 foreshortening=1.0,known_number=-1,templatemode='standard'):
+                 foreshortening=1.0,known_number=-1,templatemode='standard',sigma=7.0):
         self.filename=filename
         self.zclip = zclip
         self.offset_mode = offset_mode
@@ -836,13 +836,13 @@ class NPC3DSet(object):
         self.templatemode = templatemode
         if templatemode == 'standard':
             volcallback=None
-            sigma = 7.0
+            # sigma = 7.0 # we set this via sigma keyword now
         elif templatemode == 'detailed' or templatemode == 'twostage':
             volcallback=npctemplate_detailed
-            sigma = 7.0 # this value may need a little testing
+            # sigma = 7.0 # we set this via sigma keyword now
         self.llm = LLmaximizerNPC3D([self.npcdiam,self.npcheight],sigma=sigma,bgprob=1e-9,extent_nm=300.0,volcallback=volcallback)
         if templatemode == 'twostage':
-            self.llmpre = LLmaximizerNPC3D([self.npcdiam,self.npcheight],sigma=7.0,bgprob=1e-9,extent_nm=300.0,volcallback=None)
+            self.llmpre = LLmaximizerNPC3D([self.npcdiam,self.npcheight],sigma=sigma,bgprob=1e-9,extent_nm=300.0,volcallback=None)
         else:
             self.llmpre = None
         self.measurements = []
