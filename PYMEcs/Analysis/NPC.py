@@ -334,6 +334,49 @@ def fpinterpolate(fp3d,x,y,z,method='linear', bounds_error=True, fill_value=np.n
     fpinterp = RegularGridInterpolator((x,y,z), fp3d, method=method, bounds_error=bounds_error, fill_value=fill_value)
     return fpinterp
 
+# variation on makeNPC function in SimuFLUX by Marin & Ries (https://github.com/ries-lab/SimuFLUX)
+def makeNPC(center=[0,0,0], R=50, copynumber=32, dz=50, rotation=0, twistangle=np.pi/32, shiftangle=np.pi/16, dR=3, dzpair=3.2):
+    if not isinstance(center, np.ndarray):
+        center = np.array(center, dtype=float)
+
+    dphi = np.pi/4
+    maxphi = 2 * np.pi - dphi - rotation
+    nphi = int(maxphi / dphi)
+    phi = np.arange(nphi+1)*dphi
+    v0 = np.zeros_like(phi)
+
+    if copynumber == 8:
+        phiall = phi
+        zall = v0
+        Rall = v0 + R
+    elif copynumber == 16:
+        phiall = np.hstack([phi, -phi+twistangle])
+        zall = np.hstack([v0+dz/2, v0-dz/2])
+        Rall = np.hstack([v0,v0]) + R
+    elif copynumber == 32:
+        phiall = np.hstack([phi, phi+shiftangle, -phi+twistangle, -phi + twistangle - shiftangle])
+        zall = np.hstack([v0+dz/2+dzpair/2, v0+dz/2-dzpair/2, v0-dz/2-dzpair/2, v0-dz/2+dzpair/2])
+        Rall = np.hstack([v0+R+dR, v0+R, v0+R+dR, v0+R])
+    else:
+        raise ValueError("NPC copy number: must be 8, 16 or 32, is: %d" % copynumber)
+
+    posnpc = np.vstack([Rall*np.cos(phiall), Rall*np.sin(phiall), zall]).T
+    posnpc += center
+
+    return posnpc
+
+def npctemplate_detailed(x3d,y3d,z3d,npcgeometry,sigma=5.0):
+    vol = np.zeros_like(x3d)
+    d0, h0 = npcgeometry
+    npcpts = makeNPC(R=d0/2, dz=h0)
+    x=npcpts[:,0]
+    y=npcpts[:,1]
+    z=npcpts[:,2]
+    for i in range(x.size):
+        vol += np.exp(-((x3d-x[i])**2+(y3d-y[i])**2+(z3d-z[i])**2)/(2*sigma*sigma))
+
+    return vol
+
 # we may rewrite this for our purpose if bounds violations become a problem
 # code from https://stackoverflow.com/questions/21670080/how-to-find-global-minimum-in-python-optimization-with-bounds
 class RandomDisplacementBounds(object):
@@ -360,23 +403,34 @@ class RandomDisplacementBounds(object):
 maxshift = 50.0
 class LLmaximizerNPC3D(object):
     # the bgprop value needs a little more thought, it could be specific for this set of parameters
-    def __init__(self, npcgeometry, extent_nm=150.0, voxelsize_nm=2.0, eps=15.0, sigma=5.0, bgprob=1e-9):
+    def __init__(self, npcgeometry, extent_nm=150.0, voxelsize_nm=2.0, sigma=5.0, bgprob=1e-9,volcallback=None):
         self.x = np.arange(-extent_nm/2.0, extent_nm/2.0+1.0, voxelsize_nm, dtype='f')
         self.y = self.x.copy()
         self.z = self.x.copy()
         self.npcgeometry = npcgeometry
-        d0, h0 = npcgeometry # diameter of ring and ring spacing
+        self.sigma = sigma
+        self.bgprob = bgprob
+        self.volcallback = volcallback
+        
         x2d,y2d = np.meshgrid(self.x,self.y)
         x3d,y3d, z3d = np.meshgrid(self.x,self.y,self.z)
-        self.circ2d = (x2d**2 + y2d**2 -0.25*d0**2 <= eps**2) & (x2d**2 + y2d**2 -0.25*d0**2 >= -eps**2)
-        self.g3d = np.exp(-(x3d**2+y3d**2+z3d**2)/2.0/(sigma**2))
-        self.fp3d = np.zeros_like(x3d)
-        idz = np.argmin(np.abs(self.z-h0/2))
-        self.fp3d[:,:,idz] = self.circ2d
-        idz = np.argmin(np.abs(self.z-(-h0/2)))
-        self.fp3d[:,:,idz] = self.circ2d
 
-        self.fpg3d = np.clip(fftconvolve(self.fp3d,self.g3d,mode='same'),0,None)
+        if volcallback is not None:
+            if not callable(volcallback):
+                raise RuntimeError("volcallback option is not callable")
+            self.fpg3d = volcallback(x3d,y3d,z3d,npcgeometry,sigma=sigma)
+        else:
+            eps=15.0 # we have removed the eps variable as input, set it here
+            d0, h0 = npcgeometry # diameter of ring and ring spacing
+            self.circ2d = (x2d**2 + y2d**2 -0.25*d0**2 <= eps**2) & (x2d**2 + y2d**2 -0.25*d0**2 >= -eps**2)
+            self.g3d = np.exp(-(x3d**2+y3d**2+z3d**2)/2.0/(sigma**2))
+            self.fp3d = np.zeros_like(x3d)
+            idz = np.argmin(np.abs(self.z-h0/2))
+            self.fp3d[:,:,idz] = self.circ2d
+            idz = np.argmin(np.abs(self.z-(-h0/2)))
+            self.fp3d[:,:,idz] = self.circ2d
+            self.fpg3d = np.clip(fftconvolve(self.fp3d,self.g3d,mode='same'),0,None)
+
         self.fpg3d += bgprob # add background probability
         self.fpg3d /= self.fpg3d.sum()
         self.nllfp = -np.log10(self.fpg3d)
@@ -392,7 +446,7 @@ class LLmaximizerNPC3D(object):
             (-90.0,90.0), # p[3]
             (-35.0,35.0), # p[4]
             (80.0,120.0), # p[5] - limit to 20% variation to avoid misfits
-            (80.0,120.0) # p[6]  - limit to 20% variation to avoid misfits
+            (50.0,150.0) # p[6]  - limit to 50% variation to avoid misfits
         )
 
     def registerPoints(self,pts): # register candidate points for fitting
@@ -429,24 +483,30 @@ class LLmaximizerNPC3D(object):
         self._lastpars = pars
         return self.c3dr
 
-    def transform_coords_inv(self,pars):
+    def transform_coords_inv(self,pars): # this is apparently currently not used and needs to be debugged before use
         if 'c3dr' not in dir(self) or self.c3dr is None:
             raise RuntimeError("need transformed points to start with")
         c3dr = self.c3dr.copy()
         c3dr[:,0:2] /= 0.01*pars[5]
         c3dr[:,2]   /= 0.01*pars[6]
-        c3di = R.from_euler('zy', [pars[3],pars[4]], degrees=True).inv.apply(c3d)
+        c3di = R.from_euler('zy', [pars[3],pars[4]], degrees=True).inv().apply(c3dr)
         c3di -= [pars[0],pars[1],pars[2]]
         self.c3di = c3di
         return self.c3di
 
-    def plot_points(self,mode='transformed',external_pts=None,axes=None): # supported modes should be 'original', 'transformed', 'both', external
+    def plot_points(self,mode='transformed',external_pts=None,axes=None,p0=None): # supported modes should be 'original', 'transformed', 'both', external
         if mode == 'transformed':
             x,y,z = xyzfrom3vec(self.c3dr)
         elif mode == 'original':
             x,y,z = xyzfrom3vec(self.points)
         elif mode == 'both':
-            x,y,z = xyzfrom3vec(self.points)
+            if p0 is not None: # in this mode we consider a p0 as initial transform if provided
+                plast = self._lastpars # perhaps better to use opt_result.x?
+                self.transform_coords(p0)
+                x,y,z = xyzfrom3vec(self.c3dr)
+                self.transform_coords(plast) # restore transformed coords to what they were at the start
+            else:
+                x,y,z = xyzfrom3vec(self.points)
             x1,y1,z1 = xyzfrom3vec(self.c3dr)
         elif mode == 'external':
             if external_pts is None:
@@ -509,11 +569,17 @@ class LLmaximizerNPC3D(object):
     # minimize the negative log likelihood
     def nllminimize(self,p0=(0,0,0,0,0,100.0,100.0),method='L-BFGS-B'):
         from scipy.optimize import minimize
+        self.p0 = p0
+        self.minmethod = method
         self.opt_result = minimize(self.function_to_minimize(),p0,method=method,bounds=self.bounds)
 
-    def nll_basin_hopping(self,p0,method='L-BFGS-B'):
+    def nll_basin_hopping(self,p0,method='L-BFGS-B',bounds=None):
         from scipy.optimize import basinhopping
-        minimizer_kwargs = dict(method=method, bounds=self.bounds)
+        self.p0 = p0 # we record as p0 since pars0 is used at the time of "registerPoints"; will cause issues as nllm object is reused
+        self.minmethod = "basinhopping with %s" % method
+        if bounds is None:
+            bounds=self.bounds # default bounds
+        minimizer_kwargs = dict(method=method, bounds=bounds)
         self.opt_result = basinhopping(self.function_to_minimize(), p0, minimizer_kwargs=minimizer_kwargs)
 
     def pprint_lastpars(self):
@@ -529,6 +595,7 @@ class NPC3D(object):
                 raise RuntimeError("need an objectID to set points from pipeline, None was given")
             npcidx = pipeline['objectID'] == objectID
             self.points = to3vecs(pipeline['x'][npcidx],pipeline['y'][npcidx],pipeline['z'][npcidx])
+            self.t = pipeline['t'][npcidx]
             self.objectID = objectID
         self.npts = None
         if self.points is not None:
@@ -546,24 +613,61 @@ class NPC3D(object):
         else:
             raise RuntimeError("unknown mode '%s', should be mean or median" % mode)
         npts = self.points - self.offset
+        nt = self.t
         if not zclip is None:
             zgood = (npts[:,2] > -zclip)*(npts[:,2] < zclip)
             npts = npts[zgood,:]
+            nt = nt[zgood]
         self.npts = npts
+        self.nt = nt
 
-    def fitbymll(self,nllminimizer,plot=True,printpars=True,axes=None):
+    def fitbymll(self,nllminimizer,plot=True,printpars=True,axes=None,preminimizer=None,axespre=None):
         nllm = nllminimizer
         self.nllminimizer = nllm
-        
-        nllm.registerPoints(self.npts)
-        nllm.nll_basin_hopping(p0=(0,0,0,0,0,100.0,100.0))
-        self.opt_result = nllm.opt_result
-        self.transformed_pts = nllm.c3dr
+        self.preminimizer = preminimizer
+
+        if preminimizer is not None:
+            preminimizer.registerPoints(self.npts)
+            preminimizer.nll_basin_hopping(p0=(0,0,0,0,0,100.0,100.0))
+            self.opt_result_pre = preminimizer.opt_result
+            self.transformed_pts_pre = preminimizer.c3dr
+            self.bounds_pre = preminimizer.bounds
+            # in the second stage llm minimizing stage start with best fit from previous fit as p0
+            # and allow mainly variation in rotation angles 
+            # for other parameters only allow deviation from robust fitting in quite narrow range
+            p0 = self.opt_result_pre.x
+            dc = 3.0 # max deviation in coordinates (in nm)
+            dperc = 5.0 # max deviation in scaling percentage
+            bounds = (
+                (max(-maxshift,p0[0]-dc),min(maxshift,p0[0]+dc)), # p[0]
+                (max(-maxshift,p0[1]-dc),min(maxshift,p0[1]+dc)), # p[1]
+                (max(-maxshift,p0[2]-dc),min(maxshift,p0[2]+dc)), # p[2]
+                (-90.0,90.0), # p[3]
+                (-35.0,35.0), # p[4]
+                (max(80.0,p0[5]-dperc),min(120.0,p0[5]+dperc)), # p[5] - limit to 20% variation to avoid misfits
+                (max(80.0,p0[6]-dperc),min(120.0,p0[6]+dperc)) # p[6]  - limit to 20% variation to avoid misfits
+            )
+            nllm.registerPoints(self.npts)
+            nllm.nll_basin_hopping(p0=p0,bounds=bounds)
+            self.opt_result = nllm.opt_result
+            self.transformed_pts = nllm.c3dr
+            self.bounds = bounds
+        else:
+            nllm.registerPoints(self.npts)
+            nllm.nll_basin_hopping(p0=(0,0,0,0,0,100.0,100.0))
+            self.opt_result = nllm.opt_result
+            self.transformed_pts = nllm.c3dr
+            self.bounds = nllm.bounds
         self.fitted = True
         if printpars:
             nllm.pprint_lastpars()
         if plot:
-            nllm.plot_points(mode='both',axes=axes)
+            if preminimizer is not None:
+                preminimizer.plot_points(mode='both',axes=axespre)
+                p0 = nllm.p0
+            else:
+                p0 = None
+            nllm.plot_points(mode='both',axes=axes,p0=p0) # if a prefit was done we use its p0
 
     def filter(self,axis='z',minval=0, maxval=100):
         if axis == 'x':
@@ -577,8 +681,11 @@ class NPC3D(object):
 
         goodidx = (coords >= minval)*(coords <= maxval)
         self.filtered_pts = self.transformed_pts[goodidx,:]
-
-
+        try:
+            self.filtered_t = self.nt[goodidx]
+        except AttributeError: # ignore if we do not have the 'nt' attribute
+            pass
+        
     def plot_points(self,mode='transformed'):
         if mode == 'normalized':
             pts = self.npts
@@ -675,16 +782,14 @@ class NPC3D(object):
         return ax
         
 
-    def nlabeled(self,nthresh=1,r0=50.0,dr=25.0,do_plot=False,rotlocked=True,zrange=150.0,analysis2d=False):
+    def nlabeled(self,nthresh=1,r0=50.0,dr=25.0,do_plot=False,rotlocked=True,zrange=150.0,analysis2d=False,rotation=None):
         zrangeabs = abs(zrange)
-        if rotlocked:
+        if rotlocked and rotation is None:
             self.filter('z',-zrangeabs,zrangeabs)
             if self.filtered_pts.size > 0:
                 rotation = estimate_rotation2(self.filtered_pts[:,0],self.filtered_pts[:,1])
             else:
                 rotation=None
-        else:
-            rotation=None
         self.rotation = rotation # remember rotation
 
         if analysis2d:
@@ -718,7 +823,8 @@ class NPC3D(object):
             return (self.n_top,self.n_bot)
 
 class NPC3DSet(object):
-    def __init__(self,filename=None,zclip=75.0,offset_mode='median',NPCdiam=100.0,NPCheight=70.0,foreshortening=1.0, known_number=-1):
+    def __init__(self,filename=None,zclip=75.0,offset_mode='median',NPCdiam=100.0,NPCheight=70.0,
+                 foreshortening=1.0,known_number=-1,templatemode='standard',sigma=7.0):
         self.filename=filename
         self.zclip = zclip
         self.offset_mode = offset_mode
@@ -727,11 +833,31 @@ class NPC3DSet(object):
         self.npcs = []
         self.foreshortening=foreshortening # we just record this for reference
         # TODO: expose llm parameters to this init method as needed in practice!
-        self.llm = LLmaximizerNPC3D([self.npcdiam,self.npcheight],eps=15.0,sigma=7.0,bgprob=1e-9,extent_nm=300.0)
+        self.templatemode = templatemode
+        if templatemode == 'standard':
+            volcallback=None
+            # sigma = 7.0 # we set this via sigma keyword now
+        elif templatemode == 'detailed' or templatemode == 'twostage':
+            volcallback=npctemplate_detailed
+            # sigma = 7.0 # we set this via sigma keyword now
+        self.llm = LLmaximizerNPC3D([self.npcdiam,self.npcheight],sigma=sigma,bgprob=1e-9,extent_nm=300.0,volcallback=volcallback)
+        if templatemode == 'twostage':
+            self.llmpre = LLmaximizerNPC3D([self.npcdiam,self.npcheight],sigma=sigma,bgprob=1e-9,extent_nm=300.0,volcallback=None)
+        else:
+            self.llmpre = None
         self.measurements = []
         self.known_number = known_number # only considered if > 0
-        
-        self._version='1.0' # REMEMBER to increment version when changing this object or the underlying npc object definitions
+
+        # v1.1
+        # - has templatemode added
+        # - has more complete recording of llm initialization parameters
+        # v1.2
+        # - twostage mode introduced with prefitting with robust template followed by detailed template
+        # v1.3
+        # - add time from original points
+        # v1.4
+        # - add bounds info to npc object when fitting
+        self._version='1.4' # REMEMBER to increment version when changing this object or the underlying npc object definitions
 
     def registerNPC(self,npc):
         self.npcs.append(npc)
@@ -821,16 +947,16 @@ class NPCSetContainer(object):
         warn("NPCset is being unpickled - this is just a dummy unpickle, won't be usable after unpickling")
         self._unpickled = d
 
-def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle,xoffs=0,yoffs=0):
+def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle,xoffs=0,yoffs=0,enforce_8foldsym=False):
     x = np.empty((0))
     y = np.empty((0))
     z = np.empty((0))
+    t = np.empty((0),int)
     objectID = np.empty((0),int)
     is_top = np.empty((0),int)
     segmentID = np.empty((0),int)
     phi = np.empty((0))
 
-    
     if mode == 'TopOverBottom':
         gspx = 180
         gspy = 180
@@ -877,7 +1003,18 @@ def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle,xoffs=0,yoffs=0):
     polyidx = np.array(pi_base,dtype='i')
     xga = np.array(xg)
     yga = np.array(yg)
-        
+
+    def filtered_t(npc):
+        if 'filtered_t' in dir(npc):
+            return npc.filtered_t
+        else:
+            return range(npc.filtered_pts.shape[0])
+
+    if enforce_8foldsym:
+        angled_repeats = 8
+    else:
+        angled_repeats = 1
+
     for i,npc in enumerate(npcs.npcs):
         if not npc.fitted:
             warn("NPC not yet fitted, please call only after fitting")
@@ -889,42 +1026,48 @@ def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle,xoffs=0,yoffs=0):
             
         npc.filter('z',0,zclip3d)
         ptst = npc.filtered_pts
+        tt = filtered_t(npc)
+        
         npc.filter('z',-zclip3d,0)
         ptsb = npc.filtered_pts
+        tb = filtered_t(npc)
 
         from scipy.spatial.transform import Rotation as R
-        if npc.rotation is not None:
-            if NPCRotationAngle == 'negative':
-                factor = -1.0
-            elif NPCRotationAngle == 'positive':
-                factor = 1.0
-            else:
-                factor = 0.0
-            ptst = R.from_euler('z', factor*npc.rotation, degrees=False).apply(ptst)
-            ptsb = R.from_euler('z', factor*npc.rotation, degrees=False).apply(ptsb)
+        for i in range(angled_repeats):
+            if npc.rotation is not None:
+                if NPCRotationAngle == 'negative':
+                    factor = -1.0
+                elif NPCRotationAngle == 'positive':
+                    factor = 1.0
+                else:
+                    factor = 0.0
+                ptst_t = R.from_euler('z', factor*npc.rotation + i*piover4, degrees=False).apply(ptst)
+                ptsb_t = R.from_euler('z', factor*npc.rotation + i*piover4, degrees=False).apply(ptsb)
 
-        phit = phi_from_coords(ptst[:,0],ptst[:,1])
-        phib = phi_from_coords(ptsb[:,0],ptsb[:,1])
+            phit = phi_from_coords(ptst_t[:,0],ptst_t[:,1])
+            phib = phi_from_coords(ptsb_t[:,0],ptsb_t[:,1])
         
-        x = np.append(x,ptst[:,0] + gxt)
-        y = np.append(y,ptst[:,1] + gy)
-        z = np.append(z,ptst[:,2])
-        phi = np.append(phi, phit)
-        segmentID = np.append(segmentID, ((phit+np.pi)/piover4).astype(int))
-        
+            x = np.append(x,ptst_t[:,0] + gxt)
+            y = np.append(y,ptst_t[:,1] + gy)
+            z = np.append(z,ptst_t[:,2])
+            phi = np.append(phi, phit)
+            segmentID = np.append(segmentID, ((phit+np.pi)/piover4).astype(int))
+            t = np.append(t,tt)
 
-        x = np.append(x,ptsb[:,0] + gxb)
-        y = np.append(y,ptsb[:,1] + gy)
-        z = np.append(z,ptsb[:,2])
-        phi = np.append(phi, phib)
-        segmentID = np.append(segmentID, ((phib+np.pi)/piover4).astype(int))
+            x = np.append(x,ptsb_t[:,0] + gxb)
+            y = np.append(y,ptsb_t[:,1] + gy)
+            z = np.append(z,ptsb_t[:,2])
+            phi = np.append(phi, phib)
+            segmentID = np.append(segmentID, ((phib+np.pi)/piover4).astype(int))
+            t = np.append(t,tb)
         
-        objectID = np.append(objectID,np.full_like(ptst[:,0],npc.objectID,dtype=int))
-        objectID = np.append(objectID,np.full_like(ptsb[:,0],npc.objectID,dtype=int))
+            objectID = np.append(objectID,np.full_like(ptst[:,0],npc.objectID,dtype=int))
+            objectID = np.append(objectID,np.full_like(ptsb[:,0],npc.objectID,dtype=int))
 
-        is_top = np.append(is_top,np.ones_like(phit,dtype=int))
-        is_top = np.append(is_top,np.zeros_like(phib,dtype=int))
-        
+            is_top = np.append(is_top,np.ones_like(phit,dtype=int))
+            is_top = np.append(is_top,np.zeros_like(phib,dtype=int))
+
+        # remaining stuff for trace dict which shows segment boundaries
         xtr = np.append(xtr,xga + gxt)
         ytr = np.append(ytr,yga + gy)
         ztr = np.append(ztr,zt)
@@ -941,7 +1084,7 @@ def mk_NPC_gallery(npcs,mode,zclip3d,NPCRotationAngle,xoffs=0,yoffs=0):
         polyidtr = np.append(polyidtr, polyidx)
         polyidx += 8            
 
-    t = np.arange(x.size)
+    # t = np.arange(x.size)
     A = np.full_like(x,10.0,dtype='f')
     error_x = np.full_like(x,1.0,dtype='f')
     error_y = np.full_like(x,1.0,dtype='f')

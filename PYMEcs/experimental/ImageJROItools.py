@@ -23,6 +23,7 @@ class ImageJROItools:
                                    flags = wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
         rois = rf.ImagejRoi.fromfile(roi_filename)
         roimask = np.zeros(self.dsviewer.image.data_xytc.shape[0:2],dtype='int')
+        roiszx,roiszy = roimask.shape
         counter = 1
         for roi in rois:
             if roi.roitype in [rf.ROI_TYPE.RECT,
@@ -33,7 +34,7 @@ class ImageJROItools:
                 r = coords[:,0]
                 c = coords[:,1]
                 rr, cc = ski.draw.polygon(r, c)
-                roimask[cc,rr] = counter
+                roimask[np.clip(cc,0,roiszx-1),np.clip(rr,0,roiszy-1)] = counter
                 counter += 1
         ROImaskImg = ImageStack(roimask, titleStub = 'ROI region mask')
         ROImaskImg.mdh.copyEntriesFrom(self.dsviewer.image.mdh)

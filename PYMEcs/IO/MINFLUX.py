@@ -746,6 +746,8 @@ def monkeypatch_npyorzarr_io(visFr):
     visFr.pipeline._ds_from_file_original = visFr.pipeline._ds_from_file
     visFr.pipeline._ds_from_file = types.MethodType(_ds_from_file_npyorzarr,visFr.pipeline)
 
+    from PYMEcs.IO.NPC import findNPCset
+    visFr.pipeline.get_npcs = types.MethodType(findNPCset,visFr.pipeline) # we make this a method for pipeline to make access easier
 
     ### we now also need to monkey_patch the _load_input method of the pipeline recipe
     ### this should allow session loading to succeed

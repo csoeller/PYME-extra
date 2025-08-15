@@ -6,6 +6,7 @@ import skimage.filters as skf
 from scipy import ndimage
 
 from PYME.IO.image import ImageStack
+from PYME.IO import MetaDataHandler
 
 
 @register_module('FlexiThreshold') 
@@ -183,3 +184,42 @@ class LabelByRegionProperty(Filter):
     def completeMetadata(self, im):
         im.mdh['Labelling.Property'] = self.regionProperty
 
+
+from scipy.signal import fftconvolve
+def circle_kernel(diam=112.0, sigma=10.0, extent_nm=150.0,voxelsize_nm=5.0,eps=15.0):
+    x = np.arange(-extent_nm/2.0, extent_nm/2.0+1.0, voxelsize_nm, dtype='f')
+    y = x.copy()
+    x2d,y2d = np.meshgrid(x,y)
+    circ2d = (x2d**2 + y2d**2 -0.25*diam**2 <= eps**2) & (x2d**2 + y2d**2 -0.25*diam**2 >= -eps**2)
+    g2d = np.exp(-(x2d**2+y2d**2)/2.0/(sigma**2))
+    ckernel = np.clip(fftconvolve(circ2d,g2d,mode='same'),0,None)
+    ckernel /= ckernel.sum()
+
+    return ckernel
+
+@register_module('CircleConvolution')
+class CircleConvolution(ModuleBase):
+    inputImage = Input('input')
+    outputImage = Output('circle_convol')
+    outputKernel = Output('circle_kernel')
+
+    circleDiameter = Float(112.0)
+    circleBlurRadius = Float(15.0)
+
+    def run(self, inputImage):
+
+        img = inputImage.data_xyztc[:,:,0,0,0].squeeze()
+        ckern = circle_kernel(diam=self.circleDiameter,extent_nm=250.0,eps=30.0,
+                              sigma=self.circleBlurRadius,voxelsize_nm=inputImage.voxelsize_nm.x)
+
+        conv = np.clip(fftconvolve(img,ckern,mode='same'),0,None)
+        
+        imconvol = ImageStack(conv,mdh=MetaDataHandler.NestedClassMDHandler(inputImage.mdh), titleStub = self.outputImage)
+        imconvol.mdh['CircleConvolution.Diameter'] = self.circleDiameter
+        imconvol.mdh['CircleConvolution.BlurRadius'] = self.circleBlurRadius
+        circleKernel = ImageStack(ckern, titleStub = self.outputKernel)
+        circleKernel.mdh['Diameter'] = self.circleDiameter
+        circleKernel.mdh['BlurRadius'] = self.circleBlurRadius
+        
+        return {'outputImage' : imconvol, 'outputKernel' : circleKernel}
+    
