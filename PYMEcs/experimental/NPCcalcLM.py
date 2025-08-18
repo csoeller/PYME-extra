@@ -459,9 +459,16 @@ class NPCcalc():
         geo_df = pd.DataFrame.from_dict(dict(diameter=diams,height=heights))
         figuredefaults(fontsize=12)
         plt.figure()
+        from scipy.stats import iqr
+        iqrh = iqr(heights)
+        sdh = np.std(heights)
+        iqrd = iqr(diams)
+        sdd = np.std(diams)
         bp = boxswarmplot(geo_df,width=0.35,annotate_medians=True,annotate_means=True,showmeans=True,swarmalpha=0.4,swarmsize=4)
+        plt.text(0.0,50,"IQR %.1f\nSD %.1f" % (iqrd,sdd), horizontalalignment='center')
+        plt.text(1.0,120,"IQR %.1f\nSD %.1f" % (iqrh,sdh), horizontalalignment='center')
         # res = plt.boxplot([diams,heights],showmeans=True,labels=['diameter','height'])
-        plt.title("NPC mean diam %.0f nm, mean ring spacing %.0f nm" % (diams.mean(),heights.mean()), fontsize=11)
+        plt.title("%d NPCs, mean diam %.0f nm, mean ring spacing %.0f nm" % (heights.size,diams.mean(),heights.mean()), fontsize=11)
         plt.ylim(0,150)
 
     def OnNPC3DTemplateFitStats(self,event=None):

@@ -1774,6 +1774,8 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
     fitmin_max = Float(5.99)
     min_labeled = Int(1)
     labeling_threshold = Int(1)
+    height_max = Float(90.0)
+    
     rotation_locked = Bool(True,label='NPC rotation estimate locked (3D)',
                            desc="when estimating the NPC rotation (pizza slice boundaries), the top and bottom rings in 3D should be locked, "+
                            "i.e. have the same rotation from the underlying structure")
@@ -1810,6 +1812,10 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
             NPCmdh = MetaDataHandler.DictMDHandler()
             NPCmdh['Processing.NPCAnalysisInput.npcs'] = NPCSetContainer(npcs)
             if self.filter_npcs:
+                def npc_height(npc):
+                    height = npc.get_glyph_height() / (0.01*npc.opt_result.x[6])
+                    return height
+                
                 if 'templatemode' in dir(npcs) and npcs.templatemode == 'detailed':
                     rotation = 22.5 # this value may need adjustment
                 else:
@@ -1825,6 +1831,7 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
                 npcs_filtered = copy.copy(npcs)
                 vnpcs = [npc for npc in npcs.npcs if npc.opt_result.fun/npc.npts.shape[0] < self.fitmin_max]
                 vnpcs = [npc for npc in vnpcs if np.sum(npc.measures) >= self.min_labeled]
+                vnpcs = [npc for npc in vnpcs if npc_height(npc) <= self.height_max]
                 npcs_filtered.npcs = vnpcs
                 NPCmdh['Processing.NPCAnalysisInput.npcs_filtered'] = NPCSetContainer(npcs_filtered)
             else:
@@ -1878,6 +1885,8 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
                     Item('filter_npcs'),
                     Item('fitmin_max'),
                     Item('min_labeled'),
+                    Item('height_max'),
+                    Item('_'),
                     Item('labeling_threshold'),
                     Item('rotation_locked'),
                     Item('radius_uncertainty'),
