@@ -16,7 +16,9 @@ class CorrectForeshortening(ModuleBase):
     outputName = Output('corrected_f')
 
     foreshortening = Float(1.0)
-
+    apply_pixel_size_correction = Bool(False)
+    pixel_size_um = Float(0.072)
+    
     def run(self, inputName):
         from PYME.IO import tabular
         locs = inputName
@@ -25,9 +27,20 @@ class CorrectForeshortening(ModuleBase):
         out.addColumn('z',locs['z']*self.foreshortening)
         out.addColumn('error_z',locs['error_z']*self.foreshortening)
 
+        if self.apply_pixel_size_correction:
+            correction = self.pixel_size_um / (inputName.mdh.voxelsize_nm.x / 1e3)
+            out.addColumn('x',locs['x']*correction)
+            out.addColumn('error_x',locs['error_x']*correction)
+            out.addColumn('y',locs['y']*correction)
+            out.addColumn('error_y',locs['error_y']*correction)
+            
         from PYME.IO import MetaDataHandler
         mdh = MetaDataHandler.DictMDHandler(locs.mdh)
-        mdh['CorrectForeshortening.foreshortening'] = self.foreshortening
+        # mdh['CorrectForeshortening.foreshortening'] = self.foreshortening
+        if self.apply_pixel_size_correction:
+            mdh['Processing.CorrectForeshortening.PixelSizeCorrection'] = correction
+            mdh['voxelsize.x'] = self.pixel_size_um
+            mdh['voxelsize.y'] = self.pixel_size_um
         out.mdh = mdh
 
         return out
