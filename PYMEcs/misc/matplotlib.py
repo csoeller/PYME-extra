@@ -11,7 +11,7 @@ def figuredefaults(fontsize=10,linewidth=1.5):
     plt.rcParams['svg.fonttype'] = 'none'
 
 def boxswarmplot(df,width=0.4,annotate_means=False,annotate_medians=False,showmeans=True,
-                 meanprops=None,ax=None,swarmsize=7,swarmalpha=None,format="%.1f",strip=False):
+                 meanprops=None,ax=None,swarmsize=7,swarmalpha=None,format="%.1f",strip=False,**kwargs):
     import seaborn as sns
     if meanprops is None:
         meanprops={'marker':'o',
@@ -20,7 +20,7 @@ def boxswarmplot(df,width=0.4,annotate_means=False,annotate_medians=False,showme
                     'markersize':'8'}
     flierprops = dict(marker='.', markerfacecolor='none', markersize=0, linestyle='none')
     colours = ['#72a4cdff'] * df.shape[1]
-    bp = sns.boxplot(df,boxprops={'facecolor': 'none'},width=width,showmeans=showmeans,meanprops=meanprops,ax=ax,flierprops=flierprops)
+    bp = sns.boxplot(df,boxprops={'facecolor': 'none'},width=width,showmeans=showmeans,meanprops=meanprops,ax=ax,flierprops=flierprops,**kwargs)
     if strip:
         sns.stripplot(df,size=swarmsize,palette=colours,ax=ax,alpha=swarmalpha)
     else:

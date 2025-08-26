@@ -60,7 +60,7 @@ class NPCsettings(HasTraits):
     SecondPass_2D = Bool(False,label='Second pass for NPC fitting (2D)',
                          desc="a second pass for 2D fitting should be run; we have experimented with a second pass rotation "+
                          "estimate and fitting hoping to improve on the first estimate; still experimental")
-    StartHeight_3D = Float(70.0,label='Starting ring spacing for 3D fitting',
+    StartHeight_3D = Float(50.0,label='Starting ring spacing for 3D fitting',
                            desc="starting ring spacing value for the 3D fit; note only considered when doing the initial full fit; "+
                            "not considered when re-evaluating existing fit")
     StartDiam_3D = Float(107.0,label='Starting ring diameter for 3D fitting',
@@ -131,7 +131,10 @@ class NPCcalc():
     def NPCsettings(self):
         if self._npcsettings is None:
             foreshortening=self.visFr.pipeline.mdh.get('MINFLUX.Foreshortening',1.0)
-            self._npcsettings = NPCsettings(StartHeight_3D=70.0*foreshortening,Zclip_3D=75.0*foreshortening)
+            if foreshortening < 1.0:
+                self._npcsettings = NPCsettings(StartHeight_3D=70.0*foreshortening,Zclip_3D=75.0*foreshortening)
+            else:
+                self._npcsettings = NPCsettings(StartHeight_3D=50.0,Zclip_3D=55.0)
         return self._npcsettings
     
     def OnNPCsettings(self, event=None):

@@ -1117,6 +1117,9 @@ def mk_npctemplates(npcs):
     diams = np.empty((0),float)
     heights = np.empty((0),float)
     fitquals = np.empty((0),float)
+    cx = np.empty((0),float)
+    cy = np.empty((0),float)
+    cz = np.empty((0),float)
     ci = 1
     for npc in npcs.npcs:
         nt, nb = (npc.n_top,npc.n_bot)
@@ -1125,6 +1128,7 @@ def mk_npctemplates(npcs):
         diam = npc.get_glyph_diam() / (0.01*pars[5])
         height = npc.get_glyph_height() / (0.01*pars[6])
         fitqual = npc.opt_result.fun/npc.npts.shape[0]
+        offset = npc.offset[0]
         for poly in ['circ_bot','circ_top','axis']:
             c3 = glyph[poly]
             xg = c3[:,0]
@@ -1143,6 +1147,9 @@ def mk_npctemplates(npcs):
             diams = np.append(diams,np.full_like(xg,diam,dtype=float))
             heights = np.append(heights,np.full_like(xg,height,dtype=float))
             fitquals = np.append(fitquals,np.full_like(xg,fitqual,dtype=float))
+            cx = np.append(cx,np.full_like(xg,offset[0]-pars[0],dtype=float))
+            cy = np.append(cy,np.full_like(xg,offset[1]-pars[1],dtype=float))
+            cz = np.append(cz,np.full_like(xg,offset[2]-pars[2],dtype=float))
     t = np.arange(x.size)
     A = np.full_like(x,10.0,dtype='f')
     error_x = np.full_like(x,1.0,dtype='f')
@@ -1153,7 +1160,8 @@ def mk_npctemplates(npcs):
                   NtopLabelled=NtopLabelled,NbotLabelled=NbotLabelled,NLabelled=NLabelled,
                   objectID=objectID,t=t,A=A,
                   error_x=error_x,error_y=error_y,error_z=error_z,
-                  npc_height=heights,npc_diam=diams,npc_fitqual=fitquals)
+                  npc_height=heights,npc_diam=diams,npc_fitqual=fitquals,
+                  npc_ctrx=cx,npc_ctry=cy,npc_ctrz=cz)
 
     from PYME.IO.tabular import DictSource
     return DictSource(dsdict)
