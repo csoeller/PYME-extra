@@ -1,16 +1,18 @@
+import logging
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 import wx
-import os
 
-import logging
 logger = logging.getLogger(__file__)
 
 from PYMEcs.pyme_warnings import warn
 
+
 # --- Define the Localisation Error Analysis function ---
 def plot_errors(pipeline):
-    if not 'coalesced_nz' in pipeline.dataSources:
+    if 'coalesced_nz' not in pipeline.dataSources:
         warn('no data source named "coalesced_nz" - check recipe and ensure this is MINFLUX data')
         return
     curds = pipeline.selectedDataSourceKey
@@ -103,36 +105,51 @@ def plot_errors(pipeline):
     print(df.head())
     
 # --- Save as a csv file --- (Alex B addition)
-# Here we want to save the LocError, however if LocRate already exists we want to combine both files
-# and ensure that the final csv keeps the organization regrdless on which csv was generated first (locError or LocRate).
 
-    # variables to check if locerror and locrate csv files already exist
-    csv_name = pipeline.mdh.get('MINFLUX.TimeStamp')
-    locerror_file = csv_name + "temp_LocError.csv"
-    locrate_file = csv_name + "temp_LocRate.csv"
-    combined_file = csv_name + ".csv"
+    # Below is old way of saving (before 2025-08-26)
+    # Replaced by saving each file individually (refering to plot error and plot stats from MFX)
+    # The merging of files can be done in the analysis workbook
+    # This avoid creating too many intermediate files and conditionals checks if other csv are being created later on for analysis
 
-    # Save the locerror file
-    df.to_csv(locerror_file, index=False, header=True)
+        # # Here we want to save the LocError, however if LocRate already exists we want to combine both files
+        # # and ensure that the final csv keeps the organization regrdless on which csv was generated first (locError or LocRate).
 
-    # If the locrate file already exists, merge:
-    if os.path.exists(locrate_file):
-        df_rate = pd.read_csv(locrate_file)
-        df_error = pd.read_csv(locerror_file)
+        #     # variables to check if locerror and locrate csv files already exist
+        #     csv_name = pipeline.mdh.get('MINFLUX.TimeStamp')
+        #     locerror_file = csv_name + "temp_LocError.csv"
+        #     locrate_file = csv_name + "temp_LocRate.csv"
+        #     combined_file = csv_name + ".csv"
 
-        # Combine the two dataframes in the desired order
-        df_combined = pd.concat([df_error, df_rate], ignore_index=True)
-        df_combined.to_csv(combined_file, index=False, header=True)
+        #     # Save the locerror file
+        #     df.to_csv(locerror_file, index=False, header=True)
 
-        # Cleanup temp files
-        os.remove(locerror_file)
-        os.remove(locrate_file)
+        #     # If the locrate file already exists, merge:
+        #     if os.path.exists(locrate_file):
+        #         df_rate = pd.read_csv(locrate_file)
+        #         df_error = pd.read_csv(locerror_file)
+
+        #         # Combine the two dataframes in the desired order
+        #         df_combined = pd.concat([df_error, df_rate], ignore_index=True)
+        #         df_combined.to_csv(combined_file, index=False, header=True)
+
+        #         # Cleanup temp files
+        #         os.remove(locerror_file)
+        #         os.remove(locrate_file)
     
-    print(f'\ncsv name is: {csv_name}\nIf you did not load a session, csv file and figures will be saved on the desktop') # Used as a reminder for LocRate csv saving 
+    # Get the Timestamp (from pipeline) to create csv name
+    csv_name = pipeline.mdh.get('MINFLUX.TimeStamp')
+    
+    # Save the df as csv
+    df.to_csv(csv_name + "_LocError.csv", index=False, header=True)
+    
+    print(f'\ncsv name is: {csv_name}\nIf you did not load a session, csv file and figures will be saved on the desktop') # Used as a reminder for LocRate csv saving
         # By default the file is saved on the Desktop, if a session file is used, it is saved in the same directory as the session file.
     
-from PYMEcs.misc.matplotlib import boxswarmplot
 import pandas as pd
+
+from PYMEcs.misc.matplotlib import boxswarmplot
+
+
 def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', wintitle=None, bigCfraction=None,bigcf_percluster=None, plotints=True, **kwargs):
     if 'range' in kwargs:
         enforce_xlims = True
@@ -204,7 +221,7 @@ def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', wintitle=None, 
     fig.canvas.manager.set_window_title(figtitle)
 
 def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True, return_means=False, psu=None, bins=15, bigc_thresh=50, **kwargs):
-    if not ds in pipeline.dataSources:
+    if ds not in pipeline.dataSources:
         warn('no data source named "%s" - check recipe and ensure this is MINFLUX data' % ds)
         return
     curds = pipeline.selectedDataSourceKey
@@ -248,7 +265,7 @@ def cluster_analysis(pipeline):
     return plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=False,return_means=True)
     
 def plot_intra_clusters_dists(pipeline, ds='dbscanClustered',bins=15,NNs=1,**kwargs):
-    if not ds in pipeline.dataSources:
+    if ds not in pipeline.dataSources:
         warn('no data source named "%s" - check recipe and ensure this is MINFLUX data' % ds)
         return
     from scipy.spatial import KDTree
@@ -348,8 +365,9 @@ def plot_zextent(pipeline, ds='closemerged', series_name='This series'):
     plt.subplots_adjust(bottom=0.15, wspace=0.05)
 
     
-from scipy.special import binom
 from scipy.optimize import curve_fit
+from scipy.special import binom
+
 
 def sigpn(p):
     return pn(1,p)+pn(2,p)+pn(3,p)+pn(4,p)
@@ -509,13 +527,14 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
         axs[1, 1].set_ylabel('orig. corr [nm]')
     plt.tight_layout()
 
+import PYME.config
+from PYME.recipes.traits import Bool, CStr, Enum, Float, HasTraits
+
 from PYMEcs.Analysis.MINFLUX import analyse_locrate
+from PYMEcs.IO.MINFLUX import findmbm
 from PYMEcs.misc.guiMsgBoxes import Error
 from PYMEcs.misc.utils import unique_name
-from PYMEcs.IO.MINFLUX import findmbm
 
-from PYME.recipes.traits import HasTraits, Float, Enum, CStr, Bool, Int, List
-import PYME.config
 
 class MINFLUXSettings(HasTraits):
     withOrigamiSmoothingCurves = Bool(True,label='Plot smoothing curves',desc="if overplotting smoothing curves " +
@@ -604,6 +623,7 @@ class MINFLUXanalyser():
 
     def OnClumpScatterPosPlot(self,event):
         from scipy.stats import binned_statistic
+
         from PYMEcs.IO.MINFLUX import get_stddev_property
         def detect_coalesced(pipeline):
             # placeholder, to be implemented
@@ -686,7 +706,7 @@ class MINFLUXanalyser():
         mod.lowess_cachesave()
 
     def OnMBMAttributes(self, event):
-        from  wx.lib.dialogs import ScrolledMessageDialog
+        from wx.lib.dialogs import ScrolledMessageDialog
         fres = self.visFr.pipeline.dataSources['FitResults']
         if 'zarr' in dir(fres):
             try:
@@ -703,7 +723,7 @@ class MINFLUXanalyser():
             warn("could not find zarr attribute - is this a MFX zarr file?")
         
     def OnMFXAttributes(self, event):
-        from  wx.lib.dialogs import ScrolledMessageDialog
+        from wx.lib.dialogs import ScrolledMessageDialog
         fres = self.visFr.pipeline.dataSources['FitResults']
         if 'zarr' in dir(fres):
             try:
@@ -720,7 +740,6 @@ class MINFLUXanalyser():
             warn("could not find zarr attribute - is this a MFX zarr file?")
     
     def OnMFXInfo(self, event):
-        import io
         import wx.html
         fres = self.visFr.pipeline.dataSources['FitResults']
         if 'zarr' not in dir(fres):
@@ -787,8 +806,9 @@ class MINFLUXanalyser():
             if ddialog.ShowModal() != wx.ID_OK:
                 return
             fpath = ddialog.GetPath()
-        from PYMEcs.misc.utils import zarrtozipstore
         from pathlib import Path
+
+        from PYMEcs.misc.utils import zarrtozipstore
         zarr_root = Path(fpath)
         dest_dir = zarr_root.parent
         archive_name = dest_dir / zarr_root.with_suffix('.zarr').name # we make archive_name here in the calling routine so that we can check for existence etc
@@ -835,19 +855,25 @@ class MINFLUXanalyser():
             return
         
         # now we add a layer to render our alpha shape polygons
-        from PYME.LMVis.layers.tracks import TrackRenderLayer # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
+        from PYME.LMVis.layers.tracks import (
+            TrackRenderLayer,  # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
+        )
         layer = TrackRenderLayer(self.visFr.pipeline, dsname='cluster_shapes', method='tracks', clump_key='polyIndex', line_width=2.0, alpha=0.5)
         self.visFr.add_layer(layer)
 
     def OnAddMINFLUXTracksCI(self, event):        
         # now we add a track layer to render our traces
-        from PYME.LMVis.layers.tracks import TrackRenderLayer # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
+        from PYME.LMVis.layers.tracks import (
+            TrackRenderLayer,  # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
+        )
         layer = TrackRenderLayer(self.visFr.pipeline, dsname='output', method='tracks', clump_key='clumpIndex', line_width=2.0, alpha=0.5)
         self.visFr.add_layer(layer)
 
     def OnAddMINFLUXTracksTid(self, event):        
         # now we add a track layer to render our traces
-        from PYME.LMVis.layers.tracks import TrackRenderLayer # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
+        from PYME.LMVis.layers.tracks import (
+            TrackRenderLayer,  # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
+        )
         layer = TrackRenderLayer(self.visFr.pipeline, dsname='output', method='tracks', clump_key='tid', line_width=2.0, alpha=0.5)
         self.visFr.add_layer(layer)
 
@@ -856,7 +882,6 @@ class MINFLUXanalyser():
 
 
     def OnMBMSave(self,event):
-        from pathlib import Path
         pipeline = self.visFr.pipeline
         mbm = findmbm(pipeline)
         if mbm is None:
@@ -1100,10 +1125,9 @@ class MINFLUXanalyser():
                              config='user', create_backup=True)
 
     def OnMINFLUXplotTempData(self, event):
-        import PYME.config as config
-        import os
-        from os.path import basename
         from glob import glob
+
+        import PYME.config as config
 
         configvar = 'MINFLUX-temperature_folder'
         folder = config.get(configvar)
@@ -1198,7 +1222,7 @@ class MINFLUXanalyser():
         pipeline = self.visFr.pipeline
         curds = pipeline.selectedDataSourceKey
         pipeline.selectDataSource(self.analysisSettings.defaultDatasourceForAnalysis)
-        if not 'clumpIndex' in pipeline.keys():
+        if 'clumpIndex' not in pipeline.keys():
             Error(self.visFr,'no property called "clumpIndex", cannot check')
             pipeline.selectDataSource(curds)
             return
@@ -1221,11 +1245,11 @@ class MINFLUXanalyser():
         timestamp = pipeline.mdh.get('MINFLUX.TimeStamp')
         # print("Timestamp from OnLocalisationRate(experimental/MINFLUX.py): ", timestamp)
         
-        if not 'cfr' in pipeline.keys():
+        if 'cfr' not in pipeline.keys():
             Error(self.visFr,'no property called "cfr", likely no MINFLUX data - aborting')
             pipeline.selectDataSource(curds)
             return
-        if not 'tim' in pipeline.keys():
+        if 'tim' not in pipeline.keys():
             Error(self.visFr,'no property called "tim", you need to convert to CSV with a more recent version of PYME-Extra - aborting')
             pipeline.selectDataSource(curds)
             return
@@ -1239,7 +1263,7 @@ class MINFLUXanalyser():
         pipeline.selectDataSource(self.analysisSettings.defaultDatasourceForAnalysis)
         #Added by Alex B to get timestamp and send it to plot_stats_minflux 
         timestamp = pipeline.mdh.get('MINFLUX.TimeStamp')
-        if not 'efo' in pipeline.keys():
+        if 'efo' not in pipeline.keys():
             Error(self.visFr,'no property called "efo", likely no MINFLUX data or wrong datasource (CHECK) - aborting')
             return
         plt.figure()
@@ -1286,9 +1310,10 @@ class MINFLUXanalyser():
         pipeline.selectDataSource(finalFiltered)
         
     def OnOrigamiSiteRecipe(self, event=None):
-        from PYMEcs.recipes.localisations import OrigamiSiteTrack, DBSCANClustering2
         from PYME.recipes.localisations import MergeClumps
         from PYME.recipes.tablefilters import FilterTable, Mapping
+
+        from PYMEcs.recipes.localisations import DBSCANClustering2, OrigamiSiteTrack
         
         pipeline = self.visFr.pipeline
         recipe = pipeline.recipe

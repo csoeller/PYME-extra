@@ -1,10 +1,10 @@
-from scipy.stats import binned_statistic
-from PYMEcs.IO.MINFLUX import get_stddev_property
-import numpy as np
 import matplotlib.pyplot as plt
-from PYMEcs.pyme_warnings import warn
+import numpy as np
 import pandas as pd
-import os
+from scipy.stats import binned_statistic
+
+from PYMEcs.IO.MINFLUX import get_stddev_property
+from PYMEcs.pyme_warnings import warn
 
 
 def propcheck_density_stats(ds,warning=True):
@@ -55,6 +55,8 @@ def plot_density_stats(ds,objectID='dbscanClumpID',scatter=False):
     plt.tight_layout()
 
 from PYMEcs.misc.matplotlib import boxswarmplot
+
+
 def plot_density_stats_sns(ds,objectID='dbscanClumpID'):
     if not propcheck_density_stats(ds):
         return
@@ -98,7 +100,7 @@ def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, ti
     ax1[0].set_xlabel('time between traces (TBT) [s]')
     ax1[0].text(0.95, 0.8, 'median %.2f s' % dtmedian, horizontalalignment='right',
              verticalalignment='bottom', transform=ax1[0].transAxes)
-    if not areaString is None:
+    if areaString is not None:
         ax1[0].text(0.95, 0.6, areaString, horizontalalignment='right',
              verticalalignment='bottom', transform=ax1[0].transAxes)
     
@@ -153,31 +155,39 @@ def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, ti
     else:
         csv_name = timestamp
     # --- Save as a csv file --- (Alex B addition)
-    # Here we want to save the LocRate, however if LocError already exists we want to combine both files
-    # and ensure that the final csv keeps the organization regrdless on which csv was generated first (locError or LocRate).
     
-    # variables to check if locerror and locrate csv files already exist
-    locerror_file = csv_name + "temp_LocError.csv"
-    locrate_file = csv_name + "temp_LocRate.csv"
-    combined_file = csv_name + ".csv"
-    
-    # Save the LocRate file
-    df.to_csv(locrate_file, index=False, header=True)
-    
-    # If the LocError file already exists, merge:
-    if os.path.exists(locerror_file):
-        df_rate = pd.read_csv(locrate_file)
-        df_error = pd.read_csv(locerror_file)
+    # Below is old way of saving (before 2025-08-26)
+    # Replaced by saving each file individually (refering to plot error and plot stats from MFX)
+    # The merging of files can be done in the analysis workbook
+    # This avoid creating too many intermediate files and conditionals checks if other csv are being created later on for analysis
+        # Here we want to save the LocRate, however if LocError already exists we want to combine both files
+        # and ensure that the final csv keeps the organization regrdless on which csv was generated first (locError or LocRate).
         
-        # Combine the two dataframes in the desired order
-        df_combined = pd.concat([df_error, df_rate], ignore_index=True)
-        df_combined.to_csv(combined_file, index=False, header=True)
+        # variables to check if locerror and locrate csv files already exist
+        # locerror_file = csv_name + "temp_LocError.csv"
+        # locrate_file = csv_name + "temp_LocRate.csv"
+        # combined_file = csv_name + ".csv"
         
-        # Cleanup temp files
-        os.remove(locerror_file)
-        os.remove(locrate_file)
+        # # Save the LocRate file
+        # df.to_csv(locrate_file, index=False, header=True)
+        
+        # # If the LocError file already exists, merge:
+        # if os.path.exists(locerror_file):
+        #     df_rate = pd.read_csv(locrate_file)
+        #     df_error = pd.read_csv(locerror_file)
+            
+        #     # Combine the two dataframes in the desired order
+        #     df_combined = pd.concat([df_error, df_rate], ignore_index=True)
+        #     df_combined.to_csv(combined_file, index=False, header=True)
+            
+        #     # Cleanup temp files
+        #     os.remove(locerror_file)
+        #     os.remove(locrate_file)
     
-    print(f'\ncsv name is: {csv_name}\nIf you did not load a session, csv file and figures will be saved on the desktop') # Used as a reminder for LocRate csv saving 
+        # df.to_csv(locrate_file, index=False, header=True)
+
+    print(f'\ncsv name is: {csv_name}\nIf you did not load a session, csv file and figures will be saved on the desktop') # Used as a reminder for LocRate csv saving
+    df.to_csv(csv_name + '_LocRate.csv', index=False, header=True)
     
         # --- Save the figure --- (Alex B addition)
     plt.savefig(csv_name + '_loc_rate.png', dpi=300, bbox_inches='tight')
