@@ -67,6 +67,7 @@ class NPCsettings(HasTraits):
                            desc="starting ring diameter value for the 3D fit; note only considered when doing the initial full fit; "+
                            "not considered when re-evaluating existing fit")
     TemplateMode_3D = Enum(['standard','detailed','twostage'],desc="standard or detailed NPC template")
+    TemplateSigma_3D = Float(7.0,label='Sigma value for 3D template smoothing',desc="smoothing SD (sigma) to smooth the 3D fitting template, default is 7 nm")
     FitMode = Enum(['abs','square'],label='Fit mode for NPC rotation',
                    desc="fit mode for NPC rotation; in 2D and 3D estimation of the NPC lateral rotation a simple algorithm is used to find the start of the 'pizza pieces'; "+
                    "this mode refers to use of absolute or squared differences in the calculation; default should be ok")
@@ -193,7 +194,8 @@ class NPCcalc():
                             NPCheight=self.NPCsettings.StartHeight_3D,
                             foreshortening=pipeline.mdh.get('MINFLUX.Foreshortening',1.0),
                             known_number=self.NPCsettings.KnownNumber_3D,
-                            templatemode=self.NPCsettings.TemplateMode_3D)
+                            templatemode=self.NPCsettings.TemplateMode_3D,
+                            sigma=self.NPCsettings.TemplateSigma_3D)
             do_plot = True
             for oid in np.unique(pipeline['objectID']):
                 npcs.addNPCfromPipeline(pipeline,oid)
@@ -467,7 +469,7 @@ class NPCcalc():
     def OnNPC3DSaveNPCSet(self, event=None):
         from PYMEcs.IO.NPC import save_NPC_set
         pipeline = self.visFr.pipeline
-        defaultFile = None
+        defaultFile = ''
         MINFLUXts = pipeline.mdh.get('MINFLUX.TimeStamp')
         if MINFLUXts is not None:
             defaultFile = "%s-NPCset.pickle" % MINFLUXts
@@ -497,9 +499,16 @@ class NPCcalc():
         geo_df = pd.DataFrame.from_dict(dict(diameter=diams,height=heights))
         figuredefaults(fontsize=12)
         plt.figure()
+        from scipy.stats import iqr
+        iqrh = iqr(heights)
+        sdh = np.std(heights)
+        iqrd = iqr(diams)
+        sdd = np.std(diams)
         bp = boxswarmplot(geo_df,width=0.35,annotate_medians=True,annotate_means=True,showmeans=True,swarmalpha=0.4,swarmsize=4)
+        plt.text(0.0,50,"IQR %.1f\nSD %.1f" % (iqrd,sdd), horizontalalignment='center')
+        plt.text(1.0,120,"IQR %.1f\nSD %.1f" % (iqrh,sdh), horizontalalignment='center')
         # res = plt.boxplot([diams,heights],showmeans=True,labels=['diameter','height'])
-        plt.title("NPC mean diam %.0f nm, mean ring spacing %.0f nm" % (diams.mean(),heights.mean()), fontsize=11)
+        plt.title("%d NPCs, mean diam %.0f nm, mean ring spacing %.0f nm" % (heights.size,diams.mean(),heights.mean()), fontsize=11)
         plt.ylim(0,150)
 
     def OnNPC3DTemplateFitStats(self,event=None):
