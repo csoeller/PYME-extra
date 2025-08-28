@@ -1,13 +1,15 @@
-from PYMEcs.pyme_warnings import warn
-from PYMEcs.Analysis.NPC import estimate_nlabeled, npclabel_fit, plotcdf_npc3d
-from PYME.recipes import tablefilters
-import wx
-from traits.api import HasTraits, Str, Int, CStr, List, Enum, Float, Bool
-import numpy as np
-import matplotlib.pyplot as plt
-from PYMEcs.misc.utils import unique_name
-from PYMEcs.IO.NPC import findNPCset
 import logging
+
+import matplotlib.pyplot as plt
+import numpy as np
+import wx
+from PYME.recipes import tablefilters
+from traits.api import Bool, Enum, Float, HasTraits, Int
+
+from PYMEcs.Analysis.NPC import estimate_nlabeled, npclabel_fit, plotcdf_npc3d
+from PYMEcs.IO.NPC import findNPCset
+from PYMEcs.misc.utils import unique_name
+from PYMEcs.pyme_warnings import warn
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +128,28 @@ class NPCcalc():
         self._npcsettings = None
         self.gallery_layer = None
         self.segment_layer = None
+    
+        # --- Alex B addition test for running several action at once ---
+        # Add combined MenuItem for all requested actions
+        visFr.AddMenuItem('Experimental>NPC3D', 'Save All NPC 3D Analysis Actions', self.OnNPC3DRunAllActions)
+    def OnNPC3DRunAllActions(self, event=None):
+        """Performs all key NPC 3D analysis actions in sequence."""
+        # Save NPC Set with full fit analysis
+        self.OnNPC3DSaveNPCSet()
+        # Save Measurements Only (csv, no fit info saved)
+        self.OnNPC3DSaveMeasurements()
+        # Show NPC geometry statistics
+        self.OnNPC3DGeometryStats()
+        # Show NPC template fit statistics
+        self.OnNPC3DTemplateFitStats()
+        # Plot NPC by-segment data
+        self.OnNPC3DPlotBySegments()
+        # Save NPC by-segment data
+        self.OnNPC3DSaveBySegments()
+        
+        # --- End of Alex B addition test for running several action at once ---
+
+
 
     @property
     def NPCsettings(self):
@@ -186,7 +210,6 @@ class NPCcalc():
             npcs = findNPCset(pipeline)
             do_plot = False
         else:
-            from PYMEcs.IO.MINFLUX import foreshortening
             npcs = NPC3DSet(filename=pipeline_filename(pipeline),
                             zclip=self.NPCsettings.Zclip_3D,
                             offset_mode=self.NPCsettings.OffsetMode_3D,
@@ -367,7 +390,9 @@ class NPCcalc():
 
         # now we add a track layer to render our template polygons
         # TODO - we may need to check if this happened before or not!
-        from PYME.LMVis.layers.tracks import TrackRenderLayer # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
+        from PYME.LMVis.layers.tracks import (
+            TrackRenderLayer,  # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
+        )
         layer = TrackRenderLayer(pipeline, dsname=ds_template_name, method='tracks', clump_key='polyIndex', line_width=2.0, alpha=0.5)
         self.visFr.add_layer(layer)        
 
@@ -388,7 +413,6 @@ class NPCcalc():
         fpath = fdialog.GetPath()
         meas = np.array(npcs.measurements, dtype='i')
 
-        import pandas as pd
         df = pd.DataFrame({'Ntop_NPC3D': meas[:, 0], 'Nbot_NPC3D': meas[:, 1]})
         entries = len(np.unique(pipeline.objectID))
         MINFLUX_filename = [pipeline.mdh.getEntry('MINFLUX.Filename')]*entries
@@ -493,6 +517,7 @@ class NPCcalc():
             warn('no valid NPC measurements found, thus no geometry info available...')
             return
         import pandas as pd
+
         from PYMEcs.misc.matplotlib import boxswarmplot, figuredefaults
         diams = np.asarray(npcs.diam())
         heights = np.asarray(npcs.height())
@@ -518,6 +543,7 @@ class NPCcalc():
             warn('no valid NPC measurements found, thus no geometry info available...')
             return
         import pandas as pd
+
         from PYMEcs.misc.matplotlib import boxswarmplot, figuredefaults
         id = [npc.objectID for npc in npcs.npcs] # not used right now
         llperloc = [npc.opt_result.fun/npc.npts.shape[0] for npc in npcs.npcs]
