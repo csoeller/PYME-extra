@@ -116,6 +116,7 @@ class NPCcalc():
         visFr.AddMenuItem('Experimental>NPC3D', "Save Measurements Only (csv, no fit info saved)",self.OnNPC3DSaveMeasurements)
         visFr.AddMenuItem('Experimental>NPC3D', "Load and display saved Measurements (from csv)",self.OnNPC3DLoadMeasurements)
         visFr.AddMenuItem('Experimental>NPC3D', "Show NPC geometry statistics",self.OnNPC3DGeometryStats)
+        visFr.AddMenuItem('Experimental>NPC3D', "Save NPC geometry statistics as CSV",self.OnNPC3DSaveGeometryStats)
         visFr.AddMenuItem('Experimental>NPC3D', "Show NPC template fit statistics",self.OnNPC3DTemplateFitStats)
         visFr.AddMenuItem('Experimental>NPC2D', 'NPC Analysis settings', self.OnNPCsettings)
         visFr.AddMenuItem('Experimental>NPC3D', 'NPC Analysis settings', self.OnNPCsettings)
@@ -449,6 +450,25 @@ class NPCcalc():
         
         save_NPC_set(npcs,fdialog.GetPath())
 
+    def OnNPC3DSaveGeometryStats(self,event=None):
+        pipeline = self.visFr.pipeline
+        npcs = findNPCset(pipeline)
+        if npcs is None:
+            warn('no valid NPC measurements found, thus no geometry info available...')
+            return
+        diams = np.asarray(npcs.diam())
+        heights = np.asarray(npcs.height())
+        import pandas as pd
+        geo_df = pd.DataFrame.from_dict(dict(diameter=diams,height=heights))
+        with wx.FileDialog(self.visFr, 'Save NPC measurements as ...',
+                                wildcard='CSV (*.csv)|*.csv',
+                                style=wx.FD_SAVE) as fdialog:
+            if fdialog.ShowModal() != wx.ID_OK:
+                return
+            fpath = fdialog.GetPath()
+ 
+        geo_df.to_csv(fpath,index=False)
+     
     def OnNPC3DGeometryStats(self,event=None):
         pipeline = self.visFr.pipeline
         npcs = findNPCset(pipeline)

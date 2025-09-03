@@ -272,7 +272,7 @@ def npclabel_fit(nphist,sigma=None):
     return (popt[0],n_labels_scaled,perr[0])
 
 from PYMEcs.misc.utils import get_timestamp_from_filename
-def plotcdf_npc3d(nlab,plot_as_points=True,timestamp=None,thresh=None):
+def plotcdf_npc3d(nlab,plot_as_points=True,timestamp=None,thresh=None,return_data=False):
     pr = prangeNPC3D()
     for p in pr.keys():
         if p != 'krange':
@@ -305,6 +305,9 @@ def plotcdf_npc3d(nlab,plot_as_points=True,timestamp=None,thresh=None):
               (nlab.size,100.0*popt,100.0*perr))
     plt.xlabel("N labeled")
     plt.ylabel("CDF")
+
+    if return_data:
+        return (histctr,histn)
 
 def npclabel_fit3D(histx,histv,sigma=0.1):
     popt, pcov = curve_fit(pnpc3dc, histx, histv, sigma=sigma, method='lm', p0=[0.4])

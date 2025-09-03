@@ -121,7 +121,8 @@ def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', wintitle=None, 
 
     fig.canvas.manager.set_window_title(figtitle)
 
-def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True, return_means=False, psu=None, bins=15, bigc_thresh=50, **kwargs):
+def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True, return_means=False,
+                          return_data=False, psu=None, bins=15, bigc_thresh=50, **kwargs):
     if not ds in pipeline.dataSources:
         warn('no data source named "%s" - check recipe and ensure this is MINFLUX data' % ds)
         return
@@ -160,7 +161,9 @@ def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True, return_m
 
     if return_means:
         return (csm,csgt1m)
-    
+
+    if return_data:
+        return (cts,ctsgt1)
 
 def cluster_analysis(pipeline):
     return plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=False,return_means=True)
