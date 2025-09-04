@@ -1,4 +1,5 @@
 import logging
+import os
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -124,6 +125,19 @@ class NPCcalc():
         visFr.AddMenuItem('Experimental>NPC3D', 'Add NPC Gallery', self.On3DNPCaddGallery)
         visFr.AddMenuItem('Experimental>NPC3D', 'Plot NPC by-segment data', self.OnNPC3DPlotBySegments)
         visFr.AddMenuItem('Experimental>NPC3D', 'Save NPC by-segment data', self.OnNPC3DSaveBySegments)
+
+        # --- Alex B addition for auto-saving NPC sets ---
+        # TODO: When all are working, replace the items in 'OnNPC3DRunAllActions'
+        self.visFr.AddMenuItem('Experimental>NPC3D', "Auto-save Analyse 3D NPCs by ID", self.OnAnalyse3DNPCsByID_auto_save)
+        self.visFr.AddMenuItem('Experimental>NPC3D', "Auto-save NPC Set", self.OnNPC3DSaveNPCSet_auto_save)
+        self.visFr.AddMenuItem('Experimental>NPC3D', "Auto-save Measurements Only (csv, no fit info saved)", self.OnNPC3DSaveMeasurements_auto_save)    
+        self.visFr.AddMenuItem('Experimental>NPC3D', "Auto-save NPC geometry statistics",self.OnNPC3DGeometryStats_auto_save)
+        self.visFr.AddMenuItem('Experimental>NPC3D', "Auto-save NPC template fit statistics",self.OnNPC3DTemplateFitStats_auto_save)
+        self.visFr.AddMenuItem('Experimental>NPC3D', "Auto-save NPC by-segment data",self.OnNPC3DSaveBySegments_auto_save)
+        self.visFr.AddMenuItem('Experimental>NPC3D', "Auto-save NPC by-segment plot",self.OnNPC3DPlotBySegments_auto_save)
+
+        # --- End of Alex B addition for auto-saving NPC sets ---
+
 
         self._npcsettings = None
         self.gallery_layer = None
@@ -279,6 +293,118 @@ class NPCcalc():
         
         npcs.plot_labeleff(thresh=self.NPCsettings.SegmentThreshold_3D)
 
+# --- Alex B addition --- 
+# AIM: perform all actions 3D NPC actions and save output automatically
+# Original function 'OnAnalyse3DNPCsByID', copied and modified for automatic saving.
+
+    def OnAnalyse3DNPCsByID_auto_save(self, event=None):
+        from PYMEcs.Analysis.NPC import NPC3DSet
+        pipeline = self.visFr.pipeline
+
+        # --- Alex B addition ---
+        # We define a few variables used for automatic saving later
+        
+        base_dir = os.getcwd() # Get the working directory
+        MINFLUXts = pipeline.mdh.get('MINFLUX.TimeStamp') # Get the timestamp and use it for naming the file to save
+        if MINFLUXts is not None:
+            fitplot_filename = f"{MINFLUXts}-NPC_fit_plot.png"
+            leplot_filename = f"{MINFLUXts}-LE_plot.png"
+        else: # If no timestamp is found, use default filenames
+            fitplot_filename = "NPC_fit_plot.png"
+            leplot_filename = "LE_plot.png"
+        fitplot_save_path = os.path.join(base_dir, fitplot_filename) # Save path for fit plot
+        leplot_save_path = os.path.join(base_dir, leplot_filename) # Save path for LE plot
+
+        # --- End Alex B addition ---
+
+        if findNPCset(pipeline,warnings=False) is not None:
+            npcs = findNPCset(pipeline)
+            do_plot = False # If NPC set exists, do not re-analyze / re-plot
+        else: # If NPC set does not exists, do analyze plot
+            npcs = NPC3DSet(filename=pipeline_filename(pipeline),
+                            zclip=self.NPCsettings.Zclip_3D,
+                            offset_mode=self.NPCsettings.OffsetMode_3D,
+                            NPCdiam=self.NPCsettings.StartDiam_3D,
+                            NPCheight=self.NPCsettings.StartHeight_3D,
+                            foreshortening=pipeline.mdh.get('MINFLUX.Foreshortening',1.0),
+                            known_number=self.NPCsettings.KnownNumber_3D,
+                            templatemode=self.NPCsettings.TemplateMode_3D,
+                            sigma=self.NPCsettings.TemplateSigma_3D)
+            do_plot = True # If NPC set does not exists, do analyze plot (lines 326)
+            for oid in np.unique(pipeline['objectID']):
+                npcs.addNPCfromPipeline(pipeline,oid)
+
+        # for example use of ProgressDialog see also
+        # https://github.com/Metallicow/wxPython-Sample-Apps-and-Demos/blob/master/101_Common_Dialogs/ProgressDialog/ProgressDialog_extended.py
+        progress = wx.ProgressDialog("NPC analysis in progress", "please wait", maximum=len(npcs.npcs),
+                                     parent=self.visFr,
+                                     style=wx.PD_SMOOTH
+                                     | wx.PD_AUTO_HIDE
+                                     | wx.PD_CAN_ABORT
+                                     | wx.PD_ESTIMATED_TIME
+                                     | wx.PD_REMAINING_TIME)
+        if do_plot: # IInitialize plots (only creates canvas and axes)
+            fig, axes=plt.subplots(2,3)
+            if 'templatemode' in dir(npcs) and npcs.templatemode == 'twostage':
+                figpre, axespre=plt.subplots(2,3,label='pre-llm')
+        cancelled = False
+        npcs.measurements = []
+        if 'templatemode' in dir(npcs) and npcs.templatemode == 'detailed':
+            rotation = 22.5 # this value may need adjustment
+        else:
+            rotation = None
+
+
+        # keep track if any fits were performed
+        anyfits = False
+        for i,npc in enumerate(npcs.npcs):
+            if not npc.fitted:
+                if 'templatemode' in dir(npcs) and npcs.templatemode == 'twostage':
+                    npc.fitbymll(npcs.llm,plot=True,printpars=False,axes=axes,preminimizer=npcs.llmpre,axespre=axespre) # Plot generated here
+                else:
+                    npc.fitbymll(npcs.llm,plot=True,printpars=False,axes=axes) # Plot generated here
+                anyfits = True
+            nt,nb = npc.nlabeled(nthresh=self.NPCsettings.SegmentThreshold_3D,
+                                 dr=self.NPCsettings.RadiusUncertainty_3D,
+                                 rotlocked=self.NPCsettings.RotationLocked_3D,
+                                 zrange=self.NPCsettings.Zclip_3D,
+                                 rotation=rotation)
+            if self.NPCsettings.SkipEmptyTopOrBottom_3D and (nt == 0 or nb == 0):
+                pass # we skip NPCs with empty rings in this case
+            else:
+                npcs.measurements.append([nt,nb])
+            (keepGoing, skip) = progress.Update(i+1)
+            if not keepGoing:
+                logger.info('OnAnalyse3DNPCsByID: progress cancelled, aborting NPC analysis')
+                cancelled = True
+                progress.Destroy()
+                wx.Yield()
+                # Cancelled by user.
+                break
+            wx.Yield()
+        else:
+            if anyfits:
+                pipeline.npcs = npcs # we update the pipeline npcs attribute only if the for loop completed normally and we fitted
+
+        if cancelled:
+            return
+
+        #--- Alex B modif addition---
+        
+        # Save the main NPC fit plot 
+        # Uses the variables (filename+path defined earlier)
+            # Note: Save only the last fit plot 
+        if do_plot and not cancelled:
+            fig.savefig(fitplot_save_path)
+            print(f"NPC fit plot automatically saved as: {fitplot_save_path}")
+        
+        # Create the labeling efficiency plot
+        fig = npcs.plot_labeleff_for_auto_save(thresh=self.NPCsettings.SegmentThreshold_3D) # We are calling the alternative function: plot_labeleff_for_auto_save
+                                                                                            # which returns the fig object, we then can use fig for automatic saving
+        fig.savefig(leplot_save_path)
+        print(f"Labeling efficiency plot automatically saved as: {leplot_save_path}")
+        # --- End of Alex B addition ---
+
 
     def OnNPC3DSaveBySegments(self, event=None):
         pipeline = self.visFr.pipeline
@@ -300,6 +426,46 @@ class NPCcalc():
             df.to_csv(fpath,index=False)
         else:
             warn("could not find valid NPC set, have you carried out fitting?")
+    
+    # --- Alex B addition ---
+    
+    def OnNPC3DSaveBySegments_auto_save(self, event=None):
+        pipeline = self.visFr.pipeline
+        
+                # --- Alex B addition ---
+        # We define a few variables used for automatic saving later
+        base_dir = os.getcwd() # Get the working directory
+        MINFLUXts = pipeline.mdh.get('MINFLUX.TimeStamp') # Get the timestamp and use it for naming the file to save
+        if MINFLUXts is not None:
+            NPC_segments_stats = f"{MINFLUXts}-NPC_segments.csv"
+        else:
+            NPC_segments_stats = "NPC_segments.csv"
+        NPC_segments_stats_save_path = os.path.join(base_dir, NPC_segments_stats) # Save path for csv file
+        # --- End of Alex B addition ---
+        
+        if findNPCset(pipeline) is not None:
+            nbs = findNPCset(pipeline).n_bysegments()
+            if nbs is None:
+                warn("could not find npcs with by-segment fitting info, have you carried out fitting with recent code?")
+                return
+            # # Original code with dialog for manual saving
+            # with wx.FileDialog(self.visFr, 'Save NPC by-segment data as ...',
+            #                     wildcard='CSV (*.csv)|*.csv',
+            #                     style=wx.FD_SAVE) as fdialog:
+            #     if fdialog.ShowModal() != wx.ID_OK:
+            #         return
+            #     else:
+            #         fpath = fdialog.GetPath()
+                    
+            import pandas as pd
+            df = pd.DataFrame.from_dict(dict(top=nbs['top'].flatten(),bottom=nbs['bottom'].flatten()))
+            df.to_csv(NPC_segments_stats_save_path,index=False) # Alex B automatic saving
+            print(f"NPC by-segment data automatically saved as: {NPC_segments_stats_save_path}")
+            
+        else:
+            warn("could not find valid NPC set, have you carried out fitting?")
+    
+    # --- End of Alex B addition ---
         
     def OnNPC3DPlotBySegments(self, event=None):
         pipeline = self.visFr.pipeline
@@ -326,6 +492,55 @@ class NPCcalc():
                      verticalalignment='center', color='r', transform=fig.transFigure)
         else:
             warn("could not find valid NPC set, have you carried out fitting?")
+            
+    # --- Alex B addition ---
+    
+    def OnNPC3DPlotBySegments_auto_save(self, event=None):
+        pipeline = self.visFr.pipeline
+        
+        # --- Alex B addition ---
+        # We define a few variables used for automatic saving later
+        
+        base_dir = os.getcwd() # Get the working directory
+        MINFLUXts = pipeline.mdh.get('MINFLUX.TimeStamp') # Get the timestamp and use it for naming the file to save
+        if MINFLUXts is not None:
+            NPC_plot_segments = f"{MINFLUXts}-NPC_segments.png"
+        else:
+            NPC_plot_segments = "NPC_segments.png"
+        NPC_plot_segments_save_path = os.path.join(base_dir, NPC_plot_segments) # Save path for csv file
+        
+        # --- End of Alex B addition ---
+        
+        if findNPCset(pipeline) is not None:
+            nbs = findNPCset(pipeline).n_bysegments()
+            if nbs is None:
+                warn("could not find npcs with by-segment fitting info, have you carried out fitting with recent code?")
+                return
+            fig = plt.figure()
+            plt.hist(nbs['bottom'].flatten(),bins=np.arange(nbs['bottom'].max()+2)-0.5,alpha=0.5,label='bottom',density=True,histtype='step')
+            plt.plot([nbs['bottom'].mean(),nbs['bottom'].mean()],[0,0.2],'b--')
+            plt.hist(nbs['top'].flatten(),bins=np.arange(nbs['top'].max()+2)-0.5,alpha=0.5,label='top',density=True,histtype='step')
+            plt.plot([nbs['top'].mean(),nbs['top'].mean()],[0,0.2],'r--')
+            plt.legend()
+            nbsflat = nbs['bottom'].flatten()
+            b_meanall = 0.5*nbsflat.mean() # 0.5 to get per site because we have two sites per segment
+            b_meannz =  0.5*nbsflat[nbsflat>0].mean() # 0.5 to get per site because we have two sites per segment
+            plt.text(0.65,0.5,'cytop per site: %.1f (%.1f per labeled)' % (b_meanall,b_meannz), horizontalalignment='center',
+                        verticalalignment='center', color='b', transform=fig.transFigure)
+            nbsflat = nbs['top'].flatten()
+            t_meanall = 0.5*nbsflat.mean() # 0.5 to get per site because we have two sites per segment
+            t_meannz =  0.5*nbsflat[nbsflat>0].mean() # 0.5 to get per site because we have two sites per segment
+            plt.text(0.65,0.44,'nucleop per site: %.1f (%.1f per labeled)' % (t_meanall,t_meannz), horizontalalignment='center',
+                        verticalalignment='center', color='r', transform=fig.transFigure)
+            # --- Alex B addition ---
+            # Save the NPC geometry stats plot
+            fig.savefig(NPC_plot_segments_save_path)
+            print(f"NPC geometry stats plot automatically saved as: {NPC_plot_segments_save_path}")
+            # --- End of Alex B addition ---
+        else:
+            warn("could not find valid NPC set, have you carried out fitting?")
+    
+    # --- End of Alex B addition ---
         
     def On3DNPCaddGallery(self, event=None):
         pipeline = self.visFr.pipeline
@@ -460,6 +675,89 @@ class NPCcalc():
 
         df.to_csv(fpath,index=False, mode='a')
 
+    # --- Alex B addition for auto-save of measurements ---
+
+    def OnNPC3DSaveMeasurements_auto_save(self, event=None):
+        import pandas as pd
+        pipeline = self.visFr.pipeline
+        npcs = findNPCset(pipeline)
+        if npcs is None or 'measurements' not in dir(npcs):
+            warn('no valid NPC measurements found, therefore cannot save...')
+            return 
+        # Dialog for saving --> Commented-out
+        # fdialog = wx.FileDialog(self.visFr, 'Save NPC measurements as ...',
+        #                         wildcard='CSV (*.csv)|*.csv',
+        #                         style=wx.FD_SAVE)
+        # if fdialog.ShowModal() != wx.ID_OK:
+        #     return
+
+        # fpath = fdialog.GetPath()
+        
+        # --- Alex B addition ---
+        # We define a few variables used for automatic saving later
+        
+        base_dir = os.getcwd() # Get the working directory
+        MINFLUXts = pipeline.mdh.get('MINFLUX.TimeStamp') # Get the timestamp and use it for naming the file to save
+        if MINFLUXts is not None:
+            csv_filename = f"{MINFLUXts}-LE_stats.csv"
+        else:
+            csv_filename = "LE_stats.csv"
+        csv_save_path = os.path.join(base_dir, csv_filename) # Save path for csv file
+        
+        # --- End of Alex B addition ---
+
+
+        meas = np.array(npcs.measurements, dtype='i')
+
+        df = pd.DataFrame({'Ntop_NPC3D': meas[:, 0], 'Nbot_NPC3D': meas[:, 1]})
+        entries = len(np.unique(pipeline.objectID))
+        MINFLUX_filename = [pipeline.mdh.getEntry('MINFLUX.Filename')]*entries
+        NPC_threshold = [self.NPCsettings.SegmentThreshold_3D]*entries
+        fshortening = [pipeline.mdh.getEntry('MINFLUX.Foreshortening')]*entries
+        t_min = [np.round(np.min(pipeline.tim))]*entries
+        t_max = [np.round(np.max(pipeline.tim))]*entries
+        t_maxhr = [np.round(ti/3600) for ti in t_max]
+
+        duration_hours = [np.round((np.max(pipeline.tim)-np.min(pipeline.tim))/3600,2)]*entries
+        duration_hours_rounded = [np.round(duration) for duration in duration_hours]
+        dim_z_nm = [np.round(np.max(pipeline.z)-np.min(pipeline.z),2)]*entries
+        NPCLE = (meas[:,0]+meas[:,1])/16
+        
+        unique_ids, counts = np.unique(pipeline.objectID, return_counts=True)
+        nEvents = counts.tolist()  
+        
+        df = pd.DataFrame({'Ntop_NPC3D': meas[:, 0], 'Nbot_NPC3D': meas[:, 1], "NPC_LE": NPCLE,
+                            'objectID': np.unique(pipeline.objectID),
+                            'diameters': np.round(pipeline.npcs.diam(), 4),
+                            'heights': np.round(pipeline.npcs.height(), 4),
+                            't_min': t_min,
+                            't_max': t_max,
+                            't_maxhr': t_maxhr,
+                            'duration_hours': duration_hours,
+                            'duration_hours_rounded': duration_hours_rounded,
+                            'nEvents': nEvents,
+                            'dim_z_nm': dim_z_nm,
+                            'foreshortening': fshortening,
+                            'NPC_threshold': NPC_threshold,                            
+                            'filename': MINFLUX_filename})
+
+        pipeline.selectDataSource('Localizations')
+        dim_x = (np.max(pipeline.x)-np.min(pipeline.x))/1000
+        dim_y = (np.max(pipeline.y)-np.min(pipeline.y))/1000
+        area_xy = [np.round(dim_x*dim_y,2)]*entries
+
+        df.insert(3, 'area_xy', area_xy)
+
+        try:
+            pipeline.selectDataSource('valid_npcs')
+            print("Pipeline data source successfully changed")
+        except:
+            print("Unable to change the pipeline to 'valid_npcs'")
+
+        df.to_csv(csv_save_path,index=False, mode='a')
+
+# --- End of Alex B addition for auto-save ---
+
 
     def OnNPC3DLoadMeasurements(self, event=None):
         from PYMEcs.misc.utils import get_timestamp_from_filename
@@ -510,6 +808,41 @@ class NPCcalc():
         
         save_NPC_set(npcs,fdialog.GetPath())
 
+
+# --- Alex B addition ---
+# AIM: perform all actions 3D NPC actions and save output automatically
+# Original function 'OnNPC3DSaveNPCSet', copied and modified for automatic saving.
+# Works fine as single action (new button: OnNPC3DSaveNPCSet_auto_save) line 130
+
+    def OnNPC3DSaveNPCSet_auto_save(self, event=None): 
+        """Automatically save the NPC set to a default file path without user dialog."""
+
+        from PYMEcs.IO.NPC import save_NPC_set
+
+        pipeline = self.visFr.pipeline
+
+        # Get the MINFLUX timestamp from the pipeline metadata, if available
+        MINFLUXts = pipeline.mdh.get('MINFLUX.TimeStamp')
+        # Construct the default filename using the timestamp if present
+        if MINFLUXts is not None:
+            defaultFile = f"{MINFLUXts}-NPCset.pickle"
+        else:
+            defaultFile = "NPCset.pickle"
+        # Save in the current directory (same as the session file
+        base_dir = os.getcwd()
+        save_path = os.path.join(base_dir, defaultFile)
+        # Find the current NPC set in the pipeline
+        npcs = findNPCset(pipeline)
+        print(f"Attempting to automatically save NPC Set to: {save_path}.")
+        # If no NPC set is found, warn and exit
+        if npcs is None:
+            warn('no valid NPC Set found, therefore cannot save...')
+            return
+        # Save the NPC set to the constructed path
+        save_NPC_set(npcs, save_path)
+
+# --- End of Alex B addition ---
+
     def OnNPC3DGeometryStats(self,event=None):
         pipeline = self.visFr.pipeline
         npcs = findNPCset(pipeline)
@@ -536,6 +869,54 @@ class NPCcalc():
         plt.title("%d NPCs, mean diam %.0f nm, mean ring spacing %.0f nm" % (heights.size,diams.mean(),heights.mean()), fontsize=11)
         plt.ylim(0,150)
 
+# --- Alex B addition ---
+# Origimnal function 'OnNPC3DGeometryStats', copied and modified for automatic saving.
+
+    def OnNPC3DGeometryStats_auto_save(self,event=None):
+        pipeline = self.visFr.pipeline
+        npcs = findNPCset(pipeline)
+        if npcs is None:
+            warn('no valid NPC measurements found, thus no geometry info available...')
+            return
+        import pandas as pd
+
+        # --- Alex B addition ---
+        # We define a few variables used for automatic saving later
+        
+        base_dir = os.getcwd() # Get the working directory
+        MINFLUXts = pipeline.mdh.get('MINFLUX.TimeStamp') # Get the timestamp and use it for naming the file to save
+        if MINFLUXts is not None:
+            geom_stats_fig = f"{MINFLUXts}-Geom_stats.png"
+        else:
+            geom_stats_fig = "Geom_stats.png"
+        geom_stats_fig_save_path = os.path.join(base_dir, geom_stats_fig) # Save path for csv file
+        
+        # --- End of Alex B addition ---
+
+        from PYMEcs.misc.matplotlib import boxswarmplot, figuredefaults
+        diams = np.asarray(npcs.diam())
+        heights = np.asarray(npcs.height())
+        geo_df = pd.DataFrame.from_dict(dict(diameter=diams,height=heights))
+        figuredefaults(fontsize=12)
+        plt.figure()
+        from scipy.stats import iqr
+        iqrh = iqr(heights)
+        sdh = np.std(heights)
+        iqrd = iqr(diams)
+        sdd = np.std(diams)
+        bp = boxswarmplot(geo_df,width=0.35,annotate_medians=True,annotate_means=True,showmeans=True,swarmalpha=0.4,swarmsize=4)
+        plt.text(0.0,50,"IQR %.1f\nSD %.1f" % (iqrd,sdd), horizontalalignment='center')
+        plt.text(1.0,120,"IQR %.1f\nSD %.1f" % (iqrh,sdh), horizontalalignment='center')
+        # res = plt.boxplot([diams,heights],showmeans=True,labels=['diameter','height'])
+        plt.title("%d NPCs, mean diam %.0f nm, mean ring spacing %.0f nm" % (heights.size,diams.mean(),heights.mean()), fontsize=11)
+        plt.ylim(0,150)
+        # --- Alex B addition ---
+        # Save the geometry stats plot
+        plt.savefig(geom_stats_fig_save_path)
+        print(f"Geometry stats plot automatically saved as: {geom_stats_fig_save_path}")
+
+# --- End of Alex B addition ---
+
     def OnNPC3DTemplateFitStats(self,event=None):
         pipeline = self.visFr.pipeline
         npcs = findNPCset(pipeline)
@@ -552,7 +933,48 @@ class NPCcalc():
         plt.figure()
         bp = boxswarmplot(ll_df,width=0.35,annotate_medians=True,annotate_means=True,showmeans=True,swarmalpha=0.6,swarmsize=5)
         plt.title("NPC neg-log-likelihood per localization")
+
+# --- Alex B addition ---
+# Original function 'OnNPC3DTemplateFitStats', copied and modified for automatic saving.
+
+    def OnNPC3DTemplateFitStats_auto_save(self,event=None):
+        pipeline = self.visFr.pipeline
+        npcs = findNPCset(pipeline)
+        if npcs is None:
+            warn('no valid NPC measurements found, thus no geometry info available...')
+            return
+        import pandas as pd
+
+        # --- Alex B addition ---
+        # We define a few variables used for automatic saving later
         
+        base_dir = os.getcwd() # Get the working directory
+        MINFLUXts = pipeline.mdh.get('MINFLUX.TimeStamp') # Get the timestamp and use it for naming the file to save
+        if MINFLUXts is not None:
+            template_fit_stats_fig = f"{MINFLUXts}-Template_fit_stats.png"
+        else:
+            template_fit_stats_fig = "Template_fit_stats.png"
+        template_fit_stats_fig_save_path = os.path.join(base_dir, template_fit_stats_fig) # Save path for csv file
+
+        # --- End of Alex B addition ---
+
+        from PYMEcs.misc.matplotlib import boxswarmplot, figuredefaults
+        id = [npc.objectID for npc in npcs.npcs] # not used right now
+        llperloc = [npc.opt_result.fun/npc.npts.shape[0] for npc in npcs.npcs]
+        ll_df = pd.DataFrame.from_dict(dict(llperloc=llperloc))
+        figuredefaults(fontsize=12)
+        plt.figure()
+        bp = boxswarmplot(ll_df,width=0.35,annotate_medians=True,annotate_means=True,showmeans=True,swarmalpha=0.6,swarmsize=5)
+        plt.title("NPC neg-log-likelihood per localization")
+
+        # --- Alex B addition ---
+        # Save the template fit stats plot
+        plt.savefig(template_fit_stats_fig_save_path)
+        print(f"Template fit stats plot automatically saved as: {template_fit_stats_fig_save_path}")
+
+# --- End of Alex B addition ---
+
+
     def OnSelectNPCsByMask(self,event=None):
         from PYME.DSView import dsviewer
 
