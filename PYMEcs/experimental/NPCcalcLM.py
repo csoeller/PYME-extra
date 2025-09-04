@@ -125,18 +125,7 @@ class NPCcalc():
         visFr.AddMenuItem('Experimental>NPC3D', 'Add NPC Gallery', self.On3DNPCaddGallery)
         visFr.AddMenuItem('Experimental>NPC3D', 'Plot NPC by-segment data', self.OnNPC3DPlotBySegments)
         visFr.AddMenuItem('Experimental>NPC3D', 'Save NPC by-segment data', self.OnNPC3DSaveBySegments)
-
-        # --- Alex B addition for auto-saving NPC sets ---
-        # TODO: When all are working, replace the items in 'OnNPC3DRunAllActions'
-        self.visFr.AddMenuItem('Experimental>NPC3D', "Auto-save Analyse 3D NPCs by ID", self.OnAnalyse3DNPCsByID_auto_save)
-        self.visFr.AddMenuItem('Experimental>NPC3D', "Auto-save NPC Set", self.OnNPC3DSaveNPCSet_auto_save)
-        self.visFr.AddMenuItem('Experimental>NPC3D', "Auto-save Measurements Only (csv, no fit info saved)", self.OnNPC3DSaveMeasurements_auto_save)    
-        self.visFr.AddMenuItem('Experimental>NPC3D', "Auto-save NPC geometry statistics",self.OnNPC3DGeometryStats_auto_save)
-        self.visFr.AddMenuItem('Experimental>NPC3D', "Auto-save NPC template fit statistics",self.OnNPC3DTemplateFitStats_auto_save)
-        self.visFr.AddMenuItem('Experimental>NPC3D', "Auto-save NPC by-segment data",self.OnNPC3DSaveBySegments_auto_save)
-        self.visFr.AddMenuItem('Experimental>NPC3D', "Auto-save NPC by-segment plot",self.OnNPC3DPlotBySegments_auto_save)
-
-        # --- End of Alex B addition for auto-saving NPC sets ---
+        visFr.AddMenuItem('Experimental>NPC3D', 'Analysis 3D NPCs by ID and save all outputs', self.OnNPC3DRunAllActions) # Add combined MenuItem for all requested actions
 
 
         self._npcsettings = None
@@ -144,26 +133,23 @@ class NPCcalc():
         self.segment_layer = None
     
         # --- Alex B addition test for running several action at once ---
-        # Add combined MenuItem for all requested actions
-        visFr.AddMenuItem('Experimental>NPC3D', 'Save All NPC 3D Analysis Actions', self.OnNPC3DRunAllActions)
     def OnNPC3DRunAllActions(self, event=None):
         """Performs all key NPC 3D analysis actions in sequence."""
+        # Analyse NPC by mask and auto-save
+        self.OnAnalyse3DNPCsByID_auto_save()
         # Save NPC Set with full fit analysis
-        self.OnNPC3DSaveNPCSet()
+        self.OnNPC3DSaveNPCSet_auto_save()
         # Save Measurements Only (csv, no fit info saved)
-        self.OnNPC3DSaveMeasurements()
+        self.OnNPC3DSaveMeasurements_auto_save()
         # Show NPC geometry statistics
-        self.OnNPC3DGeometryStats()
+        self.OnNPC3DGeometryStats_auto_save()
         # Show NPC template fit statistics
-        self.OnNPC3DTemplateFitStats()
+        self.OnNPC3DTemplateFitStats_auto_save()
         # Plot NPC by-segment data
-        self.OnNPC3DPlotBySegments()
+        self.OnNPC3DPlotBySegments_auto_save()
         # Save NPC by-segment data
-        self.OnNPC3DSaveBySegments()
-        
+        self.OnNPC3DSaveBySegments_auto_save()
         # --- End of Alex B addition test for running several action at once ---
-
-
 
     @property
     def NPCsettings(self):
