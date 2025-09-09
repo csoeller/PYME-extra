@@ -798,6 +798,40 @@ class NPCcalc():
             return
         
         save_NPC_set(npcs,fdialog.GetPath())
+        
+# --- Alex B addition ---
+# AIM: perform all actions 3D NPC actions and save output automatically
+# Original function 'OnNPC3DSaveNPCSet', copied and modified for automatic saving.
+# Works fine as single action (new button: OnNPC3DSaveNPCSet_auto_save) line 130
+
+    def OnNPC3DSaveNPCSet_auto_save(self, event=None): 
+        """Automatically save the NPC set to a default file path without user dialog."""
+
+        from PYMEcs.IO.NPC import save_NPC_set
+
+        pipeline = self.visFr.pipeline
+
+        # Get the MINFLUX timestamp from the pipeline metadata, if available
+        MINFLUXts = pipeline.mdh.get('MINFLUX.TimeStamp')
+        # Construct the default filename using the timestamp if present
+        if MINFLUXts is not None:
+            defaultFile = f"{MINFLUXts}-NPCset.pickle"
+        else:
+            defaultFile = "NPCset.pickle"
+        # Save in the current directory (same as the session file
+        base_dir = os.getcwd()
+        save_path = os.path.join(base_dir, defaultFile)
+        # Find the current NPC set in the pipeline
+        npcs = findNPCset(pipeline)
+        print(f"Attempting to automatically save NPC Set to: {save_path}.")
+        # If no NPC set is found, warn and exit
+        if npcs is None:
+            warn('no valid NPC Set found, therefore cannot save...')
+            return
+        # Save the NPC set to the constructed path
+        save_NPC_set(npcs, save_path)
+
+# --- End of Alex B addition ---
 
     def OnNPC3DSaveGeometryStats(self,event=None):
         pipeline = self.visFr.pipeline
