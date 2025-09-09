@@ -804,7 +804,7 @@ class NPCcalc():
 # Original function 'OnNPC3DSaveNPCSet', copied and modified for automatic saving.
 # Works fine as single action (new button: OnNPC3DSaveNPCSet_auto_save) line 130
 
-    def OnNPC3DSaveNPCSet_auto_save(self, event=None): 
+    def OnNPC3DSaveNPCSet_auto_save(self, event=None, save_dir=None): 
         """Automatically save the NPC set to a default file path without user dialog."""
 
         from PYMEcs.IO.NPC import save_NPC_set
@@ -819,8 +819,9 @@ class NPCcalc():
         else:
             defaultFile = "NPCset.pickle"
         # Save in the current directory (same as the session file
-        base_dir = os.getcwd()
-        save_path = os.path.join(base_dir, defaultFile)
+        if save_dir is None:
+            save_dir = os.getcwd()
+        save_path = os.path.join(save_dir, defaultFile)
         # Find the current NPC set in the pipeline
         npcs = findNPCset(pipeline)
         print(f"Attempting to automatically save NPC Set to: {save_path}.")
