@@ -150,6 +150,7 @@ class NPCcalc():
         self.OnNPC3DTemplateFitStats_auto_save(save_dir=save_dir)
         self.OnNPC3DPlotBySegments_auto_save(save_dir=save_dir)
         self.OnNPC3DSaveBySegments_auto_save(save_dir=save_dir)
+        self.OnNPC3DSaveGeometryStats_auto_save(save_dir=save_dir)
         # --- End of Alex B addition test for running several action at once ---
 
     @property
@@ -852,6 +853,37 @@ class NPCcalc():
             fpath = fdialog.GetPath()
  
         geo_df.to_csv(fpath,index=False)
+        
+# --- Alex B addition ---
+# Origimnal function 'OnNPC3DSaveGeometryStats', copied and modified for automatic saving.
+
+    def OnNPC3DSaveGeometryStats_auto_save(self,event=None, save_dir=None):
+        pipeline = self.visFr.pipeline
+        npcs = findNPCset(pipeline)
+        if npcs is None:
+            warn('no valid NPC measurements found, thus no geometry info available...')
+            return
+        diams = np.asarray(npcs.diam())
+        heights = np.asarray(npcs.height())
+        import pandas as pd
+        geo_df = pd.DataFrame.from_dict(dict(diameter=diams,height=heights))
+        # with wx.FileDialog(self.visFr, 'Save NPC measurements as ...',
+        #                         wildcard='CSV (*.csv)|*.csv',
+        #                         style=wx.FD_SAVE) as fdialog:
+        #     if fdialog.ShowModal() != wx.ID_OK:
+        #         return
+        #     fpath = fdialog.GetPath()
+        if save_dir is None:
+            save_dir = os.getcwd()
+        MINFLUXts = pipeline.mdh.get('MINFLUX.TimeStamp') # Get the timestamp and use it for naming the file to save
+        if MINFLUXts is not None:
+            geo_stats_csv = f"{MINFLUXts}-NPC_geometry_stats.csv"
+        else:
+            geo_stats_csv = "NPC_geometry_stats.csv"
+        geo_df.to_csv(os.path.join(save_dir, geo_stats_csv), index=False)
+
+# --- End of Alex B addition ---
+        
      
     def OnNPC3DGeometryStats(self,event=None):
         pipeline = self.visFr.pipeline
