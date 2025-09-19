@@ -1087,8 +1087,15 @@ from scipy.interpolate import CubicSpline
 # the bins need to be chosen in a robust manner - FIX
 def smoothed_site_func(t,coord_site,statistic='mean',bins=75,sgwindow_length=10,sgpolyorder=6):
     csitem, tbins, binnum = binned_statistic(t,coord_site,statistic=statistic,bins=bins)
+    # replace NaNs with nearest neighbour values
+    nanmask = np.isnan(csitem)
+    csitem[nanmask] = np.interp(np.flatnonzero(nanmask), np.flatnonzero(~nanmask), csitem[~nanmask])
+    # now we should have no NaNs left
+    if np.any(np.isnan(csitem)):
+        warn("csitem still contains NaNs, should not happen")
+    filtered = savgol_filter(csitem,10,6)
     tmid = 0.5*(tbins[0:-1]+tbins[1:])
-    return CubicSpline(tmid,savgol_filter(csitem,10,6))
+    return CubicSpline(tmid,filtered)
 
 from scipy.optimize import curve_fit
 def gfit_func(x, a0, a1, a2):
