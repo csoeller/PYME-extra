@@ -1255,24 +1255,6 @@ class MINFLUXanalyser():
             ax.legend()
             ax.set_xlabel('error %s (nm)' % axisname)
             ax.set_ylabel('#')
-
-        def plot_stats(ds,ax,errdict,sdmax=None):
-            df = site_stats(ds,errdict,objectID='siteID')
-            kwargs = dict(swarmsize=3,width=0.2,annotate_means=True,annotate_medians=True,swarmalpha=0.4)
-            boxswarmplot(df,ax=ax,**kwargs)
-            ax.set_ylim(0,sdmax)
-            ax.set_ylabel('precision [nm]')
-
-        import pandas as pd
-        def site_stats(ds,sitedict,objectID='siteID'):    
-            uids, idx = np.unique(ds[objectID],return_index=True)
-            sitestats = {}
-            for key in sitedict:
-                prop = sitedict[key]
-                sitestats[key] = ds[prop][idx]
-            df = pd.DataFrame.from_dict(sitestats)
-
-            return df
   
         fig, axs = plt.subplots(2, 2,num='origami error estimates %d' % self.origamiErrorFignum)
         plot_errs(axs[0, 0], 'x', ['error_x_ori','error_x_nc','error_x'])
@@ -1293,24 +1275,11 @@ class MINFLUXanalyser():
         ax.set_ylabel('MBM corr [nm]')
         ax.legend()
         plt.tight_layout()
-
-        uids = np.unique(p['siteID'])
+        
+        uids = np.unique(p['siteID']) # currently siteID is hard coded - make config option
+        from PYMEcs.Analysis.MINFLUX import plotsitestats
         if uids.size < self.analysisSettings.origamiSiteMaxNum:
-            fig, axs = plt.subplots(2, 2,num='origami site stats %d' % self.origamiErrorFignum)
-            plot_stats(p,axs[0, 0],dict(xd_sd_corr='error_x',x_sd='error_x_nc',x_sd_trace='error_x_ori'),
-                       sdmax=self.analysisSettings.origamiErrorLimit)
-            plot_stats(p,axs[0, 1],dict(yd_sd_corr='error_y',y_sd='error_y_nc',y_sd_trace='error_y_ori'),
-                       sdmax=self.analysisSettings.origamiErrorLimit)
-            if p.mdh.get('MINFLUX.Is3D'):
-                plot_stats(p,axs[1, 0],dict(zd_sd_corr='error_z',z_sd='error_z_nc',z_sd_trace='error_z_ori'),
-                           sdmax=self.analysisSettings.origamiErrorLimit)
-
-            all_axes = dict(xd_sd_corr='error_x',yd_sd_corr='error_y')
-            if p.mdh.get('MINFLUX.Is3D'):
-                all_axes['zd_sd_corr'] = 'error_z'
-            plot_stats(p,axs[1, 1],all_axes,sdmax=self.analysisSettings.origamiErrorLimit)
-            plt.tight_layout()
-            
+            plotsitestats(p,fignum=('origami site stats %d' % self.origamiErrorFignum))
         self.origamiErrorFignum += 1
 
     def OnMINFLUXColour(self,event):
