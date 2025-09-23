@@ -222,7 +222,7 @@ def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', wintitle=None, 
 
 def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True, return_means=False,
                           return_data=False, psu=None, bins=15, bigc_thresh=50, **kwargs):
-    if not ds in pipeline.dataSources:
+    if ds not in pipeline.dataSources:
         warn('no data source named "%s" - check recipe and ensure this is MINFLUX data' % ds)
         return
     curds = pipeline.selectedDataSourceKey
@@ -611,6 +611,9 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from clumpIndex)", self.OnAddMINFLUXTracksCI)
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from tid)", self.OnAddMINFLUXTracksTid)
         visFr.AddMenuItem('MINFLUX>Colour', "Plot colour stats", self.OnPlotColourStats)
+        # --- Alex B test addition ---
+        visFr.AddMenuItem('MINFLUX>Paraflux', "Run Paraflux Analysis", self.OnRunParafluxAnalysis)
+        # --- End of Alex B test addition ---
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -623,6 +626,174 @@ class MINFLUXanalyser():
             for r in minfluxRecipes:
                 ID = visFr.AddMenuItem('MINFLUX>Recipes', r, self.OnLoadCustom).GetId()
                 self.minfluxRIDs[ID] = minfluxRecipes[r]
+
+    # --- Alex B test addition funciton ---
+    def OnRunParafluxAnalysis(self, event):
+        import os
+        from pathlib import Path
+
+        import numpy as np
+        import pandas as pd
+        import wx
+        import zarr
+
+        # Add if statement to check if pipeline is available
+        # Access the pipeline from the visFr object and get the timestamp (used for saving)
+        pipeline = self.visFr.pipeline
+        timestamp = pipeline.mdh.get('MINFLUX.TimeStamp')
+        # TODO: Get the zarr.zip file path from the pipeline if possible
+        # For now, we will prompt the user to select the file
+
+        # =====================================================
+        # --- Step 1: Select and load Zarr.zip file ---
+        # =====================================================
+        if store_path is None:
+            with wx.FileDialog(
+                self.visFr,
+                'Choose a Zarr.zip to open ...',
+                wildcard='ZIP (*.zip)|*.zip',
+                style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST
+                ) as fdialog:
+                if fdialog.ShowModal() != wx.ID_OK:
+                    return
+                store_path = Path(fdialog.GetPath())
+
+        # --- Open the archive ---
+        # defaultDir = str(Path(store_path).parent)
+        # store = zarr.storage.ZipStore(str(store_path), mode='r')
+        # archz = zarr.open(store, mode='r')
+        
+        # Load mfx data
+        mfxdata = archz['mfx'][:]
+
+        # =====================================================
+        # --- Step 2: Convert to DataFrame ---
+        # =====================================================
+        df_mfx = pd.DataFrame()
+        for name in mfxdata.dtype.names:
+            col = mfxdata[name]
+            if col.ndim == 1:
+                df_mfx[name] = col
+            else:
+                n_dim = col.shape[1]
+                expanded = pd.DataFrame(col.tolist(),
+                                        index=df_mfx.index if not df_mfx.empty else None)
+                if name in ['loc', 'lnc']:
+                    labels = ["x", "y", "z"]
+                    expanded.columns = [f"{name}_{labels[i]}" for i in range(n_dim)]
+                elif name == 'dcr':
+                    expanded.columns = [f"{name}_{i+1}" for i in range(n_dim)]
+                else:
+                    expanded.columns = [f"{name}_{i}" for i in range(n_dim)]
+                df_mfx = pd.concat([df_mfx, expanded], axis=1)
+
+        # =====================================================
+        # --- Step 3: Run analysis pipeline ---
+        # =====================================================
+        failure_map = {
+            1: "Valid final", 2: "Valid not final",
+            4: "Derived iteration", 5: "Reserved",
+            6: "CFR failure", 8: "No signal",
+            9: "DAC out of range", 11: "Background measurement"
+        }
+        pair_mapping = {1: 0, 2: 1, 3: 1, 4: 2, 5: 2, 6: 3, 7: 3, 8: 4, 9: 4}
+        pairs = [(0,1), (1,2), (2,3), (3,4), (4,5),
+                (5,6), (6,7), (7,8), (8,9)]
+
+        def build_valid_tid_table(df):
+            vld = df[df['vld']].groupby('itr')['tid'].apply(lambda x: list(set(x))).reset_index()
+            vld['vld_loc_counts'] = vld['tid'].apply(len)
+            vld['failed_loc'] = vld['vld_loc_counts'].shift(1) - vld['vld_loc_counts']
+            vld['Axis'] = np.where(vld['itr'] % 2 == 0, 'x,y', 'z')
+            vld.insert(1, 'Axis', vld.pop('Axis'))
+            vld['Cumulative sum of failed_loc'] = vld['failed_loc'].cumsum()
+            return vld
+
+        def compute_passed_itr(vld):
+            initial_count = vld['vld_loc_counts'].iloc[0]
+            vld['passed_itr %'] = (vld['vld_loc_counts'] * 100 / initial_count).round(1)
+            return vld
+
+        def compute_failed_sums(vld, pair_mapping):
+            vld['pair_group'] = vld['itr'].map(pair_mapping)
+            failed_sum_map = vld.groupby('pair_group')['failed_loc'].transform('sum')
+            vld['failed_sum'] = np.where(
+                vld['pair_group'].notna() & (vld['itr'] % 2 == 1),
+                failed_sum_map,
+                np.nan
+            )
+            vld.drop(columns='pair_group', inplace=True)
+            initial_count = vld['vld_loc_counts'].iloc[0]
+            vld['failed %'] = (vld['failed_sum'] / initial_count * 100).round(1)
+            return vld
+
+        def analyze_failures(vld, df, itr_from, itr_to, failure_map):
+            tids_from = set(vld.loc[vld['itr'] == itr_from, 'tid'].values[0])
+            tids_to = set(vld.loc[vld['itr'] == itr_to, 'tid'].values[0])
+            failed_tids = tids_from - tids_to
+            failed_df = df[df['tid'].isin(failed_tids) & (df['itr'] == itr_to)]
+            counts = failed_df['sta'].value_counts().rename_axis("sta").reset_index(name="count")
+            counts["reason"] = counts["sta"].map(failure_map).fillna("Other")
+            counts.insert(0, "itr", itr_to)
+            return counts
+
+        def compute_failure_pivot(vld, df, pairs, failure_map):
+            failure_results = pd.concat(
+                [analyze_failures(vld, df, i_from, i_to, failure_map) for i_from, i_to in pairs],
+                ignore_index=True
+            )
+            failure_pivot = failure_results.pivot_table(
+                index="itr", columns="reason", values="count", fill_value=0
+            ).reset_index()
+            return vld.merge(failure_pivot, on="itr", how="left")
+
+        def compute_cfr_and_no_signal(vld):
+            initial_count = vld['vld_loc_counts'].iloc[0]
+            vld['CFR failure %'] = np.where(
+                vld['itr'].isin([4, 6]),
+                (vld['CFR failure'] / initial_count * 100).round(1),
+                np.nan
+            )
+            no_signal_groups = {5: [4, 5], 7: [6, 7]}
+            no_signal_pct = {}
+            for target_itr, group in no_signal_groups.items():
+                total_no_signal = vld.loc[vld['itr'].isin(group), 'No signal'].sum()
+                no_signal_pct[target_itr] = (total_no_signal / initial_count * 100).round(1)
+            vld['No signal %'] = vld['itr'].map(no_signal_pct)
+            return vld
+
+        # Run pipeline
+        vld = build_valid_tid_table(df_mfx)
+        vld = compute_passed_itr(vld)
+        vld = compute_failed_sums(vld, pair_mapping)
+        vld = compute_failure_pivot(vld, df_mfx, pairs, failure_map)
+        vld = compute_cfr_and_no_signal(vld)
+
+        # =====================================================
+        # --- Step 4: Save results ---
+        # =====================================================
+        vld_full = vld.drop(columns='tid', errors='ignore')
+        default_dir = str(store_path.parent)
+        full_path = os.path.join(default_dir, "paraflux_stats_full.csv")
+        clean_path = os.path.join(default_dir, "paraflux_stats_clean.csv")
+
+        vld_full.to_csv(full_path, index=False)
+
+        keep_cols = ["itr", "Axis", "vld_loc_counts",
+                    "failed_loc", "failed %", "CFR failure %", "No signal %"]
+        vld_clean = vld_full[keep_cols]
+        vld_clean.to_csv(clean_path, index=False)
+
+        print(f"✔ Saved full results to: {full_path}")
+        print(f"✔ Saved cleaned results to: {clean_path}")
+
+        # =====================================================
+        # --- Step 5: Return results ---
+        # =====================================================
+        return vld
+
+    # --- end of Alex B addition ---
+
 
     def OnClumpScatterPosPlot(self,event):
         from scipy.stats import binned_statistic
