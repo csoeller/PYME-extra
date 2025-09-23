@@ -4,6 +4,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import wx
+import zarr
 
 logger = logging.getLogger(__file__)
 
@@ -635,33 +636,40 @@ class MINFLUXanalyser():
         import numpy as np
         import pandas as pd
         import wx
-        import zarr
-
-        # Add if statement to check if pipeline is available
-        # Access the pipeline from the visFr object and get the timestamp (used for saving)
-        pipeline = self.visFr.pipeline
-        timestamp = pipeline.mdh.get('MINFLUX.TimeStamp')
-        # TODO: Get the zarr.zip file path from the pipeline if possible
-        # For now, we will prompt the user to select the file
 
         # =====================================================
         # --- Step 1: Select and load Zarr.zip file ---
         # =====================================================
+        # Access the pipeline from the visFr object
+        pipeline = self.visFr.pipeline
+        
+        # Check for pipeline existence
+        if pipeline is None:
+            Error(self.visFr, "No active pipeline found. Please load a MINFLUX dataset first.")
+            return
+        
+        # Try to get the FitResults path from the pipeline's datasources
+        datasources = pipeline._get_session_datasources()
+        store_path = datasources.get('FitResults')
+        
+        # Fallback to file dialog if no FitResults path is found
         if store_path is None:
+            print("FitResults path not found. Asking user to select a Zarr.zip file.")
             with wx.FileDialog(
                 self.visFr,
-                'Choose a Zarr.zip to open ...',
+                'Select a Zarr.zip to open ...',
                 wildcard='ZIP (*.zip)|*.zip',
                 style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST
                 ) as fdialog:
                 if fdialog.ShowModal() != wx.ID_OK:
                     return
                 store_path = Path(fdialog.GetPath())
-
-        # --- Open the archive ---
-        # defaultDir = str(Path(store_path).parent)
-        # store = zarr.storage.ZipStore(str(store_path), mode='r')
-        # archz = zarr.open(store, mode='r')
+        else:
+            store_path = Path(store_path)
+        
+        # Open the Zarr file from .zip
+        store = zarr.storage.ZipStore(str(store_path), mode='r')
+        archz = zarr.open(store, mode='r')
         
         # Load mfx data
         mfxdata = archz['mfx'][:]
@@ -772,10 +780,18 @@ class MINFLUXanalyser():
         # =====================================================
         # --- Step 4: Save results ---
         # =====================================================
+        
+        # Get the timestamp to append to the filename
+        try:
+            timestamp = pipeline.mdh.get('MINFLUX.TimeStamp')
+        except Exception:
+            print("No timestamp found in metadata, saving as default.")
+            timestamp = "default"
+
         vld_full = vld.drop(columns='tid', errors='ignore')
         default_dir = str(store_path.parent)
-        full_path = os.path.join(default_dir, "paraflux_stats_full.csv")
-        clean_path = os.path.join(default_dir, "paraflux_stats_clean.csv")
+        full_path = os.path.join(default_dir, f"paraflux_stats_full_{timestamp}.csv")
+        clean_path = os.path.join(default_dir, f"paraflux_stats_clean_{timestamp}.csv")
 
         vld_full.to_csv(full_path, index=False)
 
