@@ -628,13 +628,13 @@ class MINFLUXanalyser():
                 ID = visFr.AddMenuItem('MINFLUX>Recipes', r, self.OnLoadCustom).GetId()
                 self.minfluxRIDs[ID] = minfluxRecipes[r]
 
-# --- Alex B test addition function ---
+# --- Alex B addition function to save and plot ITR stats (Paraflux like) ---
     def OnRunParafluxAnalysis(self, event):
         from pathlib import Path
 
-        # =====================================================
-        # --- Step 1: Select and load Zarr.zip file ---
-        # =====================================================
+        # ======================================================================================
+        # --- Select, load Zarr.zip file, convert into DataFrame, Run the analysis functions ---
+        # ======================================================================================
         pipeline = self.visFr.pipeline # Get the pipeline from the GUI
         
         if pipeline is None:
@@ -692,21 +692,23 @@ class MINFLUXanalyser():
         vld = self.compute_vld_stats(df_mfx, failure_map, pipeline, store_path)
         return vld
 
-    # ==============================================================
+    # ==================================================
+    # --- Analysis functions ( Paraflux-like) ---
+    # ==================================================
 
-    # Creates a df with valid and failed localizations per iteration
+    # Create a df with list of vld tids per iteration + additional basic stats
     def build_valid_df(self, df_mfx):
-        if not isinstance(df_mfx, pd.DataFrame):
+        if not isinstance(df_mfx, pd.DataFrame): # Convert to DataFrame if input is structured array
             df = pd.DataFrame(df_mfx)
         else:
             df = df_mfx.copy()
-        df_valid = df[df['vld']]
+        df_valid = df[df['vld']] # Select only valid localizations
         vld_itr = df_valid.groupby('itr')['tid'].apply(lambda x: list(set(x))).reset_index() # Get list of unique tids per iteration
-        vld_itr['Axis'] = np.where(vld_itr['itr'] % 2 == 0, 'x,y', 'z') # Define axis of each iteration 
-        vld_itr['vld loc count'] = vld_itr['tid'].apply(len)
+        vld_itr['Axis'] = np.where(vld_itr['itr'] % 2 == 0, 'x,y', 'z') # Add a col with axis of each iteration 
+        vld_itr['vld loc count'] = vld_itr['tid'].apply(len) # Count valid locs per iteration
         vld_itr['failed loc count'] = vld_itr['vld loc count'].shift(1, fill_value=vld_itr['vld loc count'].iloc[0]) - vld_itr['vld loc count'] # Calculate failed loc count per iteration
         vld_itr.loc[0, 'failed loc count'] = 0 # Set failed loc count of first iteration to 0 (instead of NaN)
-        vld_itr['failed loc cum sum'] = vld_itr['failed loc count'].cumsum()
+        vld_itr['failed loc cum sum'] = vld_itr['failed loc count'].cumsum() # Cumulative sum of failed locs
         return vld_itr
 
     # Compute percentages of passed and failed localizations (from build_valid_df)
@@ -721,38 +723,44 @@ class MINFLUXanalyser():
         vld_itr['failed cum sum %'] = vld_itr['failed % per itr'].cumsum().round(1)
         return vld_itr
 
-    # Analyze failures between iterations and categorize them based on failure_map
+    # Analyze failures between consecutive iterations and categorize them based on failure_map (found on wiki from Abberior)
     def analyze_failures(self, vld_itr, df_mfx, failure_map):
         def analyze_failures_single_steps(vld_itr, df, itr_from, itr_to, failure_map):
             tids_from = set(vld_itr.loc[vld_itr['itr'] == itr_from, 'tid'].iloc[0]) # Select valid tids of the previous iteration
             tids_to   = set(vld_itr.loc[vld_itr['itr'] == itr_to, 'tid'].iloc[0]) # Select valid tids of the current iteration
             failed_tids = tids_from - tids_to # Determine tids that failed in the current iteration
-            failed_df = df[df['tid'].isin(failed_tids) & (df['itr'] == itr_to)]
-            counts = failed_df['sta'].value_counts().rename_axis("sta").reset_index(name="count")
-            counts["reason"] = counts["sta"].map(failure_map).fillna("Other")
-            counts.insert(0, "itr", itr_to)
+            failed_df = df[df['tid'].isin(failed_tids) & (df['itr'] == itr_to)] # Create a df with only failed tids in the current iteration
+            counts = failed_df['sta'].value_counts().rename_axis("sta").reset_index(name="count") # Count failure reasons
+            counts["reason"] = counts["sta"].map(failure_map).fillna("Other") # Map failure reasons using failure_map
+            counts.insert(0, "itr", itr_to) # Add iteration column
             return counts
 
-        pairs = [(i, i+1) for i in range(vld_itr['itr'].max())]
+        pairs = [(i, i+1) for i in range(vld_itr['itr'].max())] # Create pairs of consecutive iterations
+        # Analyze failures for each pair and concatenate results
         failure_results = pd.concat(
             [analyze_failures_single_steps(vld_itr, df_mfx, i_from, i_to, failure_map) for i_from, i_to in pairs],
             ignore_index=True
-        )
-        failure_pivot = failure_results.pivot_table(
+        ) 
+        # Pivot the results to have failure reasons as columns
+        failure_pivot = failure_results.pivot_table( 
             index="itr", columns="reason", values="count", fill_value=0
-        ).reset_index()
+        ).reset_index() 
         return vld_itr.merge(failure_pivot, on="itr", how="left")
 
     # Compute percentages for failure reasons
     def add_failure_metrics(self, vld_itr, initial_count):
-        cfr_map = {5: 4, 7: 6}
-        vld_itr['CFR failure %'] = np.nan
+        cfr_map = {5: 4, 7: 6} #map ITR where CFR failures occurs
+        vld_itr['CFR failure %'] = np.nan # Initialize column with NaNs
+        # Calculate CFR failure percentages based on cfr_map
         for target_itr, source_itr in cfr_map.items():
-            if not vld_itr.loc[vld_itr['itr'] == source_itr, 'CFR failure'].empty:
-                val = vld_itr.loc[vld_itr['itr'] == source_itr, 'CFR failure'].values[0]
-                vld_itr.loc[vld_itr['itr'] == target_itr, 'CFR failure %'] = (val / initial_count * 100).round(1)
+            if not vld_itr.loc[vld_itr['itr'] == source_itr, 'CFR failure'].empty: # Check if CFR failure data exists for the source iteration
+                val = vld_itr.loc[vld_itr['itr'] == source_itr, 'CFR failure'].values[0] # Get the CFR failure count
+                vld_itr.loc[vld_itr['itr'] == target_itr, 'CFR failure %'] = (val / initial_count * 100).round(1) # Calculate percentage and assign to target iteration
+        # Calculate No signal percentage for each iteration       
         vld_itr['No signal %'] = (vld_itr['No signal'] * 100 / initial_count).round(1)
+        # Define groups of iterations for No signal percentage calculation
         no_signal_groups = {1: [0, 1],3: [2, 3], 5: [4, 5], 7: [6, 7], 9: [8, 9]}
+        # Calculate No signal percentage for each group and map to iterations
         no_signal_pct = {
             target_itr: (vld_itr.loc[vld_itr['itr'].isin(group), 'No signal'].sum() / initial_count * 100).round(1)
             for target_itr, group in no_signal_groups.items()
@@ -771,6 +779,7 @@ class MINFLUXanalyser():
             "Other": "Other",
         }
 
+        # Function to get pretty label based on the label map (substring matching from vld_paraflux col names)
         def pretty_label(colname):
             """Map colname to user-friendly label based on substring rules."""
             for key, label in label_map.items():
@@ -781,36 +790,40 @@ class MINFLUXanalyser():
         # Keep only odd iterations (Paraflux style, i.e., 1, 3, 5, 7, 9)
         vld_paraflux = vld_paraflux[vld_paraflux['itr'] % 2 == 1]
 
+        # Set figure size
+        plt.figure(figsize=(8, 6))
+
         # Base positions
-        r1 = np.arange(len(vld_paraflux)) # Define the position of bars on x-axis
+        r1 = np.arange(len(vld_paraflux)) # Define the positions for each bar
         names = vld_paraflux['itr'] # Names of group
         barWidth = 0.85 # Bar width
-
-        plt.figure(figsize=(8, 6)) # Set figure size
 
         # Colors (extendable if more cols are added)
         colors = ["#0072B2", "#009E73", "#D55E00", "#E69F00", "#CC79A7"]
         
-        bottom = np.zeros(len(vld_paraflux))  # track the stack height
+        # Define the bottom position for stacking
+        bottompos = np.zeros(len(vld_paraflux))
+
+        # Plot each column as a stacked bar
         for i, col in enumerate(vld_paraflux.columns[1:]): # Enumerate over all columns except 'itr'
             vals = vld_paraflux[col].fillna(0) # Get the values for the current column, filling NaNs with 0
-            label = pretty_label(col) # Get the pretty label for the legend
+            labels = pretty_label(col) # Get the pretty label for the legend
             
             plt.bar(
-                r1, vals, bottom=bottom,
+                r1, vals, bottom=bottompos,
                 color=colors[i % len(colors)],
-                edgecolor="white", width=barWidth, label=label
+                edgecolor="white", width=barWidth, label=labels
             ) # Create the bar
 
             # Add labels inside each bar
             for j, v in enumerate(vals):
                 if v > 0:
-                    plt.text(r1[j], bottom[j] + v / 2, f"{v:.1f}%", # Only add text if value > 0
+                    plt.text(r1[j], bottompos[j] + v / 2, f"{v:.1f}%", # Only add text if value > 0
                             ha="center", va="center",
                             color="black",
                             fontsize=9)
 
-            bottom += vals.values
+            bottompos += vals.values
 
         # X/Y labels
         plt.xticks(r1, names)
