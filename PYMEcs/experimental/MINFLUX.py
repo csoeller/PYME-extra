@@ -628,31 +628,22 @@ class MINFLUXanalyser():
                 ID = visFr.AddMenuItem('MINFLUX>Recipes', r, self.OnLoadCustom).GetId()
                 self.minfluxRIDs[ID] = minfluxRecipes[r]
 
-    # --- Alex B test addition funciton ---
+# --- Alex B test addition function ---
     def OnRunParafluxAnalysis(self, event):
-        import os
         from pathlib import Path
-
-        import numpy as np
-        import pandas as pd
-        import wx
 
         # =====================================================
         # --- Step 1: Select and load Zarr.zip file ---
         # =====================================================
-        # Access the pipeline from the visFr object
-        pipeline = self.visFr.pipeline
+        pipeline = self.visFr.pipeline # Get the pipeline from the GUI
         
-        # Check for pipeline existence
         if pipeline is None:
-            Error(self.visFr, "No active pipeline found. Please load a MINFLUX dataset first.")
+            Error(self.visFr, "No data found. Please load a MINFLUX dataset first.")
             return
         
-        # Try to get the FitResults path from the pipeline's datasources
         datasources = pipeline._get_session_datasources()
         store_path = datasources.get('FitResults')
         
-        # Fallback to file dialog if no FitResults path is found
         if store_path is None:
             print("FitResults path not found. Asking user to select a Zarr.zip file.")
             with wx.FileDialog(
@@ -667,16 +658,11 @@ class MINFLUXanalyser():
         else:
             store_path = Path(store_path)
         
-        # Open the Zarr file from .zip
         store = zarr.storage.ZipStore(str(store_path), mode='r')
         archz = zarr.open(store, mode='r')
-        
-        # Load mfx data
         mfxdata = archz['mfx'][:]
 
-        # =====================================================
-        # --- Step 2: Convert to DataFrame ---
-        # =====================================================
+        # Convert structured array (original mfx data) to DataFrame (containing all data from MFX experiment)
         df_mfx = pd.DataFrame()
         for name in mfxdata.dtype.names:
             col = mfxdata[name]
@@ -684,8 +670,7 @@ class MINFLUXanalyser():
                 df_mfx[name] = col
             else:
                 n_dim = col.shape[1]
-                expanded = pd.DataFrame(col.tolist(),
-                                        index=df_mfx.index if not df_mfx.empty else None)
+                expanded = pd.DataFrame(col.tolist(), index=df_mfx.index if not df_mfx.empty else None)
                 if name in ['loc', 'lnc']:
                     labels = ["x", "y", "z"]
                     expanded.columns = [f"{name}_{labels[i]}" for i in range(n_dim)]
@@ -695,120 +680,260 @@ class MINFLUXanalyser():
                     expanded.columns = [f"{name}_{i}" for i in range(n_dim)]
                 df_mfx = pd.concat([df_mfx, expanded], axis=1)
 
-        # =====================================================
-        # --- Step 3: Run analysis pipeline ---
-        # =====================================================
+        # Create failure_map (used to interpret failure reasons in analyze_failures)
         failure_map = {
             1: "Valid final", 2: "Valid not final",
             4: "Derived iteration", 5: "Reserved",
             6: "CFR failure", 8: "No signal",
             9: "DAC out of range", 11: "Background measurement"
         }
-        pair_mapping = {1: 0, 2: 1, 3: 1, 4: 2, 5: 2, 6: 3, 7: 3, 8: 4, 9: 4}
-        pairs = [(0,1), (1,2), (2,3), (3,4), (4,5),
-                (5,6), (6,7), (7,8), (8,9)]
 
-        def build_valid_tid_table(df):
-            vld = df[df['vld']].groupby('itr')['tid'].apply(lambda x: list(set(x))).reset_index()
-            vld['vld_loc_counts'] = vld['tid'].apply(len)
-            vld['failed_loc'] = vld['vld_loc_counts'].shift(1) - vld['vld_loc_counts']
-            vld['Axis'] = np.where(vld['itr'] % 2 == 0, 'x,y', 'z')
-            vld.insert(1, 'Axis', vld.pop('Axis'))
-            vld['Cumulative sum of failed_loc'] = vld['failed_loc'].cumsum()
-            return vld
+        # Run analysis pipeline
+        vld = self.compute_vld_stats(df_mfx, failure_map, pipeline, store_path)
+        return vld
 
-        def compute_passed_itr(vld):
-            initial_count = vld['vld_loc_counts'].iloc[0]
-            vld['passed_itr %'] = (vld['vld_loc_counts'] * 100 / initial_count).round(1)
-            return vld
+    # ==============================================================
 
-        def compute_failed_sums(vld, pair_mapping):
-            vld['pair_group'] = vld['itr'].map(pair_mapping)
-            failed_sum_map = vld.groupby('pair_group')['failed_loc'].transform('sum')
-            vld['failed_sum'] = np.where(
-                vld['pair_group'].notna() & (vld['itr'] % 2 == 1),
-                failed_sum_map,
-                np.nan
-            )
-            vld.drop(columns='pair_group', inplace=True)
-            initial_count = vld['vld_loc_counts'].iloc[0]
-            vld['failed %'] = (vld['failed_sum'] / initial_count * 100).round(1)
-            return vld
+    # Creates a df with valid and failed localizations per iteration
+    def build_valid_df(self, df_mfx):
+        if not isinstance(df_mfx, pd.DataFrame):
+            df = pd.DataFrame(df_mfx)
+        else:
+            df = df_mfx.copy()
+        df_valid = df[df['vld']]
+        vld_itr = df_valid.groupby('itr')['tid'].apply(lambda x: list(set(x))).reset_index() # Get list of unique tids per iteration
+        vld_itr['Axis'] = np.where(vld_itr['itr'] % 2 == 0, 'x,y', 'z') # Define axis of each iteration 
+        vld_itr['vld loc count'] = vld_itr['tid'].apply(len)
+        vld_itr['failed loc count'] = vld_itr['vld loc count'].shift(1, fill_value=vld_itr['vld loc count'].iloc[0]) - vld_itr['vld loc count'] # Calculate failed loc count per iteration
+        vld_itr.loc[0, 'failed loc count'] = 0 # Set failed loc count of first iteration to 0 (instead of NaN)
+        vld_itr['failed loc cum sum'] = vld_itr['failed loc count'].cumsum()
+        return vld_itr
 
-        def analyze_failures(vld, df, itr_from, itr_to, failure_map):
-            tids_from = set(vld.loc[vld['itr'] == itr_from, 'tid'].values[0])
-            tids_to = set(vld.loc[vld['itr'] == itr_to, 'tid'].values[0])
-            failed_tids = tids_from - tids_to
+    # Compute percentages of passed and failed localizations (from build_valid_df)
+    def compute_percentages(self, vld_itr):
+        initial_count = vld_itr['vld loc count'].iloc[0] # Percentage calculations are based on initial count of valid locs
+        vld_itr['passed itr %'] = (vld_itr['vld loc count'] * 100 / initial_count).round(1)
+        vld_itr['failed % per itr'] = (vld_itr['failed loc count'] * 100 / initial_count).round(1)
+        pair_sums = {} # This is done to mimic results from Paraflux
+        for i in range(1, len(vld_itr), 2):
+            pair_sums[i] = vld_itr.loc[i-1:i, 'failed % per itr'].sum().round(1)
+        vld_itr['failed % per itr pairs'] = vld_itr.index.map(pair_sums)
+        vld_itr['failed cum sum %'] = vld_itr['failed % per itr'].cumsum().round(1)
+        return vld_itr
+
+    # Analyze failures between iterations and categorize them based on failure_map
+    def analyze_failures(self, vld_itr, df_mfx, failure_map):
+        def analyze_failures_single_steps(vld_itr, df, itr_from, itr_to, failure_map):
+            tids_from = set(vld_itr.loc[vld_itr['itr'] == itr_from, 'tid'].iloc[0]) # Select valid tids of the previous iteration
+            tids_to   = set(vld_itr.loc[vld_itr['itr'] == itr_to, 'tid'].iloc[0]) # Select valid tids of the current iteration
+            failed_tids = tids_from - tids_to # Determine tids that failed in the current iteration
             failed_df = df[df['tid'].isin(failed_tids) & (df['itr'] == itr_to)]
             counts = failed_df['sta'].value_counts().rename_axis("sta").reset_index(name="count")
             counts["reason"] = counts["sta"].map(failure_map).fillna("Other")
             counts.insert(0, "itr", itr_to)
             return counts
 
-        def compute_failure_pivot(vld, df, pairs, failure_map):
-            failure_results = pd.concat(
-                [analyze_failures(vld, df, i_from, i_to, failure_map) for i_from, i_to in pairs],
-                ignore_index=True
-            )
-            failure_pivot = failure_results.pivot_table(
-                index="itr", columns="reason", values="count", fill_value=0
-            ).reset_index()
-            return vld.merge(failure_pivot, on="itr", how="left")
+        pairs = [(i, i+1) for i in range(vld_itr['itr'].max())]
+        failure_results = pd.concat(
+            [analyze_failures_single_steps(vld_itr, df_mfx, i_from, i_to, failure_map) for i_from, i_to in pairs],
+            ignore_index=True
+        )
+        failure_pivot = failure_results.pivot_table(
+            index="itr", columns="reason", values="count", fill_value=0
+        ).reset_index()
+        return vld_itr.merge(failure_pivot, on="itr", how="left")
 
-        def compute_cfr_and_no_signal(vld):
-            initial_count = vld['vld_loc_counts'].iloc[0]
-            vld['CFR failure %'] = np.where(
-                vld['itr'].isin([4, 6]),
-                (vld['CFR failure'] / initial_count * 100).round(1),
-                np.nan
-            )
-            no_signal_groups = {5: [4, 5], 7: [6, 7]}
-            no_signal_pct = {}
-            for target_itr, group in no_signal_groups.items():
-                total_no_signal = vld.loc[vld['itr'].isin(group), 'No signal'].sum()
-                no_signal_pct[target_itr] = (total_no_signal / initial_count * 100).round(1)
-            vld['No signal %'] = vld['itr'].map(no_signal_pct)
-            return vld
+    # Compute percentages for failure reasons
+    def add_failure_metrics(self, vld_itr, initial_count):
+        cfr_map = {5: 4, 7: 6}
+        vld_itr['CFR failure %'] = np.nan
+        for target_itr, source_itr in cfr_map.items():
+            if not vld_itr.loc[vld_itr['itr'] == source_itr, 'CFR failure'].empty:
+                val = vld_itr.loc[vld_itr['itr'] == source_itr, 'CFR failure'].values[0]
+                vld_itr.loc[vld_itr['itr'] == target_itr, 'CFR failure %'] = (val / initial_count * 100).round(1)
+        vld_itr['No signal %'] = (vld_itr['No signal'] * 100 / initial_count).round(1)
+        no_signal_groups = {1: [0, 1],3: [2, 3], 5: [4, 5], 7: [6, 7], 9: [8, 9]}
+        no_signal_pct = {
+            target_itr: (vld_itr.loc[vld_itr['itr'].isin(group), 'No signal'].sum() / initial_count * 100).round(1)
+            for target_itr, group in no_signal_groups.items()
+        }
+        vld_itr['No signal % per itr pairs'] = vld_itr['itr'].map(no_signal_pct)
+        return vld_itr
 
-        # Run pipeline
-        vld = build_valid_tid_table(df_mfx)
-        vld = compute_passed_itr(vld)
-        vld = compute_failed_sums(vld, pair_mapping)
-        vld = compute_failure_pivot(vld, df_mfx, pairs, failure_map)
-        vld = compute_cfr_and_no_signal(vld)
+    # Main function to compute stats of failed and valid localizations and save results
+    def compute_vld_stats(self, df_mfx, failure_map, pipeline, store_path):
+        # Run the analysis steps
+        vld_itr = self.build_valid_df(df_mfx)
+        vld_itr = self.compute_percentages(vld_itr)
+        vld_itr = self.analyze_failures(vld_itr, df_mfx, failure_map)
+        initial_count = vld_itr['vld loc count'].iloc[0]
+        vld_itr = self.add_failure_metrics(vld_itr, initial_count)
 
-        # =====================================================
-        # --- Step 4: Save results ---
-        # =====================================================
-        
-        # Get the timestamp to append to the filename
+        # Save results to CSV files
         try:
             timestamp = pipeline.mdh.get('MINFLUX.TimeStamp')
         except Exception:
             print("No timestamp found in metadata, saving as default.")
-            timestamp = "default"
+            timestamp = "no_ts"
 
-        vld_full = vld.drop(columns='tid', errors='ignore')
+        vld_itr = vld_itr.drop(columns='tid', errors='ignore')
         default_dir = str(store_path.parent)
-        full_path = os.path.join(default_dir, f"paraflux_stats_full_{timestamp}.csv")
-        clean_path = os.path.join(default_dir, f"paraflux_stats_clean_{timestamp}.csv")
+        full_path = os.path.join(default_dir, f"{timestamp}_iteration_stats_full.csv")
+        paraflux_path = os.path.join(default_dir, f"{timestamp}_iteration_stats_Paraflux_only.csv")
 
-        vld_full.to_csv(full_path, index=False)
-
-        keep_cols = ["itr", "Axis", "vld_loc_counts",
-                    "failed_loc", "failed %", "CFR failure %", "No signal %"]
-        vld_clean = vld_full[keep_cols]
-        vld_clean.to_csv(clean_path, index=False)
+        vld_itr.to_csv(full_path, index=False)
+        keep_cols = ["itr", 'passed itr %', 'CFR failure %', 'No signal % per itr pairs']
+        vld_paraflux = vld_itr[keep_cols]
+        vld_paraflux.to_csv(paraflux_path, index=False)
 
         print(f"✔ Saved full results to: {full_path}")
-        print(f"✔ Saved cleaned results to: {clean_path}")
+        print(f"✔ Saved cleaned results to: {paraflux_path}")
 
-        # =====================================================
-        # --- Step 5: Return results ---
-        # =====================================================
-        return vld
+        return vld_itr
 
-    # --- end of Alex B addition ---
+##############################################################
+##############################################################
+##############################################################
+
+    #     # =====================================================
+    #     # --- Step 2: Convert to DataFrame ---
+    #     # =====================================================
+    #     df_mfx = pd.DataFrame()
+    #     for name in mfxdata.dtype.names:
+    #         col = mfxdata[name]
+    #         if col.ndim == 1:
+    #             df_mfx[name] = col
+    #         else:
+    #             n_dim = col.shape[1]
+    #             expanded = pd.DataFrame(col.tolist(),
+    #                                     index=df_mfx.index if not df_mfx.empty else None)
+    #             if name in ['loc', 'lnc']:
+    #                 labels = ["x", "y", "z"]
+    #                 expanded.columns = [f"{name}_{labels[i]}" for i in range(n_dim)]
+    #             elif name == 'dcr':
+    #                 expanded.columns = [f"{name}_{i+1}" for i in range(n_dim)]
+    #             else:
+    #                 expanded.columns = [f"{name}_{i}" for i in range(n_dim)]
+    #             df_mfx = pd.concat([df_mfx, expanded], axis=1)
+
+    #     # =====================================================
+    #     # --- Step 3: Run analysis pipeline ---
+    #     # =====================================================
+    #     failure_map = {
+    #         1: "Valid final", 2: "Valid not final",
+    #         4: "Derived iteration", 5: "Reserved",
+    #         6: "CFR failure", 8: "No signal",
+    #         9: "DAC out of range", 11: "Background measurement"
+    #     }
+    #     pair_mapping = {1: 0, 2: 1, 3: 1, 4: 2, 5: 2, 6: 3, 7: 3, 8: 4, 9: 4}
+    #     pairs = [(0,1), (1,2), (2,3), (3,4), (4,5),
+    #             (5,6), (6,7), (7,8), (8,9)]
+
+    #     def build_valid_tid_table(df):
+    #         vld = df[df['vld']].groupby('itr')['tid'].apply(lambda x: list(set(x))).reset_index()
+    #         vld['vld_loc_counts'] = vld['tid'].apply(len)
+    #         vld['failed_loc'] = vld['vld_loc_counts'].shift(1) - vld['vld_loc_counts']
+    #         vld['Axis'] = np.where(vld['itr'] % 2 == 0, 'x,y', 'z')
+    #         vld.insert(1, 'Axis', vld.pop('Axis'))
+    #         vld['Cumulative sum of failed_loc'] = vld['failed_loc'].cumsum()
+    #         return vld
+
+    #     def compute_passed_itr(vld):
+    #         initial_count = vld['vld_loc_counts'].iloc[0]
+    #         vld['passed_itr %'] = (vld['vld_loc_counts'] * 100 / initial_count).round(1)
+    #         return vld
+
+    #     def compute_failed_sums(vld, pair_mapping):
+    #         vld['pair_group'] = vld['itr'].map(pair_mapping)
+    #         failed_sum_map = vld.groupby('pair_group')['failed_loc'].transform('sum')
+    #         vld['failed_sum'] = np.where(
+    #             vld['pair_group'].notna() & (vld['itr'] % 2 == 1),
+    #             failed_sum_map,
+    #             np.nan
+    #         )
+    #         vld.drop(columns='pair_group', inplace=True)
+    #         initial_count = vld['vld_loc_counts'].iloc[0]
+    #         vld['failed %'] = (vld['failed_sum'] / initial_count * 100).round(1)
+    #         return vld
+
+    #     def analyze_failures(vld, df, itr_from, itr_to, failure_map):
+    #         tids_from = set(vld.loc[vld['itr'] == itr_from, 'tid'].values[0])
+    #         tids_to = set(vld.loc[vld['itr'] == itr_to, 'tid'].values[0])
+    #         failed_tids = tids_from - tids_to
+    #         failed_df = df[df['tid'].isin(failed_tids) & (df['itr'] == itr_to)]
+    #         counts = failed_df['sta'].value_counts().rename_axis("sta").reset_index(name="count")
+    #         counts["reason"] = counts["sta"].map(failure_map).fillna("Other")
+    #         counts.insert(0, "itr", itr_to)
+    #         return counts
+
+    #     def compute_failure_pivot(vld, df, pairs, failure_map):
+    #         failure_results = pd.concat(
+    #             [analyze_failures(vld, df, i_from, i_to, failure_map) for i_from, i_to in pairs],
+    #             ignore_index=True
+    #         )
+    #         failure_pivot = failure_results.pivot_table(
+    #             index="itr", columns="reason", values="count", fill_value=0
+    #         ).reset_index()
+    #         return vld.merge(failure_pivot, on="itr", how="left")
+
+    #     def compute_cfr_and_no_signal(vld):
+    #         initial_count = vld['vld_loc_counts'].iloc[0]
+    #         vld['CFR failure %'] = np.where(
+    #             vld['itr'].isin([4, 6]),
+    #             (vld['CFR failure'] / initial_count * 100).round(1),
+    #             np.nan
+    #         )
+    #         no_signal_groups = {5: [4, 5], 7: [6, 7]}
+    #         no_signal_pct = {}
+    #         for target_itr, group in no_signal_groups.items():
+    #             total_no_signal = vld.loc[vld['itr'].isin(group), 'No signal'].sum()
+    #             no_signal_pct[target_itr] = (total_no_signal / initial_count * 100).round(1)
+    #         vld['No signal %'] = vld['itr'].map(no_signal_pct)
+    #         return vld
+
+    #     # Run pipeline
+    #     vld = build_valid_tid_table(df_mfx)
+    #     vld = compute_passed_itr(vld)
+    #     vld = compute_failed_sums(vld, pair_mapping)
+    #     vld = compute_failure_pivot(vld, df_mfx, pairs, failure_map)
+    #     vld = compute_cfr_and_no_signal(vld)
+
+    #     # =====================================================
+    #     # --- Step 4: Save results ---
+    #     # =====================================================
+        
+    #     # Get the timestamp to append to the filename
+    #     try:
+    #         timestamp = pipeline.mdh.get('MINFLUX.TimeStamp')
+    #     except Exception:
+    #         print("No timestamp found in metadata, saving as default.")
+    #         timestamp = "default"
+
+    #     vld_full = vld.drop(columns='tid', errors='ignore')
+    #     default_dir = str(store_path.parent)
+    #     full_path = os.path.join(default_dir, f"paraflux_stats_full_{timestamp}.csv")
+    #     clean_path = os.path.join(default_dir, f"paraflux_stats_clean_{timestamp}.csv")
+
+    #     vld_full.to_csv(full_path, index=False)
+
+    #     keep_cols = ["itr", "Axis", "vld_loc_counts",
+    #                 "failed_loc", "failed %", "CFR failure %", "No signal %"]
+    #     vld_clean = vld_full[keep_cols]
+    #     vld_clean.to_csv(clean_path, index=False)
+
+    #     print(f"✔ Saved full results to: {full_path}")
+    #     print(f"✔ Saved cleaned results to: {clean_path}")
+
+    #     # =====================================================
+    #     # --- Step 5: Return results ---
+    #     # =====================================================
+    #     return vld
+
+##############################################################
+##############################################################
+##############################################################
+
+    # # --- end of Alex B addition ---
 
 
     def OnClumpScatterPosPlot(self,event):
