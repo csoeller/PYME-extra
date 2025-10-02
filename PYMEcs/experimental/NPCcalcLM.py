@@ -5,11 +5,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import wx
 from PYME.recipes import tablefilters
+from traits.api import Bool, Enum, Float, HasTraits, Int
+
 from PYMEcs.Analysis.NPC import estimate_nlabeled, npclabel_fit, plotcdf_npc3d
 from PYMEcs.IO.NPC import findNPCset
 from PYMEcs.misc.utils import unique_name
 from PYMEcs.pyme_warnings import warn
-from traits.api import Bool, Enum, Float, HasTraits, Int
 
 logger = logging.getLogger(__name__)
 
@@ -131,8 +132,8 @@ class NPCcalc():
         self._npcsettings = None
         self.gallery_layer = None
         self.segment_layer = None
-    
-        # --- Alex B addition test for running several action at once ---
+
+        # --- Alex B addition for running several NPC calc action at once ---
     def OnNPC3DRunAllActions(self, event=None):
         """Performs all key NPC 3D analysis actions in sequence, prompting user for output folder."""
         # Prompt user for save directory
@@ -286,7 +287,6 @@ class NPCcalc():
 
 # --- Alex B addition --- 
 # AIM: perform all actions 3D NPC actions and save output automatically
-# Original function 'OnAnalyse3DNPCsByID', copied and modified for automatic saving.
 
     def OnAnalyse3DNPCsByID_auto_save(self, event=None, save_dir=None):
         from PYMEcs.Analysis.NPC import NPC3DSet
@@ -439,14 +439,6 @@ class NPCcalc():
             if nbs is None:
                 warn("could not find npcs with by-segment fitting info, have you carried out fitting with recent code?")
                 return
-            # # Original code with dialog for manual saving
-            # with wx.FileDialog(self.visFr, 'Save NPC by-segment data as ...',
-            #                     wildcard='CSV (*.csv)|*.csv',
-            #                     style=wx.FD_SAVE) as fdialog:
-            #     if fdialog.ShowModal() != wx.ID_OK:
-            #         return
-            #     else:
-            #         fpath = fdialog.GetPath()
                     
             import pandas as pd
             df = pd.DataFrame.from_dict(dict(top=nbs['top'].flatten(),bottom=nbs['bottom'].flatten()))
@@ -597,8 +589,9 @@ class NPCcalc():
 
         # now we add a track layer to render our template polygons
         # TODO - we may need to check if this happened before or not!
-        from PYME.LMVis.layers.tracks import \
-            TrackRenderLayer  # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
+        from PYME.LMVis.layers.tracks import (
+            TrackRenderLayer,  # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
+        )
         layer = TrackRenderLayer(pipeline, dsname=ds_template_name, method='tracks', clump_key='polyIndex', line_width=2.0, alpha=0.5)
         self.visFr.add_layer(layer)        
 
@@ -675,14 +668,6 @@ class NPCcalc():
         if npcs is None or 'measurements' not in dir(npcs):
             warn('no valid NPC measurements found, therefore cannot save...')
             return 
-        # Dialog for saving --> Commented-out
-        # fdialog = wx.FileDialog(self.visFr, 'Save NPC measurements as ...',
-        #                         wildcard='CSV (*.csv)|*.csv',
-        #                         style=wx.FD_SAVE)
-        # if fdialog.ShowModal() != wx.ID_OK:
-        #     return
-
-        # fpath = fdialog.GetPath()
         
         # --- Alex B addition ---
         # We define a few variables used for automatic saving later
@@ -802,8 +787,6 @@ class NPCcalc():
         
 # --- Alex B addition ---
 # AIM: perform all actions 3D NPC actions and save output automatically
-# Original function 'OnNPC3DSaveNPCSet', copied and modified for automatic saving.
-# Works fine as single action (new button: OnNPC3DSaveNPCSet_auto_save) line 130
 
     def OnNPC3DSaveNPCSet_auto_save(self, event=None, save_dir=None): 
         """Automatically save the NPC set to a default file path without user dialog."""
@@ -855,7 +838,6 @@ class NPCcalc():
         geo_df.to_csv(fpath,index=False)
         
 # --- Alex B addition ---
-# Origimnal function 'OnNPC3DSaveGeometryStats', copied and modified for automatic saving.
 
     def OnNPC3DSaveGeometryStats_auto_save(self,event=None, save_dir=None):
         pipeline = self.visFr.pipeline
@@ -867,12 +849,7 @@ class NPCcalc():
         heights = np.asarray(npcs.height())
         import pandas as pd
         geo_df = pd.DataFrame.from_dict(dict(diameter=diams,height=heights))
-        # with wx.FileDialog(self.visFr, 'Save NPC measurements as ...',
-        #                         wildcard='CSV (*.csv)|*.csv',
-        #                         style=wx.FD_SAVE) as fdialog:
-        #     if fdialog.ShowModal() != wx.ID_OK:
-        #         return
-        #     fpath = fdialog.GetPath()
+
         if save_dir is None:
             save_dir = os.getcwd()
         MINFLUXts = pipeline.mdh.get('MINFLUX.TimeStamp') # Get the timestamp and use it for naming the file to save
@@ -892,6 +869,7 @@ class NPCcalc():
             warn('no valid NPC measurements found, thus no geometry info available...')
             return
         import pandas as pd
+
         from PYMEcs.misc.matplotlib import boxswarmplot, figuredefaults
         diams = np.asarray(npcs.diam())
         heights = np.asarray(npcs.height())
@@ -911,7 +889,6 @@ class NPCcalc():
         plt.ylim(0,150)
 
 # --- Alex B addition ---
-# Origimnal function 'OnNPC3DGeometryStats', copied and modified for automatic saving.
 
     def OnNPC3DGeometryStats_auto_save(self,event=None, save_dir=None):
         pipeline = self.visFr.pipeline
@@ -966,6 +943,7 @@ class NPCcalc():
             warn('no valid NPC measurements found, thus no geometry info available...')
             return
         import pandas as pd
+
         from PYMEcs.misc.matplotlib import boxswarmplot, figuredefaults
         id = [npc.objectID for npc in npcs.npcs] # not used right now
         llperloc = [npc.opt_result.fun/npc.npts.shape[0] for npc in npcs.npcs]

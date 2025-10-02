@@ -43,10 +43,8 @@ def plot_errors(pipeline):
         plt.text(x, y, '%.0f' % y,
                 horizontalalignment='right') # draw above, centered
     uids, idx = np.unique(p['clumpIndex'],return_index=True)
-    #print(f"bp_dict1: {bp_dict1['medians'][0].get_xydata()[0][1]}")
     
     # Get the median values for photons and background
-    # mean_photon = np.mean(p['nPhotons'])
     median_photon = np.median(p['nPhotons'])
     
     # mean_bg = np.mean(p['fbg'])
@@ -104,38 +102,6 @@ def plot_errors(pipeline):
         "Unit": ["","","","nm","nm","nm" ]    })
     # --- Show the head of df in the console --- (Alex B addition)
     print(df.head())
-    
-# --- Save as a csv file --- (Alex B addition)
-
-    # Below is old way of saving (before 2025-08-26)
-    # Replaced by saving each file individually (refering to plot error and plot stats from MFX)
-    # The merging of files can be done in the analysis workbook
-    # This avoid creating too many intermediate files and conditionals checks if other csv are being created later on for analysis
-
-        # # Here we want to save the LocError, however if LocRate already exists we want to combine both files
-        # # and ensure that the final csv keeps the organization regrdless on which csv was generated first (locError or LocRate).
-
-        #     # variables to check if locerror and locrate csv files already exist
-        #     csv_name = pipeline.mdh.get('MINFLUX.TimeStamp')
-        #     locerror_file = csv_name + "temp_LocError.csv"
-        #     locrate_file = csv_name + "temp_LocRate.csv"
-        #     combined_file = csv_name + ".csv"
-
-        #     # Save the locerror file
-        #     df.to_csv(locerror_file, index=False, header=True)
-
-        #     # If the locrate file already exists, merge:
-        #     if os.path.exists(locrate_file):
-        #         df_rate = pd.read_csv(locrate_file)
-        #         df_error = pd.read_csv(locerror_file)
-
-        #         # Combine the two dataframes in the desired order
-        #         df_combined = pd.concat([df_error, df_rate], ignore_index=True)
-        #         df_combined.to_csv(combined_file, index=False, header=True)
-
-        #         # Cleanup temp files
-        #         os.remove(locerror_file)
-        #         os.remove(locrate_file)
     
     # Get the Timestamp (from pipeline) to create csv name
     csv_name = pipeline.mdh.get('MINFLUX.TimeStamp')
@@ -1491,7 +1457,6 @@ class MINFLUXanalyser():
         pipeline.selectDataSource(self.analysisSettings.defaultDatasourceForAnalysis)
         #Added by Alex B to get timestamp and send it to plot_stats_minflux 
         timestamp = pipeline.mdh.get('MINFLUX.TimeStamp')
-        # print("Timestamp from OnLocalisationRate(experimental/MINFLUX.py): ", timestamp)
         
         if 'cfr' not in pipeline.keys():
             Error(self.visFr,'no property called "cfr", likely no MINFLUX data - aborting')
