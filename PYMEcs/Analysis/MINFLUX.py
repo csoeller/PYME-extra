@@ -6,6 +6,44 @@ from scipy.stats import binned_statistic
 from PYMEcs.IO.MINFLUX import get_stddev_property
 from PYMEcs.pyme_warnings import warn
 
+import pandas as pd
+from PYMEcs.misc.matplotlib import boxswarmplot
+
+def plot_stats(ds,ax,errdict,sdmax=None,swarmsize=3,siteKey='siteID'):
+    df = site_stats(ds,errdict,siteKey=siteKey)
+    kwargs = dict(swarmsize=swarmsize,width=0.2,annotate_means=True,annotate_medians=True,swarmalpha=0.4)
+    boxswarmplot(df,ax=ax,**kwargs)
+    ax.set_ylim(0,sdmax)
+    ax.set_ylabel('precision [nm]')
+    return df
+
+def site_stats(ds,sitedict,siteKey='siteID'):
+    uids, idx = np.unique(ds[siteKey],return_index=True)
+    sitestats = {}
+    for key in sitedict:
+        prop = sitedict[key]
+        sitestats[key] = ds[prop][idx]
+    df = pd.DataFrame.from_dict(sitestats)
+    return df[df > 0].dropna() # this drops rows with zeroes; these should not occur but apparently do; probably a bug somewhere
+
+def plotsitestats(p,origamiErrorLimit=10,figsize=None,swarmsize=3,siteKey='siteID',fignum=None):
+    uids = np.unique(p[siteKey])
+    fig, axs = plt.subplots(2, 2, figsize=figsize,num=fignum)
+    plot_stats(p,axs[0, 0],dict(xd_sd_corr='error_x',x_sd='error_x_nc',x_sd_trace='error_x_ori'),
+                sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey)
+    plot_stats(p,axs[0, 1],dict(yd_sd_corr='error_y',y_sd='error_y_nc',y_sd_trace='error_y_ori'),
+                sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey)
+    if p.mdh.get('MINFLUX.Is3D'):
+        plot_stats(p,axs[1, 0],dict(zd_sd_corr='error_z',z_sd='error_z_nc',z_sd_trace='error_z_ori'),
+                    sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey)
+
+    all_axes = dict(xd_sd_corr='error_x',yd_sd_corr='error_y')
+    if p.mdh.get('MINFLUX.Is3D'):
+        all_axes['zd_sd_corr'] = 'error_z'
+    df_allaxes = plot_stats(p,axs[1, 1],all_axes,sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey)
+    fig.suptitle('Site stats for %d sites' % df_allaxes.shape[0])
+    plt.tight_layout()
+    return df_allaxes
 
 def propcheck_density_stats(ds,warning=True):
     for prop in ['clst_area','clst_vol','clst_density','clst_stdz']:
@@ -53,9 +91,6 @@ def plot_density_stats(ds,objectID='dbscanClumpID',scatter=False):
         ax1[0].scattered_boxplot(vol/1e6,labels=['Volume'],showmeans=True)
         ax1[1].scattered_boxplot(sz,labels=['Stddev Z'],showmeans=True)
     plt.tight_layout()
-
-from PYMEcs.misc.matplotlib import boxswarmplot
-
 
 def plot_density_stats_sns(ds,objectID='dbscanClumpID'):
     if not propcheck_density_stats(ds):

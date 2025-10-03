@@ -498,7 +498,7 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
     plt.tight_layout()
 
 import PYME.config
-from PYME.recipes.traits import Bool, CStr, Enum, Float, HasTraits
+from PYME.recipes.traits import Bool, CStr, Enum, Float, HasTraits, Int, List
 
 from PYMEcs.Analysis.MINFLUX import analyse_locrate
 from PYMEcs.IO.MINFLUX import findmbm
@@ -526,6 +526,8 @@ class MINFLUXSettings(HasTraits):
                           desc="if a full second module set is inserted to also analyse the origami data without any MBM corrections")
     origamiErrorLimit = Float(10.0,label='xLimit when plotting origami errors',
                               desc="sets the upper limit in x (in nm) when plotting origami site errors")
+    origamiSiteMaxNum = Int(100,label='Max number of sites for site stats',
+                            desc="the maximum number of sites for which a SD site stats boxswarmplot is generated, skip otherwise")
 
 class DateString(HasTraits):
     TimeStampString = CStr('',label="Time stamp",desc='the time stamp string in format yymmdd-HHMMSS')
@@ -1605,8 +1607,11 @@ class MINFLUXanalyser():
 
     def OnOrigamiErrorPlot(self, event):
         p = self.visFr.pipeline
-        # need to add checks if the required properties are present in the datasource!!
-
+        # need to check if the required properties are present in the datasource
+        if 'error_x_ori' not in p.keys():
+            warn("property 'error_x_ori' not present, possibly not the right datasource for origami site info. Aborting...")
+            return
+        
         def plot_errs(ax,axisname,errkeys):
             ax.hist(p[errkeys[0]],bins='auto',alpha=0.5,density=True,label='Trace est')
             ax.hist(p[errkeys[1]],bins='auto',alpha=0.5,density=True,label='Site est')
@@ -1614,7 +1619,7 @@ class MINFLUXanalyser():
             ax.legend()
             ax.set_xlabel('error %s (nm)' % axisname)
             ax.set_ylabel('#')
-        
+  
         fig, axs = plt.subplots(2, 2,num='origami error estimates %d' % self.origamiErrorFignum)
         plot_errs(axs[0, 0], 'x', ['error_x_ori','error_x_nc','error_x'])
         axs[0, 0].set_xlim(0,self.analysisSettings.origamiErrorLimit)
@@ -1634,6 +1639,11 @@ class MINFLUXanalyser():
         ax.set_ylabel('MBM corr [nm]')
         ax.legend()
         plt.tight_layout()
+        
+        uids = np.unique(p['siteID']) # currently siteID is hard coded - make config option
+        from PYMEcs.Analysis.MINFLUX import plotsitestats
+        if uids.size < self.analysisSettings.origamiSiteMaxNum:
+            plotsitestats(p,fignum=('origami site stats %d' % self.origamiErrorFignum))
         self.origamiErrorFignum += 1
 
     def OnMINFLUXColour(self,event):
