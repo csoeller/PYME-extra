@@ -1,49 +1,12 @@
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.stats import binned_statistic
-
 from PYMEcs.IO.MINFLUX import get_stddev_property
 from PYMEcs.pyme_warnings import warn
+from scipy.stats import binned_statistic
 
-import pandas as pd
-from PYMEcs.misc.matplotlib import boxswarmplot
-
-def plot_stats(ds,ax,errdict,sdmax=None,swarmsize=3,siteKey='siteID'):
-    df = site_stats(ds,errdict,siteKey=siteKey)
-    kwargs = dict(swarmsize=swarmsize,width=0.2,annotate_means=True,annotate_medians=True,swarmalpha=0.4)
-    boxswarmplot(df,ax=ax,**kwargs)
-    ax.set_ylim(0,sdmax)
-    ax.set_ylabel('precision [nm]')
-    return df
-
-def site_stats(ds,sitedict,siteKey='siteID'):
-    uids, idx = np.unique(ds[siteKey],return_index=True)
-    sitestats = {}
-    for key in sitedict:
-        prop = sitedict[key]
-        sitestats[key] = ds[prop][idx]
-    df = pd.DataFrame.from_dict(sitestats)
-    return df[df > 0].dropna() # this drops rows with zeroes; these should not occur but apparently do; probably a bug somewhere
-
-def plotsitestats(p,origamiErrorLimit=10,figsize=None,swarmsize=3,siteKey='siteID',fignum=None):
-    uids = np.unique(p[siteKey])
-    fig, axs = plt.subplots(2, 2, figsize=figsize,num=fignum)
-    plot_stats(p,axs[0, 0],dict(xd_sd_corr='error_x',x_sd='error_x_nc',x_sd_trace='error_x_ori'),
-                sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey)
-    plot_stats(p,axs[0, 1],dict(yd_sd_corr='error_y',y_sd='error_y_nc',y_sd_trace='error_y_ori'),
-                sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey)
-    if p.mdh.get('MINFLUX.Is3D'):
-        plot_stats(p,axs[1, 0],dict(zd_sd_corr='error_z',z_sd='error_z_nc',z_sd_trace='error_z_ori'),
-                    sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey)
-
-    all_axes = dict(xd_sd_corr='error_x',yd_sd_corr='error_y')
-    if p.mdh.get('MINFLUX.Is3D'):
-        all_axes['zd_sd_corr'] = 'error_z'
-    df_allaxes = plot_stats(p,axs[1, 1],all_axes,sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey)
-    fig.suptitle('Site stats for %d sites' % df_allaxes.shape[0])
-    plt.tight_layout()
-    return df_allaxes
 
 def propcheck_density_stats(ds,warning=True):
     for prop in ['clst_area','clst_vol','clst_density','clst_stdz']:
@@ -92,6 +55,9 @@ def plot_density_stats(ds,objectID='dbscanClumpID',scatter=False):
         ax1[1].scattered_boxplot(sz,labels=['Stddev Z'],showmeans=True)
     plt.tight_layout()
 
+from PYMEcs.misc.matplotlib import boxswarmplot
+
+
 def plot_density_stats_sns(ds,objectID='dbscanClumpID'):
     if not propcheck_density_stats(ds):
         return
@@ -115,11 +81,40 @@ def plot_density_stats_sns(ds,objectID='dbscanClumpID'):
     fig.suptitle('Density stats for %d clusters' % dens.size)
     plt.tight_layout()
 
+    # --- Save the values to csv --- (Alex B addition)
+    df = pd.DataFrame({
+        "Metric": ["cluster density"],
+        "Mean": [np.mean(dens)],
+        "Median": [np.median(dens)],
+        "Unit": ["#/um^2"]})
+    # --- Show the head of df in the console --- (Alex B addition)
+    print(df.head())
+
+    # --- Save as a csv file --- (Alex B addition)
+    # Save the cluster size file
+    #fn = os.path.splitext(ds.mdh.get('MINFLUX.Filename'))[0]
+    dirpath, filename = os.path.split(ds.filename)
+    fn = ds.mdh.get('MINFLUX.TimeStamp')
+    df.to_csv(os.path.join(dirpath, fn + "_clusterDensity.csv"), 
+              index=False, header=True)
+
+    # save data CSV file with dbscanClustered
+    df_dbscanClustered = ds.dataSources['dbscanClustered'].to_pandas()
+    df_dbscanClustered.to_csv(
+        os.path.join(dirpath, fn + "_dbscanClustered_data.csv"), index=False, header=True)
+    # Used as a reminder for LocRate csv saving
+    # print(
+    #   f'\ncsv name is: {fn + "_clusterDensity.csv"}\nIf you did not load a session, csv file and figures will be saved on the desktop')
+    # By default the file is saved on the Desktop, if a session file is used, it is saved in the same directory as the session file.
+
     return dens
 
 
+# copied from experimental>NPCcalcLM.py to try getting the filename
+# this should be a backwards compatible way to access the main filename associated with the pipeline/datasource
+
 def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, times,
-                       showTimeAverages=False, dsKey=None, areaString=None, timestamp=None):
+                       showTimeAverages=False, dsKey=None, areaString=None, timestamp=None, dirPath=None):
     
     # --- Create the figure (plot with 2x2 subplots) ---
     fig, (ax1, ax2) = plt.subplots(2, 2)
@@ -179,20 +174,15 @@ def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, ti
     
     # --- Show the head of df in the console --- (Alex B addition)
     print(df.head())
-    
-    # --- Save as a csv file in the user specified path --- (Alex B addition)
-    # Get the timeastamp for the filename
-    if timestamp is None:
-        csv_name = input("Use the timestamp as a filename for saving (will be save in the current location):")
-    else:
-        csv_name = timestamp
+
     # --- Save as a csv file --- (Alex B addition)
-    
-    print(f'\ncsv name is: {csv_name}\nIf you did not load a session, csv file and figures will be saved on the desktop') # Used as a reminder for LocRate csv saving
-    df.to_csv(csv_name + '_LocRate.csv', index=False, header=True)
-    
-        # --- Save the figure --- (Alex B addition)
-    plt.savefig(csv_name + '_loc_rate.png', dpi=300, bbox_inches='tight')
+    # Save the LocRate file
+    df.to_csv(os.path.join(dirPath, timestamp + "_locRate.csv"), index=False, header=True)
+
+    # --- Save the figure --- (Alex B addition)
+    plt.savefig(os.path.join(dirPath, timestamp + '_locRate.png'),
+                dpi=300, bbox_inches='tight')
+    print(f'Figure and *.csv file saved to {os.path.join(dirPath, timestamp + "_locRate.png")}')
     
 # this function assumes a pandas dataframe
 # the pandas frame should generally be generated via the function minflux_npy2pyme from PYMEcs.IO.MINFLUX
@@ -232,7 +222,10 @@ def analyse_locrate_pdframe(datain,use_invalid=False,showTimeAverages=True):
     tdiff = data['tim'].values[1:]-data['tim'].values[:-1]
     tdsmall = tdiff[tdiff <= 0.1]
     tdmedian = np.median(tdsmall)
-
+    
+    dirpath, filename = os.path.split(datain.filename)
+    timeStamp = datain.mdh.get('MINFLUX.TimeStamp')
+    
     start_times = data.loc[startindex,'tim'][:-1].values # we use those for binning the deltas, we discard final time to match size of deltas
     
     if has_invalid and use_invalid:
@@ -244,9 +237,12 @@ def analyse_locrate_pdframe(datain,use_invalid=False,showTimeAverages=True):
     if showTimeAverages:
         delta_averages, bin_edges, binnumber = binned_statistic(start_times,deltas,statistic='mean', bins=50)
         delta_av_times = 0.5*(bin_edges[:-1] + bin_edges[1:]) # bin centres
-        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, delta_averages, delta_av_times, showTimeAverages=True)
+        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, 
+                           delta_averages, delta_av_times, showTimeAverages=True, 
+                           timestamp=timeStamp, dirPath=dirpath)
     else:
-        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, data['efo'], None)
+        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, data['efo'], None, 
+                           timestamp=timeStamp, dirPath=dirpath)
 
 
 # similar version but now using a pipeline
@@ -275,11 +271,17 @@ def analyse_locrate(data,datasource='Localizations',showTimeAverages=True, times
     area_string = 'area %.1fx%.1f um^2' % (lenx_um,leny_um)
     data.selectDataSource(curds)
     
+    dirpath, filename = os.path.split(data.filename)
+    timeStamp = data.mdh.get('MINFLUX.TimeStamp')
+    
     if showTimeAverages:
         delta_averages, bin_edges, binnumber = binned_statistic(starts[:-1],deltas,statistic='mean', bins=50)
         delta_av_times = 0.5*(bin_edges[:-1] + bin_edges[1:]) # bin centres
-        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, delta_averages, delta_av_times, showTimeAverages=True, dsKey = datasource, areaString=area_string, timestamp=timestamp)
+        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, 
+                           delta_averages, delta_av_times, showTimeAverages=True, 
+                           dsKey = datasource, areaString=area_string, 
+                           timestamp=timeStamp, dirPath=dirpath)
     else:
-        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, data['efo'], None, dsKey = datasource, areaString=area_string, timestamp=timestamp)
+        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, data['efo'], None, dsKey = datasource, areaString=area_string, timestamp=timeStamp, dirPath=dirpath)
 
     return (starts,deltas)

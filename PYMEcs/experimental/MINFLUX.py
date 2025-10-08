@@ -43,8 +43,10 @@ def plot_errors(pipeline):
         plt.text(x, y, '%.0f' % y,
                 horizontalalignment='right') # draw above, centered
     uids, idx = np.unique(p['clumpIndex'],return_index=True)
+    #print(f"bp_dict1: {bp_dict1['medians'][0].get_xydata()[0][1]}")
     
     # Get the median values for photons and background
+    # mean_photon = np.mean(p['nPhotons'])
     median_photon = np.median(p['nPhotons'])
     
     # mean_bg = np.mean(p['fbg'])
@@ -72,10 +74,12 @@ def plot_errors(pipeline):
     # Display the plot
     plt.tight_layout()
     pipeline.selectDataSource(curds)
-    
+    dirpath, filename = os.path.split(pipeline.filename)
+    timestamp = pipeline.mdh.get('MINFLUX.TimeStamp')
     # Save the plot as a png file (Alex B addition)
-    plt.savefig(pipeline.mdh.get('MINFLUX.TimeStamp') + '_loc_error.png', dpi=300, bbox_inches='tight') 
-    
+    plt.savefig(os.path.join(dirpath, timestamp + '_locError.png'),
+                dpi=300, bbox_inches='tight')
+
     # --- Get the median of the clump size and errors x, y, z coalesced --- (Alex B addition)
     
     # mean_clump = np.mean(p['clumpSize'])
@@ -103,17 +107,11 @@ def plot_errors(pipeline):
     # --- Show the head of df in the console --- (Alex B addition)
     print(df.head())
     
-    # Get the Timestamp (from pipeline) to create csv name
-    csv_name = pipeline.mdh.get('MINFLUX.TimeStamp')
-    
-    # Save the df as csv
-    df.to_csv(csv_name + "_LocError.csv", index=False, header=True)
-    
-    print(f'\ncsv name is: {csv_name}\nIf you did not load a session, csv file and figures will be saved on the desktop') # Used as a reminder for LocRate csv saving
-        # By default the file is saved on the Desktop, if a session file is used, it is saved in the same directory as the session file.
+    # --- Save as a csv file --- (Alex B addition)
+    df.to_csv(os.path.join(dirpath, timestamp + "_locError.csv"), index=False, header=True)
+    print(f"LocError plot and csv file saved as: {timestamp + '_locError.csv'}")    # By default the file is saved on the Desktop, if a session file is used, it is saved in the same directory as the session file.
     
 import pandas as pd
-
 from PYMEcs.misc.matplotlib import boxswarmplot
 
 
@@ -498,8 +496,7 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
     plt.tight_layout()
 
 import PYME.config
-from PYME.recipes.traits import Bool, CStr, Enum, Float, HasTraits, Int, List
-
+from PYME.recipes.traits import Bool, CStr, Enum, Float, HasTraits, Int
 from PYMEcs.Analysis.MINFLUX import analyse_locrate
 from PYMEcs.IO.MINFLUX import findmbm
 from PYMEcs.misc.guiMsgBoxes import Error
@@ -838,9 +835,8 @@ class MINFLUXanalyser():
 ### --- End of Alex B test addition function ---
 
     def OnClumpScatterPosPlot(self,event):
-        from scipy.stats import binned_statistic
-
         from PYMEcs.IO.MINFLUX import get_stddev_property
+        from scipy.stats import binned_statistic
         def detect_coalesced(pipeline):
             # placeholder, to be implemented
             return False
@@ -1071,25 +1067,22 @@ class MINFLUXanalyser():
             return
         
         # now we add a layer to render our alpha shape polygons
-        from PYME.LMVis.layers.tracks import (
-            TrackRenderLayer,  # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
-        )
+        from PYME.LMVis.layers.tracks import \
+            TrackRenderLayer  # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
         layer = TrackRenderLayer(self.visFr.pipeline, dsname='cluster_shapes', method='tracks', clump_key='polyIndex', line_width=2.0, alpha=0.5)
         self.visFr.add_layer(layer)
 
     def OnAddMINFLUXTracksCI(self, event):        
         # now we add a track layer to render our traces
-        from PYME.LMVis.layers.tracks import (
-            TrackRenderLayer,  # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
-        )
+        from PYME.LMVis.layers.tracks import \
+            TrackRenderLayer  # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
         layer = TrackRenderLayer(self.visFr.pipeline, dsname='output', method='tracks', clump_key='clumpIndex', line_width=2.0, alpha=0.5)
         self.visFr.add_layer(layer)
 
     def OnAddMINFLUXTracksTid(self, event):        
         # now we add a track layer to render our traces
-        from PYME.LMVis.layers.tracks import (
-            TrackRenderLayer,  # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
-        )
+        from PYME.LMVis.layers.tracks import \
+            TrackRenderLayer  # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
         layer = TrackRenderLayer(self.visFr.pipeline, dsname='output', method='tracks', clump_key='tid', line_width=2.0, alpha=0.5)
         self.visFr.add_layer(layer)
 
@@ -1355,7 +1348,8 @@ class MINFLUXanalyser():
                  ("needs to be a **folder** location, currently set to %s" % (folder)))
             return
 
-        from PYMEcs.misc.utils import read_temp_csv, set_diff, timestamp_to_datetime
+        from PYMEcs.misc.utils import (read_temp_csv, set_diff,
+                                       timestamp_to_datetime)
 
         if len(self.visFr.pipeline.dataSources) == 0:
             warn("no datasources, this is probably an empty pipeline, have you loaded any data?")
@@ -1527,8 +1521,8 @@ class MINFLUXanalyser():
     def OnOrigamiSiteRecipe(self, event=None):
         from PYME.recipes.localisations import MergeClumps
         from PYME.recipes.tablefilters import FilterTable, Mapping
-
-        from PYMEcs.recipes.localisations import DBSCANClustering2, OrigamiSiteTrack
+        from PYMEcs.recipes.localisations import (DBSCANClustering2,
+                                                  OrigamiSiteTrack)
         
         pipeline = self.visFr.pipeline
         recipe = pipeline.recipe
