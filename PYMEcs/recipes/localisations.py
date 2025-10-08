@@ -2191,4 +2191,105 @@ class SimulateSiteloss(ModuleBase):
         mapped_ds.addColumn('p_simloss',prob)
         mapped_ds.addColumn('retain',retained)
         return mapped_ds
+
+# two implementations to forward fill a 1D vector
+def ffill_pandas(ids):
+    import pandas as pd
+    idsf = ids.astype('f')
+    idsf[ids==0] = np.nan
+    df = pd.DataFrame.from_dict(dict(ids = idsf))
+    dff = df.ffill()
+    return dff['ids'].values.astype('i')
+# from https://stackoverflow.com/questions/41190852/most-efficient-way-to-forward-fill-nan-values-in-numpy-array
+# @user189035 replace mask.shape[1] with mask.size and remove axis=1 and replace the last line with out = arr[idx]
+def ffill_numpy(arr):
+    '''Solution provided by Divakar.'''
+    mask = arr == 0
+    idx = np.where(~mask,np.arange(mask.size,dtype='i'),0)
+    np.maximum.accumulate(idx,out=idx)
+    out = arr[idx]
+    return out
+
+@register_module('SuperClumps')
+class SuperClumps(ModuleBase):
+    """
+    Generates 'super clumps' by grouping adjacent clumps that have a distance
+    less than a selectable threshold distance - should be in the single digit nm range.
+    Grouping is based on clumpIndex assuming that was originally set from trace ids (tid).
+
+    Parameters
+    ----------
+    inputL: string - name of the data source containing localizations with clumpIndex
+    inputLM: string - name of the data source containing merged localizations based on same clumpIndex
+    threshold_nm: float, distance threshold for grouping traces into larger "super traces"
     
+    Returns
+    -------
+    outputL : tabular.MappingFilter that contains locs with new clumpIndex and clumpSize fields (now marking super clumps)
+    outputLM : tabular.MappingFilter that contains coalesced locs with new clumpIndex and clumpSize fields (now marking super clumps)
+    
+    """
+
+    inputL = Input('Localizations')
+    inputLM = Input('LocalizationsMerged')
+    outputL = Output('with_superclumps')
+    outputLM = Output('with_superclumps_merged')
+
+    threshold_nm = Float(5.0,label='threshold distance (nm)',
+                         desc='parameter that sets the distance threshold for grouping traces into larger "super traces"')
+
+    def run(self, inputL, inputLM):
+    
+        from PYMEcs.IO.MINFLUX import get_stddev_property
+        locs = inputL
+        locsm = inputLM
+        
+        x=locsm['x'];y=locsm['y'];z=locsm['z']
+        dx = x[1:]-x[:-1]; dy = y[1:]-y[:-1]; dz = z[1:]-z[:-1]
+        ds = np.sqrt(dx*dx+dy*dy+dz*dz)
+
+        # currently jumps are mereley flagged by a distance to previous gt threshold
+        # one might also want to check that things are as expected, e.g. all trace sizes before a jump have clumpSize == loclimit
+        # possibly other criteria
+        jumps = np.append(np.array(1,'i'),(ds > self.threshold_nm))
+
+        newids = jumps.copy()
+        njumps = int(jumps.sum())
+        newids[jumps > 0] = np.arange(1,njumps+1)
+
+        superids = ffill_numpy(newids) # move the new superClumpIndex throughout each superclump by forward filling
+        # superids2 = ffill_pandas(newids)
+        # if not np.all(superids == superids2):
+        #     warn("difference between ffill1 and ffill2, unexpected, please check")
+
+        # now map the new superclump ids back onto the non-coalesced localizations
+        cimerged = locsm['clumpIndex'].astype('i')
+        ci = locs['clumpIndex'].astype('i')
+        uid,idx,ridx = np.unique(ci,return_index=True,return_inverse=True)
+        uidm,idxm,ridxm = np.unique(cimerged,return_index=True,return_inverse=True)
+        if not np.all(uid == uidm):
+            warn("issue in that ids between loc data and merged loc data do not agree, please check")
+        sci = superids[idxm][ridx] # this should give us the superindices in the fully expanded events
+        scisize = get_stddev_property(sci,sci,statistic='count').astype('i')
+        superidsize = get_stddev_property(superids,superids,statistic='count').astype('i')
+
+        # now make the relevant mappings and
+        #     assign superids, superidsize for locsm mapping
+        #     assign sci, scisize for locs for locs mapping
+        # existing clumpIndex, clumpSize are retained as subClumpIndex etc
+
+        mapped_l = tabular.MappingFilter(locs)
+        mapped_lm = tabular.MappingFilter(locsm)
+        
+        mapped_l.addColumn('clumpIndex',sci)
+        mapped_l.addColumn('clumpSize',scisize)
+        mapped_l.addColumn('subClumpIndex',locs['clumpIndex'])
+        mapped_l.addColumn('subClumpSize',locs['clumpSize'])
+
+        mapped_lm.addColumn('clumpIndex',superids)
+        mapped_lm.addColumn('clumpSize',superidsize)
+        mapped_lm.addColumn('subClumpIndex',locsm['clumpIndex'])
+        mapped_lm.addColumn('subClumpSize',locsm['clumpSize'])
+        mapped_lm.addColumn('tracedist',np.append([0],ds))
+
+        return dict(outputL=mapped_l,outputLM=mapped_lm)

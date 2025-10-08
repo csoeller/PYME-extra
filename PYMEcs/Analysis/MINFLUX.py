@@ -109,43 +109,52 @@ def plot_density_stats_sns(ds,objectID='dbscanClumpID'):
 
     return dens
 
-
-# copied from experimental>NPCcalcLM.py to try getting the filename
-# this should be a backwards compatible way to access the main filename associated with the pipeline/datasource
-
-def plot_stats_minflux(deltas, durations, tdiff, tdmedian, efo_or_dtovertime, times,
+def plot_stats_minflux(deltas, durations, tdintrace, efo_or_dtovertime, times,
                        showTimeAverages=False, dsKey=None, areaString=None, timestamp=None, dirPath=None):
+    from scipy.stats import iqr
     
     # --- Create the figure (plot with 2x2 subplots) ---
     fig, (ax1, ax2) = plt.subplots(2, 2)
-    
-    # --- Compute the TBT Median ---
-    h = ax1[0].hist(deltas,bins=40)
     dtmedian = np.median(deltas)
+    dtmean = np.mean(deltas)
+    dtiqr = iqr(deltas,rng=(10, 90)) # we are going for the 10 to 90 % range
+    h = ax1[0].hist(deltas,bins=40,range=(0,dtmean + 2*dtiqr))
     ax1[0].plot([dtmedian,dtmedian],[0,h[0].max()])
     # this is time between one dye molecule and the next dye molecule being seen
     ax1[0].set_xlabel('time between traces (TBT) [s]')
     ax1[0].text(0.95, 0.8, 'median %.2f s' % dtmedian, horizontalalignment='right',
              verticalalignment='bottom', transform=ax1[0].transAxes)
-    if areaString is not None:
+    ax1[0].text(0.95, 0.7, '  mean %.2f s' % dtmean, horizontalalignment='right',
+             verticalalignment='bottom', transform=ax1[0].transAxes)
+    if not areaString is None:
         ax1[0].text(0.95, 0.6, areaString, horizontalalignment='right',
              verticalalignment='bottom', transform=ax1[0].transAxes)
     
-    # --- Compute the Duration Median ---
-    h = ax1[1].hist(durations,bins=40)
     durmedian = np.median(durations)
+    durmean = np.mean(durations)
+    duriqr = iqr(durations,rng=(10, 90))
+    h = ax1[1].hist(durations,bins=40,range=(0,durmean + 2*duriqr))
     ax1[1].plot([durmedian,durmedian],[0,h[0].max()])
     ax1[1].set_xlabel('duration of "traces" [s]')
     ax1[1].text(0.95, 0.8, 'median %.0f ms' % (1e3*durmedian), horizontalalignment='right',
              verticalalignment='bottom', transform=ax1[1].transAxes)
+    ax1[1].text(0.95, 0.7, '  mean %.0f ms' % (1e3*durmean), horizontalalignment='right',
+             verticalalignment='bottom', transform=ax1[1].transAxes)
+    # ax1[1].set_xlim(0,durmean + 2*duriqr) # superfluous since we are using the range keyword in hist
 
-    # --- Compute the Time between Localisations Median ---
-    h = ax2[0].hist(tdiff,bins=50,range=(0,0.1))
+    tdintrace_ms = 1e3*tdintrace
+    tdmedian = np.median(tdintrace_ms)
+    tdmean = np.mean(tdintrace_ms)
+    tdiqr = iqr(tdintrace_ms,rng=(10, 90))
+    h = ax2[0].hist(tdintrace_ms,bins=50,range=(0,tdmean + 2*tdiqr))
     ax2[0].plot([tdmedian,tdmedian],[0,h[0].max()])
     # these are times between repeated localisations of the same dye molecule
-    ax2[0].set_xlabel('time between localisations in same trace [s]')
-    ax2[0].text(0.95, 0.8, 'median %.0f ms' % (1e3*tdmedian), horizontalalignment='right',
+    ax2[0].set_xlabel('time between localisations in same trace [ms]')
+    ax2[0].text(0.95, 0.8, 'median %.0f ms' % (tdmedian), horizontalalignment='right',
              verticalalignment='bottom', transform=ax2[0].transAxes)
+    ax2[0].text(0.95, 0.7, '  mean %.0f ms' % (tdmean), horizontalalignment='right',
+             verticalalignment='bottom', transform=ax2[0].transAxes)
+    # ax2[0].set_xlim(0,tdmean + 2*tdiqr) # superfluous since we are using the range keyword in hist
 
     # --- Compute the TBT running time average ---
     if showTimeAverages:
@@ -246,7 +255,7 @@ def analyse_locrate_pdframe(datain,use_invalid=False,showTimeAverages=True):
 
 
 # similar version but now using a pipeline
-def analyse_locrate(data,datasource='Localizations',showTimeAverages=True, timestamp=None):
+def analyse_locrate(data,datasource='Localizations',showTimeAverages=True, plot=True, timestamp=None):
     curds = data.selectedDataSourceKey
     data.selectDataSource(datasource)
     bins = np.arange(int(data['clumpIndex'].max())+1) + 0.5
@@ -260,9 +269,11 @@ def analyse_locrate(data,datasource='Localizations',showTimeAverages=True, times
     
     durations = ends - starts
     deltas = starts[1:]-ends[:-1]
+    # now we specifically look for the deltas within a trace
     tdiff = data['tim'][1:]-data['tim'][:-1]
-    tdsmall = tdiff[tdiff <= 0.1]
-    tdmedian = np.median(tdsmall)
+    tracejump = data['clumpIndex'][1:]-data['clumpIndex'][:-1] # find all positions where the trace ID changes
+    tdintrace = tdiff[tracejump < 0.1] # and now we exclude all tracejump deltas
+    tdmedian = np.median(tdintrace)
     durations_proper = durations + tdmedian # we count one extra localisation, using the median duration
     # the extra is because we leave at least one localisation out from the total timing when we subtract ends-starts
 
@@ -284,4 +295,13 @@ def analyse_locrate(data,datasource='Localizations',showTimeAverages=True, times
     else:
         plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, data['efo'], None, dsKey = datasource, areaString=area_string, timestamp=timeStamp, dirPath=dirpath)
 
-    return (starts,deltas)
+    if plot:
+        if showTimeAverages:
+            delta_averages, bin_edges, binnumber = binned_statistic(starts[:-1],deltas,statistic='mean', bins=50)
+            delta_av_times = 0.5*(bin_edges[:-1] + bin_edges[1:]) # bin centres
+            plot_stats_minflux(deltas, durations_proper, tdintrace, delta_averages, delta_av_times,
+                               showTimeAverages=True, dsKey = datasource, areaString=area_string)
+        else:
+            plot_stats_minflux(deltas, durations_proper, tdintrace, data['efo'], None, dsKey = datasource, areaString=area_string)
+
+    return (starts,ends,deltas,durations_proper,tdintrace)

@@ -553,6 +553,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Origami', "group and analyse origami sites", self.OnOrigamiSiteRecipe)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami site correction", self.OnOrigamiSiteTrackPlot)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami error estimates", self.OnOrigamiErrorPlot)
+        visFr.AddMenuItem('MINFLUX>Origami', "plot origami site stats", self.OnOrigamiSiteStats)
         visFr.AddMenuItem('MINFLUX>Origami', "add final filter for site-based corrected data", self.OnOrigamiFinalFilter)
         visFr.AddMenuItem('MINFLUX', "Analysis settings", self.OnMINFLUXSettings)
         visFr.AddMenuItem('MINFLUX', "Manually create Colour panel", self.OnMINFLUXColour)
@@ -1634,12 +1635,47 @@ class MINFLUXanalyser():
         ax.legend()
         plt.tight_layout()
         
-        uids = np.unique(p['siteID']) # currently siteID is hard coded - make config option
+        uids = np.unique(p['siteID']) # currently siteID is hard coded - possibly make config option
         from PYMEcs.Analysis.MINFLUX import plotsitestats
         if uids.size < self.analysisSettings.origamiSiteMaxNum:
             plotsitestats(p,fignum=('origami site stats %d' % self.origamiErrorFignum))
         self.origamiErrorFignum += 1
 
+    def OnOrigamiSiteStats(self, event):
+        from PYMEcs.IO.MINFLUX import get_stddev_property
+        p = self.visFr.pipeline
+        plotted = False
+        # need to check if the required properties are present in the datasource
+        if 'error_x_ori' not in p.keys():
+            warn("property 'error_x_ori' not present, possibly not the right datasource for origami site info. Aborting...")
+            return
+        
+        from PYMEcs.Analysis.MINFLUX import plotsitestats
+        uids,idx = np.unique(p['siteID'],return_index=True) # currently siteID is hard coded - possibly make config option
+        if uids.size < self.analysisSettings.origamiSiteMaxNum:
+            plotsitestats(p,fignum=('origami site stats %d' % self.origamiErrorFignum))
+            plotted = True
+        else:
+            warn("Number of sites (%d) > max number for plotting (%d); check settings"
+                 % (uids.size,self.analysisSettings.origamiSiteMaxNum))
+
+        counts = get_stddev_property(p['siteID'],p['siteID'],statistic='count')
+        plt.figure(num=('site visits %d' % self.origamiErrorFignum))
+        ax = plt.gca()
+        ctmedian = np.median(counts[idx])
+        ctmean = np.mean(counts[idx])
+
+        h = plt.hist(counts[idx],bins='auto')
+        ax.plot([ctmedian,ctmedian],[0,h[0].max()])
+        plt.xlabel('Number of site visits')
+        plt.text(0.85, 0.8, 'median %d' % ctmedian, horizontalalignment='right',
+                 verticalalignment='bottom', transform=ax.transAxes)
+        plt.text(0.85, 0.7, '  mean %.1f' % ctmean, horizontalalignment='right',
+                 verticalalignment='bottom', transform=ax.transAxes)
+        plotted = True
+        if plotted:
+            self.origamiErrorFignum += 1
+        
     def OnMINFLUXColour(self,event):
         from PYME.LMVis import colourPanel
         
