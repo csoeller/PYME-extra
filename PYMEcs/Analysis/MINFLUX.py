@@ -116,7 +116,8 @@ def plot_stats_minflux(deltas, durations, tdintrace, efo_or_dtovertime, times,
 
     # --- Create the figure (plot with 2x2 subplots) ---
     fig, (ax1, ax2) = plt.subplots(2, 2)
-    # Compute some statistics for TBT plot
+    
+    # --- Compute some statistics for TBT plot (top-right = ax1[0]) ---
     dtmedian = np.median(deltas)
     dtmean = np.mean(deltas)
     dtiqr = iqr(deltas,rng=(10, 90)) # we are going for the 10 to 90 % range
@@ -133,10 +134,12 @@ def plot_stats_minflux(deltas, durations, tdintrace, efo_or_dtovertime, times,
         ax1[0].text(0.95, 0.6, areaString, horizontalalignment='right',
              verticalalignment='bottom', transform=ax1[0].transAxes)
     
+    # --- Compute some statistics for trace duration plot (top-left = ax1[1]) ---
     durmedian = np.median(durations)
     durmean = np.mean(durations)
     duriqr = iqr(durations,rng=(10, 90))
     h = ax1[1].hist(durations,bins=40,range=(0,durmean + 2*duriqr))
+    
     ax1[1].plot([durmedian,durmedian],[0,h[0].max()])
     ax1[1].set_xlabel('duration of "traces" [s]')
     ax1[1].text(0.95, 0.8, 'median %.0f ms' % (1e3*durmedian), horizontalalignment='right',
@@ -145,11 +148,13 @@ def plot_stats_minflux(deltas, durations, tdintrace, efo_or_dtovertime, times,
              verticalalignment='bottom', transform=ax1[1].transAxes)
     # ax1[1].set_xlim(0,durmean + 2*duriqr) # superfluous since we are using the range keyword in hist
 
+    # --- Compute some statistics for time between localisations in same trace (bottom-left = ax2[0]) ---
     tdintrace_ms = 1e3*tdintrace
     tdmedian = np.median(tdintrace_ms)
     tdmean = np.mean(tdintrace_ms)
     tdiqr = iqr(tdintrace_ms,rng=(10, 90))
     h = ax2[0].hist(tdintrace_ms,bins=50,range=(0,tdmean + 2*tdiqr))
+    
     ax2[0].plot([tdmedian,tdmedian],[0,h[0].max()])
     # these are times between repeated localisations of the same dye molecule
     ax2[0].set_xlabel('time between localisations in same trace [ms]')
@@ -159,7 +164,7 @@ def plot_stats_minflux(deltas, durations, tdintrace, efo_or_dtovertime, times,
              verticalalignment='bottom', transform=ax2[0].transAxes)
     # ax2[0].set_xlim(0,tdmean + 2*tdiqr) # superfluous since we are using the range keyword in hist
 
-    # --- Compute the TBT running time average ---
+    # --- Compute the TBT running time average (bottom-right = ax2[1]) ---
     if showTimeAverages:
         ax2[1].plot(times,efo_or_dtovertime)
         ax2[1].set_xlabel('TBT running time average [s]')
@@ -180,8 +185,10 @@ def plot_stats_minflux(deltas, durations, tdintrace, efo_or_dtovertime, times,
     
     # --- Save medians values to csv --- (Alex B addition)
     df = pd.DataFrame({
-        "Metric": ["TBT (Time Between Traces)", "dimension", "area", "Trace Duration", "Time Between Localizations"],
-        "Median": [dtmedian, dimension, area, durmedian * 1e3, tdmedian * 1e3],  # Convert seconds -> milliseconds where needed
+        "Metric": ["TBT (Time Between Traces)", "ROI dimension", "ROI area", "Trace Duration", "Time Between Localizations"],
+        "Median": [dtmedian.round(2), dimension, area, (durmedian * 1e3).round(0), tdmedian.round(0)],  # Convert seconds -> milliseconds where needed
+        "Mean": [dtmean.round(2), dimension, area, (durmean * 1e3).round(0), tdmean.round(0)],  # Convert seconds -> milliseconds where needed
+        "IQR": [dtiqr.round(2), dimension, area, (duriqr * 1e3).round(0), tdiqr.round(0)],  # Convert seconds -> milliseconds where needed
         "Unit": ["s","um^2","um^2", "ms", "ms"]    })
     
     # --- Show the head of df in the console --- (Alex B addition)
