@@ -3,9 +3,10 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from scipy.stats import binned_statistic
+
 from PYMEcs.IO.MINFLUX import get_stddev_property
 from PYMEcs.pyme_warnings import warn
-from scipy.stats import binned_statistic
 
 
 def propcheck_density_stats(ds,warning=True):
@@ -112,12 +113,14 @@ def plot_density_stats_sns(ds,objectID='dbscanClumpID'):
 def plot_stats_minflux(deltas, durations, tdintrace, efo_or_dtovertime, times,
                        showTimeAverages=False, dsKey=None, areaString=None, timestamp=None, dirPath=None):
     from scipy.stats import iqr
-    
+
     # --- Create the figure (plot with 2x2 subplots) ---
     fig, (ax1, ax2) = plt.subplots(2, 2)
+    # Compute some statistics for TBT plot
     dtmedian = np.median(deltas)
     dtmean = np.mean(deltas)
     dtiqr = iqr(deltas,rng=(10, 90)) # we are going for the 10 to 90 % range
+    
     h = ax1[0].hist(deltas,bins=40,range=(0,dtmean + 2*dtiqr))
     ax1[0].plot([dtmedian,dtmedian],[0,h[0].max()])
     # this is time between one dye molecule and the next dye molecule being seen
@@ -126,7 +129,7 @@ def plot_stats_minflux(deltas, durations, tdintrace, efo_or_dtovertime, times,
              verticalalignment='bottom', transform=ax1[0].transAxes)
     ax1[0].text(0.95, 0.7, '  mean %.2f s' % dtmean, horizontalalignment='right',
              verticalalignment='bottom', transform=ax1[0].transAxes)
-    if not areaString is None:
+    if areaString is not None:
         ax1[0].text(0.95, 0.6, areaString, horizontalalignment='right',
              verticalalignment='bottom', transform=ax1[0].transAxes)
     
@@ -285,23 +288,13 @@ def analyse_locrate(data,datasource='Localizations',showTimeAverages=True, plot=
     dirpath, filename = os.path.split(data.filename)
     timeStamp = data.mdh.get('MINFLUX.TimeStamp')
     
-    if showTimeAverages:
-        delta_averages, bin_edges, binnumber = binned_statistic(starts[:-1],deltas,statistic='mean', bins=50)
-        delta_av_times = 0.5*(bin_edges[:-1] + bin_edges[1:]) # bin centres
-        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, 
-                           delta_averages, delta_av_times, showTimeAverages=True, 
-                           dsKey = datasource, areaString=area_string, 
-                           timestamp=timeStamp, dirPath=dirpath)
-    else:
-        plot_stats_minflux(deltas, durations_proper, tdiff, tdmedian, data['efo'], None, dsKey = datasource, areaString=area_string, timestamp=timeStamp, dirPath=dirpath)
-
     if plot:
         if showTimeAverages:
             delta_averages, bin_edges, binnumber = binned_statistic(starts[:-1],deltas,statistic='mean', bins=50)
             delta_av_times = 0.5*(bin_edges[:-1] + bin_edges[1:]) # bin centres
             plot_stats_minflux(deltas, durations_proper, tdintrace, delta_averages, delta_av_times,
-                               showTimeAverages=True, dsKey = datasource, areaString=area_string)
+                               showTimeAverages=True, dsKey = datasource, areaString=area_string, timestamp=timeStamp, dirPath=dirpath)
         else:
-            plot_stats_minflux(deltas, durations_proper, tdintrace, data['efo'], None, dsKey = datasource, areaString=area_string)
+            plot_stats_minflux(deltas, durations_proper, tdintrace, data['efo'], None, dsKey = datasource, areaString=area_string, timestamp=timeStamp, dirPath=dirpath)
 
     return (starts,ends,deltas,durations_proper,tdintrace)
