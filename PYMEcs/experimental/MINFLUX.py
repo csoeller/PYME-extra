@@ -1,36 +1,58 @@
+import logging
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 import wx
+import zarr
 
-import logging
 logger = logging.getLogger(__file__)
 
 from PYMEcs.pyme_warnings import warn
+
+
+# --- Define the Localisation Error Analysis function ---
 def plot_errors(pipeline):
-    if not 'coalesced_nz' in pipeline.dataSources:
+    if 'coalesced_nz' not in pipeline.dataSources:
         warn('no data source named "coalesced_nz" - check recipe and ensure this is MINFLUX data')
         return
     curds = pipeline.selectedDataSourceKey
     pipeline.selectDataSource('coalesced_nz')
     p = pipeline
     clumpSize = p['clumpSize']
+    
+    # --- Prepare the plot --- 
     plt.figure()
     plt.subplot(221)
+    
+    # --- Plot the coalesced error in x, y (and z if available) ---
     if 'error_z' in pipeline.keys():
         plt.boxplot([p['error_x'],p['error_y'],p['error_z']],labels=['error_x','error_y','error_z'])
     else:
         plt.boxplot([p['error_x'],p['error_y']],labels=['error_x','error_y'])
     plt.ylabel('loc error - coalesced (nm)')
     pipeline.selectDataSource('with_clumps')
+    
+    # --- Plot the Photon number and background rate ---
     plt.subplot(222)
-    bp_dict = plt.boxplot([p['nPhotons'],p['fbg']],labels=['photons','background rate'])
-    for line in bp_dict['medians']:
+    bp_dict1 = plt.boxplot([p['nPhotons'],p['fbg']],labels=['photons','background rate'])
+    for line in bp_dict1['medians']:
         # get position data for median line
         x, y = line.get_xydata()[0] # top of median line
         # overlay median value
         plt.text(x, y, '%.0f' % y,
-                 horizontalalignment='right') # draw above, centered
+                horizontalalignment='right') # draw above, centered
     uids, idx = np.unique(p['clumpIndex'],return_index=True)
+    #print(f"bp_dict1: {bp_dict1['medians'][0].get_xydata()[0][1]}")
+    
+    # Get the median values for photons and background
+    # mean_photon = np.mean(p['nPhotons'])
+    median_photon = np.median(p['nPhotons'])
+    
+    # mean_bg = np.mean(p['fbg'])
+    median_bg = np.median(p['fbg'])
+    
+    # --- Plot the error in x, y, (and z if available) before coalescing, this is done by using [idx] ---
     plt.subplot(223)
     if 'error_z' in pipeline.keys():
         plt.boxplot([p['error_x'][idx],p['error_y'][idx],p['error_z'][idx]],
@@ -38,6 +60,8 @@ def plot_errors(pipeline):
     else:
         plt.boxplot([p['error_x'][idx],p['error_y'][idx]],labels=['error_x','error_y'])
     plt.ylabel('loc error - raw (nm)')
+    
+    # --- Plot the clump size ---
     plt.subplot(224)
     bp_dict = plt.boxplot([clumpSize],labels=['clump size'])
     for line in bp_dict['medians']:
@@ -45,12 +69,52 @@ def plot_errors(pipeline):
         x, y = line.get_xydata()[0] # top of median line
         # overlay median value
         plt.text(x, y, '%.0f' % y,
-                 horizontalalignment='right') # draw above, centered
+                horizontalalignment='right') # draw above, centered
+    
+    # Display the plot
     plt.tight_layout()
     pipeline.selectDataSource(curds)
+    dirpath, filename = os.path.split(pipeline.filename)
+    timestamp = pipeline.mdh.get('MINFLUX.TimeStamp')
+    # Save the plot as a png file (Alex B addition)
+    plt.savefig(os.path.join(dirpath, timestamp + '_locError.png'),
+                dpi=300, bbox_inches='tight')
+
+    # --- Get the median of the clump size and errors x, y, z coalesced --- (Alex B addition)
     
-from PYMEcs.misc.matplotlib import boxswarmplot
+    # mean_clump = np.mean(p['clumpSize'])
+    pipeline.selectDataSource('coalesced_nz')
+    median_clump = np.median(p['clumpSize'])
+    
+    median_error_x = np.median(p['error_x'])
+    median_error_y = np.median(p['error_y'])
+    median_error_z = np.median(p['error_z'])
+    
+    # median_error_x_coalesced = np.median(p['error_x'])
+    # median_error_y_coalesced = np.median(p['error_y'])
+    # median_error_z_coalesced = np.median(p['error_z'])
+    
+    # --- Print statements --- (Alex B addition)
+    print("Raw median:", np.median(p['clumpSize']))
+    print("Number of data points:", len(p['clumpSize']))
+    print("Boxplot median:", [line.get_xydata()[0][1] for line in bp_dict['medians']])
+    
+    # --- Save the values to csv --- (Alex B addition)
+    df = pd.DataFrame({
+        "Metric": ["Photons", "Background", "Clump Size", "Error X", "Error Y", "Error Z"], #  "Error X", "Error Y", "Error Z"
+        "Median": [median_photon, median_bg, median_clump, median_error_x, median_error_y ,median_error_z ], 
+        "Unit": ["","","","nm","nm","nm" ]    })
+    # --- Show the head of df in the console --- (Alex B addition)
+    print(df.head())
+    
+    # --- Save as a csv file --- (Alex B addition)
+    df.to_csv(os.path.join(dirpath, timestamp + "_locError.csv"), index=False, header=True)
+    print(f"LocError plot and csv file saved as: {timestamp + '_locError.csv'}")    # By default the file is saved on the Desktop, if a session file is used, it is saved in the same directory as the session file.
+    
 import pandas as pd
+from PYMEcs.misc.matplotlib import boxswarmplot
+
+
 def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', wintitle=None, bigCfraction=None,bigcf_percluster=None, plotints=True, **kwargs):
     if 'range' in kwargs:
         enforce_xlims = True
@@ -123,7 +187,7 @@ def _plot_clustersize_counts(cts, ctsgt1, xlabel='Cluster Size', wintitle=None, 
 
 def plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=True, return_means=False,
                           return_data=False, psu=None, bins=15, bigc_thresh=50, **kwargs):
-    if not ds in pipeline.dataSources:
+    if ds not in pipeline.dataSources:
         warn('no data source named "%s" - check recipe and ensure this is MINFLUX data' % ds)
         return
     curds = pipeline.selectedDataSourceKey
@@ -169,7 +233,7 @@ def cluster_analysis(pipeline):
     return plot_cluster_analysis(pipeline, ds='dbscanClustered',showPlot=False,return_means=True)
     
 def plot_intra_clusters_dists(pipeline, ds='dbscanClustered',bins=15,NNs=1,**kwargs):
-    if not ds in pipeline.dataSources:
+    if ds not in pipeline.dataSources:
         warn('no data source named "%s" - check recipe and ensure this is MINFLUX data' % ds)
         return
     from scipy.spatial import KDTree
@@ -269,8 +333,9 @@ def plot_zextent(pipeline, ds='closemerged', series_name='This series'):
     plt.subplots_adjust(bottom=0.15, wspace=0.05)
 
     
-from scipy.special import binom
 from scipy.optimize import curve_fit
+from scipy.special import binom
+
 
 def sigpn(p):
     return pn(1,p)+pn(2,p)+pn(3,p)+pn(4,p)
@@ -430,13 +495,13 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
         axs[1, 1].set_ylabel('orig. corr [nm]')
     plt.tight_layout()
 
+import PYME.config
+from PYME.recipes.traits import Bool, CStr, Enum, Float, HasTraits, Int
 from PYMEcs.Analysis.MINFLUX import analyse_locrate
+from PYMEcs.IO.MINFLUX import findmbm
 from PYMEcs.misc.guiMsgBoxes import Error
 from PYMEcs.misc.utils import unique_name
-from PYMEcs.IO.MINFLUX import findmbm
 
-from PYME.recipes.traits import HasTraits, Float, Enum, CStr, Bool, Int, List
-import PYME.config
 
 class MINFLUXSettings(HasTraits):
     withOrigamiSmoothingCurves = Bool(True,label='Plot smoothing curves',desc="if overplotting smoothing curves " +
@@ -513,6 +578,9 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from clumpIndex)", self.OnAddMINFLUXTracksCI)
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from tid)", self.OnAddMINFLUXTracksTid)
         visFr.AddMenuItem('MINFLUX>Colour', "Plot colour stats", self.OnPlotColourStats)
+        # --- Alex B test addition ---
+        visFr.AddMenuItem('MINFLUX>Paraflux', "Run Paraflux Analysis", self.OnRunParafluxAnalysis)
+        # --- End of Alex B test addition ---
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -526,9 +594,250 @@ class MINFLUXanalyser():
                 ID = visFr.AddMenuItem('MINFLUX>Recipes', r, self.OnLoadCustom).GetId()
                 self.minfluxRIDs[ID] = minfluxRecipes[r]
 
+# --- Alex B addition function to save and plot ITR stats (Paraflux like) ---
+    def OnRunParafluxAnalysis(self, event):
+        from pathlib import Path
+
+        # ======================================================================================
+        # --- Select, load Zarr.zip file, convert into DataFrame, Run the analysis functions ---
+        # ======================================================================================
+        pipeline = self.visFr.pipeline # Get the pipeline from the GUI
+        
+        if pipeline is None:
+            Error(self.visFr, "No data found. Please load a MINFLUX dataset first.")
+            return
+        
+        datasources = pipeline._get_session_datasources()
+        store_path = datasources.get('FitResults')
+        
+        if store_path is None:
+            print("FitResults path not found. Asking user to select a Zarr.zip file.")
+            with wx.FileDialog(
+                self.visFr,
+                'Select a Zarr.zip to open ...',
+                wildcard='ZIP (*.zip)|*.zip',
+                style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST
+                ) as fdialog:
+                if fdialog.ShowModal() != wx.ID_OK:
+                    return
+                store_path = Path(fdialog.GetPath())
+        else:
+            store_path = Path(store_path)
+        
+        store = zarr.storage.ZipStore(str(store_path), mode='r')
+        archz = zarr.open(store, mode='r')
+        mfxdata = archz['mfx'][:]
+
+        # Convert structured array (original mfx data) to DataFrame (containing all data from MFX experiment)
+        df_mfx = pd.DataFrame()
+        for name in mfxdata.dtype.names:
+            col = mfxdata[name]
+            if col.ndim == 1:
+                df_mfx[name] = col
+            else:
+                n_dim = col.shape[1]
+                expanded = pd.DataFrame(col.tolist(), index=df_mfx.index if not df_mfx.empty else None)
+                if name in ['loc', 'lnc']:
+                    labels = ["x", "y", "z"]
+                    expanded.columns = [f"{name}_{labels[i]}" for i in range(n_dim)]
+                elif name == 'dcr':
+                    expanded.columns = [f"{name}_{i+1}" for i in range(n_dim)]
+                else:
+                    expanded.columns = [f"{name}_{i}" for i in range(n_dim)]
+                df_mfx = pd.concat([df_mfx, expanded], axis=1)
+
+        # Create failure_map (used to interpret failure reasons in analyze_failures)
+        failure_map = {
+            1: "Valid final", 2: "Valid not final",
+            4: "Derived iteration", 5: "Reserved",
+            6: "CFR failure", 8: "No signal",
+            9: "DAC out of range", 11: "Background measurement"
+        }
+
+        # Run analysis pipeline
+        vld = self.compute_vld_stats(df_mfx, failure_map, pipeline, store_path)
+        return vld
+
+    # ==================================================
+    # --- Analysis functions ( Paraflux-like) ---
+    # ==================================================
+
+    # Create a df with list of vld tids per iteration + additional basic stats
+    def build_valid_df(self, df_mfx):
+        if not isinstance(df_mfx, pd.DataFrame): # Convert to DataFrame if input is structured array
+            df = pd.DataFrame(df_mfx)
+        else:
+            df = df_mfx.copy()
+        df_valid = df[df['vld']] # Select only valid localizations
+        vld_itr = df_valid.groupby('itr')['tid'].apply(lambda x: list(set(x))).reset_index() # Get list of unique tids per iteration
+        vld_itr['Axis'] = np.where(vld_itr['itr'] % 2 == 0, 'x,y', 'z') # Add a col with axis of each iteration 
+        vld_itr['vld loc count'] = vld_itr['tid'].apply(len) # Count valid locs per iteration
+        vld_itr['failed loc count'] = vld_itr['vld loc count'].shift(1, fill_value=vld_itr['vld loc count'].iloc[0]) - vld_itr['vld loc count'] # Calculate failed loc count per iteration
+        vld_itr.loc[0, 'failed loc count'] = 0 # Set failed loc count of first iteration to 0 (instead of NaN)
+        vld_itr['failed loc cum sum'] = vld_itr['failed loc count'].cumsum() # Cumulative sum of failed locs
+        return vld_itr
+
+    # Compute percentages of passed and failed localizations (from build_valid_df)
+    def compute_percentages(self, vld_itr):
+        initial_count = vld_itr['vld loc count'].iloc[0] # Percentage calculations are based on initial count of valid locs
+        vld_itr['passed itr %'] = (vld_itr['vld loc count'] * 100 / initial_count).round(1)
+        vld_itr['failed % per itr'] = (vld_itr['failed loc count'] * 100 / initial_count).round(1)
+        pair_sums = {} # This is done to mimic results from Paraflux
+        for i in range(1, len(vld_itr), 2):
+            pair_sums[i] = vld_itr.loc[i-1:i, 'failed % per itr'].sum().round(1)
+        vld_itr['failed % per itr pairs'] = vld_itr.index.map(pair_sums)
+        vld_itr['failed cum sum %'] = vld_itr['failed % per itr'].cumsum().round(1)
+        return vld_itr
+
+    # Analyze failures between consecutive iterations and categorize them based on failure_map (found on wiki from Abberior)
+    def analyze_failures(self, vld_itr, df_mfx, failure_map):
+        def analyze_failures_single_steps(vld_itr, df, itr_from, itr_to, failure_map):
+            tids_from = set(vld_itr.loc[vld_itr['itr'] == itr_from, 'tid'].iloc[0]) # Select valid tids of the previous iteration
+            tids_to   = set(vld_itr.loc[vld_itr['itr'] == itr_to, 'tid'].iloc[0]) # Select valid tids of the current iteration
+            failed_tids = tids_from - tids_to # Determine tids that failed in the current iteration
+            failed_df = df[df['tid'].isin(failed_tids) & (df['itr'] == itr_to)] # Create a df with only failed tids in the current iteration
+            counts = failed_df['sta'].value_counts().rename_axis("sta").reset_index(name="count") # Count failure reasons
+            counts["reason"] = counts["sta"].map(failure_map).fillna("Other") # Map failure reasons using failure_map
+            counts.insert(0, "itr", itr_to) # Add iteration column
+            return counts
+
+        pairs = [(i, i+1) for i in range(vld_itr['itr'].max())] # Create pairs of consecutive iterations
+        # Analyze failures for each pair and concatenate results
+        failure_results = pd.concat(
+            [analyze_failures_single_steps(vld_itr, df_mfx, i_from, i_to, failure_map) for i_from, i_to in pairs],
+            ignore_index=True
+        ) 
+        # Pivot the results to have failure reasons as columns
+        failure_pivot = failure_results.pivot_table( 
+            index="itr", columns="reason", values="count", fill_value=0
+        ).reset_index() 
+        return vld_itr.merge(failure_pivot, on="itr", how="left")
+
+    # Compute percentages for failure reasons
+    def add_failure_metrics(self, vld_itr, initial_count):
+        cfr_map = {5: 4, 7: 6} #map ITR where CFR failures occurs
+        vld_itr['CFR failure %'] = np.nan # Initialize column with NaNs
+        # Calculate CFR failure percentages based on cfr_map
+        for target_itr, source_itr in cfr_map.items():
+            if not vld_itr.loc[vld_itr['itr'] == source_itr, 'CFR failure'].empty: # Check if CFR failure data exists for the source iteration
+                val = vld_itr.loc[vld_itr['itr'] == source_itr, 'CFR failure'].values[0] # Get the CFR failure count
+                vld_itr.loc[vld_itr['itr'] == target_itr, 'CFR failure %'] = (val / initial_count * 100).round(1) # Calculate percentage and assign to target iteration
+        # Calculate No signal percentage for each iteration       
+        vld_itr['No signal %'] = (vld_itr['No signal'] * 100 / initial_count).round(1)
+        # Define groups of iterations for No signal percentage calculation
+        no_signal_groups = {1: [0, 1],3: [2, 3], 5: [4, 5], 7: [6, 7], 9: [8, 9]}
+        # Calculate No signal percentage for each group and map to iterations
+        no_signal_pct = {
+            target_itr: (vld_itr.loc[vld_itr['itr'].isin(group), 'No signal'].sum() / initial_count * 100).round(1)
+            for target_itr, group in no_signal_groups.items()
+        }
+        vld_itr['No signal % per itr pairs'] = vld_itr['itr'].map(no_signal_pct)
+        return vld_itr
+
+    # Plot like in Paraflux
+    def paraflux_itr_plot(self, vld_paraflux):
+        # Mapping rules
+        label_map = {
+            "passed": "Passed",
+            "CFR": "CFR-filtered",
+            "No signal": "Dark",
+            "DAC": "Out of range",
+            "Other": "Other",
+        }
+
+        # Function to get pretty label based on the label map (substring matching from vld_paraflux col names)
+        def pretty_label(colname):
+            """Map colname to user-friendly label based on substring rules."""
+            for key, label in label_map.items():
+                if key.lower() in colname.lower():
+                    return label
+            return colname  # fallback: keep original name
+
+        # Keep only odd iterations (Paraflux style, i.e., 1, 3, 5, 7, 9)
+        vld_paraflux = vld_paraflux[vld_paraflux['itr'] % 2 == 1]
+
+        # Set figure size
+        plt.figure(figsize=(8, 6))
+
+        # Base positions
+        r1 = np.arange(len(vld_paraflux)) # Define the positions for each bar
+        names = vld_paraflux['itr'] # Names of group
+        barWidth = 0.85 # Bar width
+
+        # Colors (extendable if more cols are added)
+        colors = ["#0072B2", "#009E73", "#D55E00", "#E69F00", "#CC79A7"]
+        
+        # Define the bottom position for stacking
+        bottompos = np.zeros(len(vld_paraflux))
+
+        # Plot each column as a stacked bar
+        for i, col in enumerate(vld_paraflux.columns[1:]): # Enumerate over all columns except 'itr'
+            vals = vld_paraflux[col].fillna(0) # Get the values for the current column, filling NaNs with 0
+            labels = pretty_label(col) # Get the pretty label for the legend
+            
+            plt.bar(
+                r1, vals, bottom=bottompos,
+                color=colors[i % len(colors)],
+                edgecolor="white", width=barWidth, label=labels
+            ) # Create the bar
+
+            # Add labels inside each bar
+            for j, v in enumerate(vals):
+                if v > 0:
+                    plt.text(r1[j], bottompos[j] + v / 2, f"{v:.1f}%", # Only add text if value > 0
+                            ha="center", va="center",
+                            color="black",
+                            fontsize=9)
+
+            bottompos += vals.values
+
+        # X/Y labels
+        plt.xticks(r1, names)
+        plt.xlabel("Iteration")
+        plt.ylabel("Events (%)")
+        plt.axhline(y=100, color="gray", linestyle="--", linewidth=1)
+
+        plt.legend(loc="upper right", fontsize=9)
+        plt.tight_layout()
+        plt.show()
+    
+    # Main function to compute stats of failed and valid localizations and save results
+    def compute_vld_stats(self, df_mfx, failure_map, pipeline, store_path):
+        # Run the analysis steps
+        vld_itr = self.build_valid_df(df_mfx)
+        vld_itr = self.compute_percentages(vld_itr)
+        vld_itr = self.analyze_failures(vld_itr, df_mfx, failure_map)
+        initial_count = vld_itr['vld loc count'].iloc[0]
+        vld_itr = self.add_failure_metrics(vld_itr, initial_count)
+        vld_paraflux = self.paraflux_itr_plot(vld_itr[['itr', 'passed itr %', 'CFR failure %', 'No signal % per itr pairs']])
+
+        # Save results to CSV files
+        try:
+            timestamp = pipeline.mdh.get('MINFLUX.TimeStamp')
+        except Exception:
+            print("No timestamp found in metadata, saving as default.")
+            timestamp = "no_ts"
+
+        vld_itr = vld_itr.drop(columns='tid', errors='ignore')
+        default_dir = str(store_path.parent)
+        full_path = os.path.join(default_dir, f"{timestamp}_iteration_stats_full.csv")
+        paraflux_path = os.path.join(default_dir, f"{timestamp}_iteration_stats_Paraflux_only.csv")
+
+        vld_itr.to_csv(full_path, index=False)
+        keep_cols = ["itr", 'passed itr %', 'CFR failure %', 'No signal % per itr pairs']
+        vld_paraflux = vld_itr[keep_cols]
+        vld_paraflux.to_csv(paraflux_path, index=False)
+
+        print(f"✔ Saved full results to: {full_path}")
+        print(f"✔ Saved cleaned results to: {paraflux_path}")
+
+        return vld_itr
+
+### --- End of Alex B test addition function ---
+
     def OnClumpScatterPosPlot(self,event):
-        from scipy.stats import binned_statistic
         from PYMEcs.IO.MINFLUX import get_stddev_property
+        from scipy.stats import binned_statistic
         def detect_coalesced(pipeline):
             # placeholder, to be implemented
             return False
@@ -610,7 +919,7 @@ class MINFLUXanalyser():
         mod.lowess_cachesave()
 
     def OnMBMAttributes(self, event):
-        from  wx.lib.dialogs import ScrolledMessageDialog
+        from wx.lib.dialogs import ScrolledMessageDialog
         fres = self.visFr.pipeline.dataSources['FitResults']
         if 'zarr' in dir(fres):
             try:
@@ -627,7 +936,7 @@ class MINFLUXanalyser():
             warn("could not find zarr attribute - is this a MFX zarr file?")
         
     def OnMFXAttributes(self, event):
-        from  wx.lib.dialogs import ScrolledMessageDialog
+        from wx.lib.dialogs import ScrolledMessageDialog
         fres = self.visFr.pipeline.dataSources['FitResults']
         if 'zarr' in dir(fres):
             try:
@@ -642,34 +951,67 @@ class MINFLUXanalyser():
                 dlg.ShowModal()
         else:
             warn("could not find zarr attribute - is this a MFX zarr file?")
-
+    
     def OnMFXInfo(self, event):
-        import io
-        from  wx.lib.dialogs import ScrolledMessageDialog
+        import wx.html
         fres = self.visFr.pipeline.dataSources['FitResults']
         if 'zarr' not in dir(fres):
             warn("could not find zarr attribute - is this a MFX zarr file?")
             return
-        else:
-            try:
-                mfx_attrs = fres.zarr['mfx'].attrs.asdict()
-            except AttributeError:
-                warn("could not access MFX attributes - do we have MFX data in zarr?")
-                return
-            if '_legacy' in mfx_attrs:
-                warn("legacy data detected - no useful MFX metadata in legacy data")
-                return
-            from PYMEcs.IO.MINFLUX import get_metadata_from_mfx_attrs
-            md_itr_info, md_globals = get_metadata_from_mfx_attrs(mfx_attrs)
-            import pprint
-            with io.StringIO() as output:
-                print(md_itr_info.to_string(show_dimensions=False,index=True,line_width=80),file=output)
-                print('\nMFX Globals:',file=output)
-                print(pprint.pformat(md_globals,indent=4),file=output)
-                mfx_info_str = output.getvalue()
-            with ScrolledMessageDialog(self.visFr, mfx_info_str, "MFX info (tentative)", size=(900,400),
-                                        style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE ) as dlg:
-                dlg.ShowModal()            
+        
+        # Get the metadata as before
+        try:
+            mfx_attrs = fres.zarr['mfx'].attrs.asdict()
+        except AttributeError:
+            warn("could not access MFX attributes - do we have MFX data in zarr?")
+            return
+        if '_legacy' in mfx_attrs:
+            warn("legacy data detected - no useful MFX metadata in legacy data")
+            return
+        
+        from PYMEcs.IO.MINFLUX import get_metadata_from_mfx_attrs
+        md_itr_info, md_globals = get_metadata_from_mfx_attrs(mfx_attrs)
+        
+        # Create an HTML dialog
+        dlg = wx.Dialog(self.visFr, title="MINFLUX Metadata Information", 
+                       size=(950, 600), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        
+        # Create HTML content
+        html_window = wx.html.HtmlWindow(dlg, style=wx.html.HW_SCROLLBAR_AUTO)
+        
+        # Format the DataFrame as an HTML table
+        html_content = "<html><body>"
+        html_content += "<h2>MINFLUX Iteration Parameters</h2>"
+        html_content += md_itr_info.to_html(
+            classes='table table-striped',
+            float_format=lambda x: f"{x:.2f}" if isinstance(x, float) else x
+        )
+        
+        # Format global parameters
+        html_content += "<h2>MINFLUX Global Parameters</h2>"
+        html_content += "<table border=1 class='table table-striped'>"
+        for key, value in sorted(md_globals.items()):
+            html_content += f"<tr><td><b>{key}</b></td><td>{value}</td></tr>"
+        html_content += "</table>"
+        html_content += "</body></html>"
+        
+        html_window.SetPage(html_content)
+        
+        # Add OK button
+        btn_sizer = wx.StdDialogButtonSizer()
+        btn = wx.Button(dlg, wx.ID_OK)
+        btn.SetDefault()
+        btn_sizer.AddButton(btn)
+        btn_sizer.Realize()
+        
+        # Layout
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(html_window, 1, wx.EXPAND | wx.ALL, 5)
+        sizer.Add(btn_sizer, 0, wx.ALIGN_CENTER | wx.ALL, 5)
+        dlg.SetSizer(sizer)
+        
+        dlg.ShowModal()
+        dlg.Destroy()
 
     def OnZarrToZipStore(self, event):
         with wx.DirDialog(self.visFr, 'Zarr to convert ...',
@@ -677,8 +1019,9 @@ class MINFLUXanalyser():
             if ddialog.ShowModal() != wx.ID_OK:
                 return
             fpath = ddialog.GetPath()
-        from PYMEcs.misc.utils import zarrtozipstore
         from pathlib import Path
+
+        from PYMEcs.misc.utils import zarrtozipstore
         zarr_root = Path(fpath)
         dest_dir = zarr_root.parent
         archive_name = dest_dir / zarr_root.with_suffix('.zarr').name # we make archive_name here in the calling routine so that we can check for existence etc
@@ -725,19 +1068,22 @@ class MINFLUXanalyser():
             return
         
         # now we add a layer to render our alpha shape polygons
-        from PYME.LMVis.layers.tracks import TrackRenderLayer # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
+        from PYME.LMVis.layers.tracks import \
+            TrackRenderLayer  # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
         layer = TrackRenderLayer(self.visFr.pipeline, dsname='cluster_shapes', method='tracks', clump_key='polyIndex', line_width=2.0, alpha=0.5)
         self.visFr.add_layer(layer)
 
     def OnAddMINFLUXTracksCI(self, event):        
         # now we add a track layer to render our traces
-        from PYME.LMVis.layers.tracks import TrackRenderLayer # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
+        from PYME.LMVis.layers.tracks import \
+            TrackRenderLayer  # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
         layer = TrackRenderLayer(self.visFr.pipeline, dsname='output', method='tracks', clump_key='clumpIndex', line_width=2.0, alpha=0.5)
         self.visFr.add_layer(layer)
 
     def OnAddMINFLUXTracksTid(self, event):        
         # now we add a track layer to render our traces
-        from PYME.LMVis.layers.tracks import TrackRenderLayer # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
+        from PYME.LMVis.layers.tracks import \
+            TrackRenderLayer  # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
         layer = TrackRenderLayer(self.visFr.pipeline, dsname='output', method='tracks', clump_key='tid', line_width=2.0, alpha=0.5)
         self.visFr.add_layer(layer)
 
@@ -746,7 +1092,6 @@ class MINFLUXanalyser():
 
 
     def OnMBMSave(self,event):
-        from pathlib import Path
         pipeline = self.visFr.pipeline
         mbm = findmbm(pipeline)
         if mbm is None:
@@ -831,7 +1176,9 @@ class MINFLUXanalyser():
             naxes = 2
         has_drift = 'driftx' in p.keys()
         has_drift_ori = 'driftx_ori' in p.keys()
-        mbm = findmbm(p,warnings=False)
+        mbm = findmbm(pipeline)
+        if mbm is None:
+            return
         has_mbm = mbm is not None
         has_mbm2 = 'mbmx' in p.keys()
 
@@ -988,10 +1335,9 @@ class MINFLUXanalyser():
                              config='user', create_backup=True)
 
     def OnMINFLUXplotTempData(self, event):
-        import PYME.config as config
-        import os
-        from os.path import basename
         from glob import glob
+
+        import PYME.config as config
 
         configvar = 'MINFLUX-temperature_folder'
         folder = config.get(configvar)
@@ -1003,7 +1349,8 @@ class MINFLUXanalyser():
                  ("needs to be a **folder** location, currently set to %s" % (folder)))
             return
 
-        from PYMEcs.misc.utils import read_temp_csv, set_diff, timestamp_to_datetime
+        from PYMEcs.misc.utils import (read_temp_csv, set_diff,
+                                       timestamp_to_datetime)
 
         if len(self.visFr.pipeline.dataSources) == 0:
             warn("no datasources, this is probably an empty pipeline, have you loaded any data?")
@@ -1086,7 +1433,7 @@ class MINFLUXanalyser():
         pipeline = self.visFr.pipeline
         curds = pipeline.selectedDataSourceKey
         pipeline.selectDataSource(self.analysisSettings.defaultDatasourceForAnalysis)
-        if not 'clumpIndex' in pipeline.keys():
+        if 'clumpIndex' not in pipeline.keys():
             Error(self.visFr,'no property called "clumpIndex", cannot check')
             pipeline.selectDataSource(curds)
             return
@@ -1105,30 +1452,39 @@ class MINFLUXanalyser():
         pipeline = self.visFr.pipeline
         curds = pipeline.selectedDataSourceKey
         pipeline.selectDataSource(self.analysisSettings.defaultDatasourceForAnalysis)
-        if not 'cfr' in pipeline.keys():
+        #Added by Alex B to get timestamp and send it to plot_stats_minflux 
+        timestamp = pipeline.mdh.get('MINFLUX.TimeStamp')
+        
+        if 'cfr' not in pipeline.keys():
             Error(self.visFr,'no property called "cfr", likely no MINFLUX data - aborting')
             pipeline.selectDataSource(curds)
             return
-        if not 'tim' in pipeline.keys():
+        if 'tim' not in pipeline.keys():
             Error(self.visFr,'no property called "tim", you need to convert to CSV with a more recent version of PYME-Extra - aborting')
             pipeline.selectDataSource(curds)
             return
         pipeline.selectDataSource(curds)
 
-        analyse_locrate(pipeline,datasource=self.analysisSettings.defaultDatasourceForAnalysis,showTimeAverages=True)
+        analyse_locrate(pipeline,datasource=self.analysisSettings.defaultDatasourceForAnalysis,showTimeAverages=True, timestamp=timestamp)
 
     def OnEfoAnalysis(self, event):
         pipeline = self.visFr.pipeline
         curds = pipeline.selectedDataSourceKey
         pipeline.selectDataSource(self.analysisSettings.defaultDatasourceForAnalysis)
-        if not 'efo' in pipeline.keys():
+        #Added by Alex B to get timestamp and send it to plot_stats_minflux 
+        timestamp = pipeline.mdh.get('MINFLUX.TimeStamp')
+        if 'efo' not in pipeline.keys():
             Error(self.visFr,'no property called "efo", likely no MINFLUX data or wrong datasource (CHECK) - aborting')
             return
         plt.figure()
-        h = plt.hist(1e-3*pipeline['efo'],bins='auto',range=(0,200))
+        # Convert efo to kHz and create bins of 1 kHz (1000 Hz)
+        efo_khz = 1e-3*pipeline['efo']
+        bins = np.arange(0, 200, 1)  # Bins from 0 to 200 kHz in 1 kHz steps
+        h = plt.hist(efo_khz, bins=bins, range=(0,200), edgecolor='white', linewidth=0.5)
         dskey = pipeline.selectedDataSourceKey
         plt.xlabel('efo (photon rate in kHz)')
-        plt.title("EFO stats, using datasource '%s'" % dskey)
+        plt.xlim(0, 200)  # Limit X axis to 200 kHz (200,000 Hz)
+        plt.title(f"EFO stats for {timestamp}, using datasource '{dskey}'")
 
         pipeline.selectDataSource(curds)
 
@@ -1164,9 +1520,10 @@ class MINFLUXanalyser():
         pipeline.selectDataSource(finalFiltered)
         
     def OnOrigamiSiteRecipe(self, event=None):
-        from PYMEcs.recipes.localisations import OrigamiSiteTrack, DBSCANClustering2
         from PYME.recipes.localisations import MergeClumps
         from PYME.recipes.tablefilters import FilterTable, Mapping
+        from PYMEcs.recipes.localisations import (DBSCANClustering2,
+                                                  OrigamiSiteTrack)
         
         pipeline = self.visFr.pipeline
         recipe = pipeline.recipe
@@ -1229,6 +1586,7 @@ class MINFLUXanalyser():
         
             recipe.add_modules_and_execute(modules)
         
+               
         pipeline.selectDataSource(corrSiteClumps)
 
     def OnOrigamiSiteTrackPlot(self, event):
