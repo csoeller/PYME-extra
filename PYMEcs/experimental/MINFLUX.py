@@ -1295,11 +1295,14 @@ class MINFLUXanalyser():
         from PYMEcs.Analysis.MINFLUX import plotsitestats
         uids,idx = np.unique(p['siteID'],return_index=True) # currently siteID is hard coded - possibly make config option
         if uids.size < self.analysisSettings.origamiSiteMaxNum:
-            plotsitestats(p,fignum=('origami site stats %d' % self.origamiErrorFignum))
-            plotted = True
+            swarmsize = 3
         else:
-            warn("Number of sites (%d) > max number for plotting (%d); check settings"
-                 % (uids.size,self.analysisSettings.origamiSiteMaxNum))
+            swarmsize = 1.5
+        plotsitestats(p,fignum=('origami site stats %d' % self.origamiErrorFignum),swarmsize=swarmsize)
+        plotted = True
+        #else:
+        #    warn("Number of sites (%d) > max number for plotting (%d); check settings"
+        #         % (uids.size,self.analysisSettings.origamiSiteMaxNum))
 
         counts = get_stddev_property(p['siteID'],p['siteID'],statistic='count')
         plt.figure(num=('site visits %d' % self.origamiErrorFignum))

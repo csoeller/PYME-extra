@@ -2088,7 +2088,7 @@ class SiteDensity(ModuleBase):
         
         return dict(outputName=mapped_ds,outputShapes=dspoly)
 
-# this module regenerates the clump derived properties for MINFLUX after events were remnoved
+# this module regenerates the clump derived properties for MINFLUX after events were removed
 # this happens typically after filtering for posInClump
 @register_module('RecalcClumpProperties')
 class RecalcClumpProperties(ModuleBase):
@@ -2273,6 +2273,8 @@ class SuperClumps(ModuleBase):
         scisize = get_stddev_property(sci,sci,statistic='count').astype('i')
         superidsize = get_stddev_property(superids,superids,statistic='count').astype('i')
 
+        from PYMEcs.IO.MINFLUX import mk_posinid
+        sci_pic = mk_posinid(sci)
         # now make the relevant mappings and
         #     assign superids, superidsize for locsm mapping
         #     assign sci, scisize for locs for locs mapping
@@ -2283,8 +2285,10 @@ class SuperClumps(ModuleBase):
         
         mapped_l.addColumn('clumpIndex',sci)
         mapped_l.addColumn('clumpSize',scisize)
+        mapped_l.addColumn('posInClump',sci_pic)
         mapped_l.addColumn('subClumpIndex',locs['clumpIndex'])
         mapped_l.addColumn('subClumpSize',locs['clumpSize'])
+        mapped_l.addColumn('subPosInClump',locs['posInClump'])
 
         mapped_lm.addColumn('clumpIndex',superids)
         mapped_lm.addColumn('clumpSize',superidsize)
