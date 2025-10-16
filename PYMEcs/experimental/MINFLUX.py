@@ -513,6 +513,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from clumpIndex)", self.OnAddMINFLUXTracksCI)
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from tid)", self.OnAddMINFLUXTracksTid)
         visFr.AddMenuItem('MINFLUX>Colour', "Plot colour stats", self.OnPlotColourStats)
+        visFr.AddMenuItem('MINFLUX>Paraflux', "Run Paraflux Analysis", self.OnRunParafluxAnalysis)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -526,6 +527,60 @@ class MINFLUXanalyser():
                 ID = visFr.AddMenuItem('MINFLUX>Recipes', r, self.OnLoadCustom).GetId()
                 self.minfluxRIDs[ID] = minfluxRecipes[r]
 
+
+    def OnRunParafluxAnalysis(self, event):
+        from pathlib import Path
+
+        # ======================================================================================
+        # --- Select, load Zarr.zip file, convert into DataFrame, Run the analysis functions ---
+        # ======================================================================================
+        pipeline = self.visFr.pipeline # Get the pipeline from the GUI
+
+        if pipeline is None:
+            Error(self.visFr, "No data found. Please load a MINFLUX dataset first.")
+            return
+
+        try:
+            # if this is a zarr archive we should have a zarr attribute in the FitResults datasource 
+            zarr_archive = pipeline.dataSources['FitResults'].zarr
+        except:
+            zarr_archive = None
+        if zarr_archive is None:
+            warn("data is not from a zarr archive, giving up...")
+            return
+
+        # possible storage code, not yet used/implemented
+        # datasources = pipeline._get_session_datasources()
+        # store_path = datasources.get('FitResults')
+        # store_path = Path(store_path)
+
+        # paraflux analysis with progress dialog follows
+        import PYMEcs.Analysis.Paraflux as pf
+        # for example use of ProgressDialog see also
+        # https://github.com/Metallicow/wxPython-Sample-Apps-and-Demos/blob/master/101_Common_Dialogs/ProgressDialog/ProgressDialog_extended.py
+        progress = wx.ProgressDialog("Paraflux analysis in progress", "please wait", maximum=6,
+                                     parent=self.visFr,
+                                     style=wx.PD_SMOOTH
+                                     | wx.PD_AUTO_HIDE)
+        # read all data
+        progress.Update(1); wx.Yield()
+        mfxdata = zarr_archive['mfx'][:]
+        # processing
+        progress.Update(2); wx.Yield()
+        df_mfx, failure_map = pf.paraflux_mk_df_fm(mfxdata)
+        # Run the analysis steps
+        progress.Update(3); wx.Yield()
+        vld_itr = pf.build_valid_df(df_mfx)
+        progress.Update(4); wx.Yield()
+        vld_itr = pf.compute_percentages(vld_itr)
+        progress.Update(5); wx.Yield()
+        vld_itr = pf.analyze_failures(vld_itr, df_mfx, failure_map)
+        initial_count = vld_itr['vld loc count'].iloc[0]
+        vld_itr = pf.add_failure_metrics(vld_itr, initial_count)
+        progress.Update(6); wx.Yield()
+        vld_paraflux = pf.paraflux_itr_plot(vld_itr[['itr', 'passed itr %', 'CFR failure %', 'No signal % per itr pairs']])
+        # here possible storage command, not yet implemented
+       
     def OnClumpScatterPosPlot(self,event):
         from scipy.stats import binned_statistic
         from PYMEcs.IO.MINFLUX import get_stddev_property
