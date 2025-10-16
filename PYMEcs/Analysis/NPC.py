@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+
 from PYMEcs.pyme_warnings import warn
 
 piover4 = np.pi/4.0
@@ -31,6 +32,8 @@ piover4 = np.pi/4.0
 #     return (crot.T[:,0],crot.T[:,1])
 
 from circle_fit import taubinSVD
+
+
 def fitcirc(x,y,sigma=None):
     pcs = np.vstack((x,y)).T
     xc, yc, r, sigma = taubinSVD(pcs)
@@ -222,8 +225,9 @@ def estimate_nlabeled(x,y,r0=None,nthresh=10,dr=30.0,rotation=None,
     else:
         return Nlabeled
 
-from scipy.special import binom
 from scipy.optimize import curve_fit
+from scipy.special import binom
+
 
 def pn(k,n,p):
     return (binom(n,k)*(np.power(p,k)*np.power((1-p),(n-k))))
@@ -328,9 +332,10 @@ def to3vecs(x,y,z):
 def xyzfrom3vec(v):
     return (v[:,0],v[:,1],v[:,2])
 
-from scipy.spatial.transform import Rotation as R
 from scipy.interpolate import RegularGridInterpolator
 from scipy.signal import fftconvolve
+from scipy.spatial.transform import Rotation as R
+
 
 def fpinterpolate(fp3d,x,y,z,method='linear', bounds_error=True, fill_value=np.nan):
     # V[i,j,k] = 100*x[i] + 10*y[j] + z[k]
@@ -617,7 +622,7 @@ class NPC3D(object):
             raise RuntimeError("unknown mode '%s', should be mean or median" % mode)
         npts = self.points - self.offset
         nt = self.t
-        if not zclip is None:
+        if zclip is not None:
             zgood = (npts[:,2] > -zclip)*(npts[:,2] < zclip)
             npts = npts[zgood,:]
             nt = nt[zgood]
@@ -881,7 +886,6 @@ class NPC3DSet(object):
             self.measurements.append([nt,nb])
     
     def plot_labeleff(self,thresh=None):
-        from PYMEcs.misc.utils import get_timestamp_from_filename
         if len(self.measurements) < 10:
             raise RuntimeError("not enough measurements, need at least 10, got %d" %
                                len(self.measurements))
@@ -894,6 +898,26 @@ class NPC3DSet(object):
 
         plt.figure()
         plotcdf_npc3d(nlab,timestamp=get_timestamp_from_filename(self.filename),thresh=thresh)
+
+        # --- Alex B addiiton for auto-saving of LE-figure ---
+        # Function is called in NPCcalcLM.py (PYMEcs>experimental>OnAnalyse3DNPCsByID_auto_save)
+
+    def plot_labeleff_for_auto_save(self,thresh=None):
+        if len(self.measurements) < 10:
+            raise RuntimeError("not enough measurements, need at least 10, got %d" %
+                               len(self.measurements))
+        meas = np.array(self.measurements)
+        nlab = meas.sum(axis=1)
+        # fill with trailing zeros if we have a known number of NPCs but have fewer measurements
+        # the "missing NPCs" typically represent NPCs with no events
+        if int(self.known_number) > 0 and nlab.shape[0] < int(self.known_number):
+            nlab = np.pad(nlab,((0,int(self.known_number)-nlab.shape[0])))
+            
+        LEfig = plt.figure()
+        plotcdf_npc3d(nlab,timestamp=get_timestamp_from_filename(self.filename),thresh=thresh)
+        return LEfig
+
+        # --- Fin Alex B addition ---
 
     def diam(self):
         diams = []
