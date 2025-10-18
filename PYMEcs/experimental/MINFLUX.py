@@ -540,6 +540,9 @@ class MINFLUXanalyser():
         if pipeline is None:
             Error(self.visFr, "No data found. Please load a MINFLUX dataset first.")
             return
+        if not pipeline.mdh['MINFLUX.Is3D']: # TODO: make paraflux analysis code 2D aware
+            warn('paraflux analysis currently only implemented for 3D data, this is apparently 2D data; giving up...')
+            return
         try:
             # if this is a zarr archive we should have a zarr attribute in the FitResults datasource 
             zarr_archive = pipeline.dataSources['FitResults'].zarr

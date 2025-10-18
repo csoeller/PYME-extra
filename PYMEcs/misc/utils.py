@@ -187,7 +187,7 @@ def autosave_csv(df,datapath,mdh,suffix):
     from pathlib import Path
     fname = fname_from_timestamp(datapath,mdh,suffix,ext='.csv')
     logger.debug(f"autosaving file {fname}...")
-    df.to_csv(fname)
+    df.to_csv(fname, index=False, header=True)
 
 def autosave_check():
     import PYME.config
