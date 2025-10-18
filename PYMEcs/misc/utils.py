@@ -1,4 +1,6 @@
 import logging
+logger = logging.getLogger(__file__)
+
 # filtering for a few sources of messages that we can generally blend out in notenooks
 
 def pyme_logging_filter(loglevel=logging.WARN,
@@ -41,7 +43,7 @@ import pandas as pd
 
 # makes the reading a little more flexible
 # contributed by Alex B
-def read_temp_csv(filename, timeformat=['%d.%m.%Y %H:%M:%S', # Newest format
+def read_temperature_csv(filename, timeformat=['%d.%m.%Y %H:%M:%S', # Newest format
                                         '%d/%m/%Y %H:%M:%S' # Original format
                                         ]):
     import re
@@ -172,3 +174,22 @@ def zarrtozipstore(zarr_root,archive_name,verbose=False):
                            'zip',
                            root_dir=zarr_root)
     return created
+
+def fname_from_timestamp(datapath,mdh,stemsuffix,ext='.csv'):
+    from pathlib import Path
+    storagepath = Path(datapath).parent
+    tstamp = mdh.get('MINFLUX.TimeStamp','timestamp_unknown')
+
+    fname = (storagepath / (tstamp + stemsuffix)).with_suffix(ext)
+    return fname
+  
+def autosave_csv(df,datapath,mdh,suffix):
+    from pathlib import Path
+    fname = fname_from_timestamp(datapath,mdh,suffix,ext='.csv')
+    logger.debug(f"autosaving file {fname}...")
+    df.to_csv(fname)
+
+def autosave_check():
+    import PYME.config
+    return PYME.config.get('MINFLUX-autosave',False)
+

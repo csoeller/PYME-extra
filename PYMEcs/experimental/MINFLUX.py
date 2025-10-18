@@ -491,8 +491,9 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami site stats", self.OnOrigamiSiteStats)
         visFr.AddMenuItem('MINFLUX>Origami', "add final filter for site-based corrected data", self.OnOrigamiFinalFilter)
         visFr.AddMenuItem('MINFLUX', "Analysis settings", self.OnMINFLUXSettings)
+        visFr.AddMenuItem('MINFLUX', "Toggle MINFLUX analysis autosaving", self.OnToggleMINFLUXautosave)
         visFr.AddMenuItem('MINFLUX', "Manually create Colour panel", self.OnMINFLUXColour)
-        visFr.AddMenuItem('MINFLUX>Util', "Plot temperature record matching current data series",self.OnMINFLUXplotTempData)
+        visFr.AddMenuItem('MINFLUX>Util', "Plot temperature record matching current data series",self.OnMINFLUXplotTemperatureData)
         visFr.AddMenuItem('MINFLUX>Util', "Set MINFLUX temperature folder location", self.OnMINFLUXsetTempDataFolder)
         visFr.AddMenuItem('MINFLUX>Util', "Check if clumpIndex contiguous", self.OnClumpIndexContig)
         visFr.AddMenuItem('MINFLUX>Util', "Plot event scatter as function of position in clump", self.OnClumpScatterPosPlot)
@@ -513,7 +514,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from clumpIndex)", self.OnAddMINFLUXTracksCI)
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from tid)", self.OnAddMINFLUXTracksTid)
         visFr.AddMenuItem('MINFLUX>Colour', "Plot colour stats", self.OnPlotColourStats)
-        visFr.AddMenuItem('MINFLUX>Paraflux', "Run Paraflux Analysis", self.OnRunParafluxAnalysis)
+        visFr.AddMenuItem('MINFLUX>Zarr', "Run Paraflux Analysis", self.OnRunParafluxAnalysis)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -527,7 +528,7 @@ class MINFLUXanalyser():
                 ID = visFr.AddMenuItem('MINFLUX>Recipes', r, self.OnLoadCustom).GetId()
                 self.minfluxRIDs[ID] = minfluxRecipes[r]
 
-
+    # --- Alex B provided function (to save - not yet) and plot ITR stats (Paraflux like) ---
     def OnRunParafluxAnalysis(self, event):
         from pathlib import Path
 
@@ -539,16 +540,18 @@ class MINFLUXanalyser():
         if pipeline is None:
             Error(self.visFr, "No data found. Please load a MINFLUX dataset first.")
             return
-
         try:
             # if this is a zarr archive we should have a zarr attribute in the FitResults datasource 
             zarr_archive = pipeline.dataSources['FitResults'].zarr
         except:
-            zarr_archive = None
-        if zarr_archive is None:
             warn("data is not from a zarr archive, giving up...")
             return
-
+        try:
+            zarr_path = zarr_archive.store.path
+        except AttributeError:
+            warn("cannot get zarr store path from zarr object, not saving analysis data...")
+            zarr_path = None
+        
         # possible storage code, not yet used/implemented
         # datasources = pipeline._get_session_datasources()
         # store_path = datasources.get('FitResults')
@@ -556,31 +559,45 @@ class MINFLUXanalyser():
 
         # paraflux analysis with progress dialog follows
         import PYMEcs.Analysis.Paraflux as pf
-        # for example use of ProgressDialog see also
-        # https://github.com/Metallicow/wxPython-Sample-Apps-and-Demos/blob/master/101_Common_Dialogs/ProgressDialog/ProgressDialog_extended.py
-        progress = wx.ProgressDialog("Paraflux analysis in progress", "please wait", maximum=6,
-                                     parent=self.visFr,
-                                     style=wx.PD_SMOOTH
-                                     | wx.PD_AUTO_HIDE)
-        # read all data
-        progress.Update(1); wx.Yield()
-        mfxdata = zarr_archive['mfx'][:]
-        # processing
-        progress.Update(2); wx.Yield()
-        df_mfx, failure_map = pf.paraflux_mk_df_fm(mfxdata)
-        # Run the analysis steps
-        progress.Update(3); wx.Yield()
-        vld_itr = pf.build_valid_df(df_mfx)
-        progress.Update(4); wx.Yield()
-        vld_itr = pf.compute_percentages(vld_itr)
-        progress.Update(5); wx.Yield()
-        vld_itr = pf.analyze_failures(vld_itr, df_mfx, failure_map)
-        initial_count = vld_itr['vld loc count'].iloc[0]
-        vld_itr = pf.add_failure_metrics(vld_itr, initial_count)
-        progress.Update(6); wx.Yield()
+        mfx_zarrsource = pipeline.dataSources['FitResults'] # this should be a MinfluxZarrSource instance
+
+        # check if we have a cached result
+        if mfx_zarrsource._paraflux_analysis is None:
+            # for example use of ProgressDialog see also
+            # https://github.com/Metallicow/wxPython-Sample-Apps-and-Demos/blob/master/101_Common_Dialogs/ProgressDialog/ProgressDialog_extended.py
+            progress = wx.ProgressDialog("Paraflux analysis in progress", "please wait", maximum=6,
+                                         parent=self.visFr,
+                                         style=wx.PD_SMOOTH
+                                         | wx.PD_AUTO_HIDE)
+            # read all data from the zarr archive
+            progress.Update(1); wx.Yield()
+            mfxdata = zarr_archive['mfx'][:]
+            # processing 1st step, move data into pandas dataframe
+            progress.Update(2); wx.Yield()
+            df_mfx, failure_map = pf.paraflux_mk_df_fm(mfxdata)
+            # Run the analysis steps
+            progress.Update(3); wx.Yield()
+            vld_itr = pf.build_valid_df(df_mfx)
+            progress.Update(4); wx.Yield()
+            vld_itr = pf.compute_percentages(vld_itr)
+            progress.Update(5); wx.Yield()
+            vld_itr = pf.analyze_failures(vld_itr, df_mfx, failure_map)
+            initial_count = vld_itr['vld loc count'].iloc[0]
+            vld_itr = pf.add_failure_metrics(vld_itr, initial_count)
+            progress.Update(6); wx.Yield()
+            mfx_zarrsource._paraflux_analysis = vld_itr
+        else:
+            vld_itr = mfx_zarrsource._paraflux_analysis
+        
         vld_paraflux = pf.paraflux_itr_plot(vld_itr[['itr', 'passed itr %', 'CFR failure %', 'No signal % per itr pairs']])
-        # here possible storage command, not yet implemented
-       
+
+        # here possible storage command, only if autosaving is enabled in config
+        from PYMEcs.misc.utils import autosave_check, autosave_csv
+        if autosave_check() and zarr_path is not None:
+            autosave_csv(vld_itr.drop(columns='tid', errors='ignore'),
+                         zarr_path,pipeline.mdh,'_iteration_stats_full')
+        ### --- End of Alex B added functionality ---
+
     def OnClumpScatterPosPlot(self,event):
         from scipy.stats import binned_statistic
         from PYMEcs.IO.MINFLUX import get_stddev_property
@@ -1042,7 +1059,22 @@ class MINFLUXanalyser():
         config.update_config({config_var: folder},
                              config='user', create_backup=True)
 
-    def OnMINFLUXplotTempData(self, event):
+    def OnToggleMINFLUXautosave(self, event):
+        import PYME.config as config
+        config_var = 'MINFLUX-autosave'
+
+        if config.get(config_var,False):
+            newval = False
+        else:
+            newval = True
+
+        config.update_config({config_var: newval},
+                             config='user', create_backup=False)
+
+        warn("MINFLUX analysis autosave was set to %s" %  config.get(config_var))
+
+        
+    def OnMINFLUXplotTemperatureData(self, event):
         import PYME.config as config
         import os
         from os.path import basename
@@ -1058,7 +1090,7 @@ class MINFLUXanalyser():
                  ("needs to be a **folder** location, currently set to %s" % (folder)))
             return
 
-        from PYMEcs.misc.utils import read_temp_csv, set_diff, timestamp_to_datetime
+        from PYMEcs.misc.utils import read_temperature_csv, set_diff, timestamp_to_datetime
 
         if len(self.visFr.pipeline.dataSources) == 0:
             warn("no datasources, this is probably an empty pipeline, have you loaded any data?")
@@ -1071,7 +1103,7 @@ class MINFLUXanalyser():
         # Convert t0 from timestamp for comparing it with timedates from csv file
         t0_dt = timestamp_to_datetime(t0)
         
-                # Identify the correct temperature CSV files in the folder
+        # Identify the correct temperature CSV files in the folder
         # Loop over CSVs to find matching file
         timeformat = config.get('MINFLUX-temperature_time_format', ['%d.%m.%Y %H:%M:%S',
                                                                     '%d/%m/%Y %H:%M:%S'])
@@ -1081,7 +1113,7 @@ class MINFLUXanalyser():
             try:
                 # print(f"\nChecking file: {basename(f)}\n")  # Debugging, Show which file is being checked
 
-                df = read_temp_csv(f, timeformat=timeformat)
+                df = read_temperature_csv(f, timeformat=timeformat)
                 
                 if 'datetime' not in df.columns:
                     print(f"File {f} has no 'datetime' column after parsing, skipping.")
@@ -1101,7 +1133,7 @@ class MINFLUXanalyser():
             return
 
         # Read temperature data from the correct CSV file
-        mtemps = read_temp_csv(selected_file, timeformat=timeformat)
+        mtemps = read_temperature_csv(selected_file, timeformat=timeformat)
         
         set_diff(mtemps,timestamp_to_datetime(t0))
         p = self.visFr.pipeline
