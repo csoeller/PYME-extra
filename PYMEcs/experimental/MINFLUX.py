@@ -6,6 +6,8 @@ import logging
 logger = logging.getLogger(__file__)
 
 from PYMEcs.pyme_warnings import warn
+import PYMEcs.misc.utils as mu
+
 def plot_errors(pipeline):
     if not 'coalesced_nz' in pipeline.dataSources:
         warn('no data source named "coalesced_nz" - check recipe and ensure this is MINFLUX data')
@@ -47,6 +49,20 @@ def plot_errors(pipeline):
         plt.text(x, y, '%.0f' % y,
                  horizontalalignment='right') # draw above, centered
     plt.tight_layout()
+    if mu.autosave_check():
+        fpath = mu.get_ds_path(p)
+        plt.savefig(mu.fname_from_timestamp(fpath,p.mdh,'_locError',ext='.png'),
+                    dpi=300, bbox_inches='tight')
+        pipeline.selectDataSource('coalesced_nz')
+        df = pd.DataFrame({
+            "Metric": ["Photons", "Background", "Clump Size", "Error X", "Error Y"],
+            "Median": [np.median(p[key]) for key in ['nPhotons','fbg','clumpSize','error_x','error_y']],
+            "Unit": ["","","","nm","nm",]
+        })
+        if p.mdh['MINFLUX.Is3D']: # any code needs to check for 2D vs 3D
+            df.loc[df.index.max() + 1] = ["Error Z",np.median(p['error_z']),'nm']
+        mu.autosave_csv(df,fpath,p.mdh,'_locError')
+                                        
     pipeline.selectDataSource(curds)
     
 from PYMEcs.misc.matplotlib import boxswarmplot
@@ -568,26 +584,24 @@ class MINFLUXanalyser():
         if mfx_zarrsource._paraflux_analysis is None:
             # for example use of ProgressDialog see also
             # https://github.com/Metallicow/wxPython-Sample-Apps-and-Demos/blob/master/101_Common_Dialogs/ProgressDialog/ProgressDialog_extended.py
-            progress = wx.ProgressDialog("Paraflux analysis in progress", "please wait", maximum=6,
+            progress = wx.ProgressDialog("Paraflux analysis in progress", "please wait", maximum=4,
                                          parent=self.visFr,
                                          style=wx.PD_SMOOTH
                                          | wx.PD_AUTO_HIDE)
+            def upd(n):
+                progress.Update(n)
+                wx.Yield()
+
             # read all data from the zarr archive
-            progress.Update(1); wx.Yield()
-            mfxdata = zarr_archive['mfx'][:]
+            mfxdata = zarr_archive['mfx'][:]; upd(1)
             # processing 1st step, move data into pandas dataframe
-            progress.Update(2); wx.Yield()
-            df_mfx, failure_map = pf.paraflux_mk_df_fm(mfxdata)
+            df_mfx, failure_map = pf.paraflux_mk_df_fm(mfxdata); upd(2)
             # Run the analysis steps
-            progress.Update(3); wx.Yield()
-            vld_itr = pf.build_valid_df(df_mfx)
-            progress.Update(4); wx.Yield()
+            vld_itr = pf.build_valid_df(df_mfx); upd(3)
             vld_itr = pf.compute_percentages(vld_itr)
-            progress.Update(5); wx.Yield()
             vld_itr = pf.analyze_failures(vld_itr, df_mfx, failure_map)
             initial_count = vld_itr['vld loc count'].iloc[0]
-            vld_itr = pf.add_failure_metrics(vld_itr, initial_count)
-            progress.Update(6); wx.Yield()
+            vld_itr = pf.add_failure_metrics(vld_itr, initial_count); upd(4)
             mfx_zarrsource._paraflux_analysis = vld_itr
         else:
             vld_itr = mfx_zarrsource._paraflux_analysis
@@ -595,10 +609,9 @@ class MINFLUXanalyser():
         vld_paraflux = pf.paraflux_itr_plot(vld_itr[['itr', 'passed itr %', 'CFR failure %', 'No signal % per itr pairs']])
 
         # here possible storage command, only if autosaving is enabled in config
-        from PYMEcs.misc.utils import autosave_check, autosave_csv
-        if autosave_check() and zarr_path is not None:
-            autosave_csv(vld_itr.drop(columns='tid', errors='ignore'),
-                         zarr_path,pipeline.mdh,'_iteration_stats_full')
+        if mu.autosave_check() and zarr_path is not None:
+            mu.autosave_csv(vld_itr.drop(columns='tid', errors='ignore'),
+                            zarr_path,pipeline.mdh,'_iteration_stats_full')
         ### --- End of Alex B added functionality ---
 
     def OnClumpScatterPosPlot(self,event):

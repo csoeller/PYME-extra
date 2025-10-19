@@ -175,6 +175,16 @@ def zarrtozipstore(zarr_root,archive_name,verbose=False):
                            root_dir=zarr_root)
     return created
 
+def get_ds_path(pipeline,ds='FitResults'):
+    if 'filename' in dir(pipeline):
+        return pipeline.filename()
+    try:
+        fpath = pipeline.get_session()['datasources'][ds]
+    except AttributeError:
+        fpath = None
+
+    return fpath
+
 def fname_from_timestamp(datapath,mdh,stemsuffix,ext='.csv'):
     from pathlib import Path
     storagepath = Path(datapath).parent
