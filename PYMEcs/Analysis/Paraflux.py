@@ -7,6 +7,11 @@ import os
 
 from PYMEcs.pyme_warnings import warn
 
+# note that currently everything is hard coded for the standard 3D sequence
+# TODO: should really check the metadata we have for (recent) zarr and check the CCRLimit array etc
+#       and figure things out from that!!
+
+
 # --- start Alex B contributed functions to (possibly save) and plot ITR stats (Paraflux like) ---
 def paraflux_mk_df_fm(mfxdata):
     # Convert structured array (original mfx data) to DataFrame (containing all data from MFX experiment)
