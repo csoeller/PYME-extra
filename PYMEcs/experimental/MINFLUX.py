@@ -8,12 +8,12 @@ logger = logging.getLogger(__file__)
 from PYMEcs.pyme_warnings import warn
 import PYMEcs.misc.utils as mu
 
-def plot_errors(pipeline):
-    if not 'coalesced_nz' in pipeline.dataSources:
-        warn('no data source named "coalesced_nz" - check recipe and ensure this is MINFLUX data')
+def plot_errors(pipeline,ds='coalesced_nz',dsclumps='with_clumps'):
+    if not ds in pipeline.dataSources:
+        warn('no data source named "%s" - check recipe and ensure this is MINFLUX data' % ds)
         return
     curds = pipeline.selectedDataSourceKey
-    pipeline.selectDataSource('coalesced_nz')
+    pipeline.selectDataSource(ds)
     p = pipeline
     clumpSize = p['clumpSize']
     plt.figure()
@@ -23,15 +23,17 @@ def plot_errors(pipeline):
     else:
         plt.boxplot([p['error_x'],p['error_y']],labels=['error_x','error_y'])
     plt.ylabel('loc error - coalesced (nm)')
-    pipeline.selectDataSource('with_clumps')
+    pipeline.selectDataSource(dsclumps)
     plt.subplot(222)
-    bp_dict = plt.boxplot([p['nPhotons'],p['fbg']],labels=['photons','background rate'])
-    for line in bp_dict['medians']:
-        # get position data for median line
-        x, y = line.get_xydata()[0] # top of median line
-        # overlay median value
-        plt.text(x, y, '%.0f' % y,
-                 horizontalalignment='right') # draw above, centered
+    if 'nPhotons' in p.keys() and 'fbg' in p.keys():
+        bp_dict = plt.boxplot([p['nPhotons'],p['fbg']],labels=['photons','background rate'])
+        for line in bp_dict['medians']:
+            # get position data for median line
+            x, y = line.get_xydata()[0] # top of median line
+            # overlay median value
+            plt.text(x, y, '%.0f' % y,
+                     horizontalalignment='right') # draw above, centered
+
     uids, idx = np.unique(p['clumpIndex'],return_index=True)
     plt.subplot(223)
     if 'error_z' in pipeline.keys():
@@ -53,7 +55,7 @@ def plot_errors(pipeline):
         fpath = mu.get_ds_path(p)
         plt.savefig(mu.fname_from_timestamp(fpath,p.mdh,'_locError',ext='.png'),
                     dpi=300, bbox_inches='tight')
-        pipeline.selectDataSource('coalesced_nz')
+        pipeline.selectDataSource(ds)
         df = pd.DataFrame({
             "Metric": ["Photons", "Background", "Clump Size", "Error X", "Error Y"],
             "Median": [np.median(p[key]) for key in ['nPhotons','fbg','clumpSize','error_x','error_y']],
@@ -419,7 +421,7 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
     axs[0, 1].set_xlabel('t [s]')
     axs[0, 1].set_ylabel('y [nm]')
 
-    if p.mdh['MINFLUX.Is3D']:
+    if p.mdh.get('MINFLUX.Is3D',False):
         axs[1, 0].scatter(t_s,p['z_site_nc'],s=0.3,c='black',alpha=0.5)
         if plotSmoothingCurve:
             axs[1, 0].plot(t_s,p['z_ori']-p['z'],'r',alpha=0.4)
@@ -428,11 +430,11 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
         axs[1, 0].set_ylabel('z [nm]')
 
     ax = axs[1,1]
-    if plotSmoothingCurve:
+    if plotSmoothingCurve and 'x_nc' in p.keys():
         # plot the MBM track
         ax.plot(t_s,p['x_ori']-p['x_nc'],alpha=0.5,label='x')
         plt.plot(t_s,p['y_ori']-p['y_nc'],alpha=0.5,label='y')
-        if p.mdh['MINFLUX.Is3D'] and 'z_nc' in p.keys():
+        if p.mdh.get('MINFLUX.Is3D',False) and 'z_nc' in p.keys():
             ax.plot(t_s,p['z_ori']-p['z_nc'],alpha=0.5,label='z')
         ax.set_xlabel('t (s)')
         ax.set_ylabel('MBM corr [nm]')
@@ -440,7 +442,7 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
     else:
         axs[1, 1].plot(t_s,p['x_ori']-p['x'])
         axs[1, 1].plot(t_s,p['y_ori']-p['y'])
-        if p.mdh['MINFLUX.Is3D']:
+        if p.mdh.get('MINFLUX.Is3D',False):
             axs[1, 1].plot(t_s,p['z_ori']-p['z'])
         axs[1, 1].set_xlabel('t [s]')
         axs[1, 1].set_ylabel('orig. corr [nm]')
@@ -460,6 +462,12 @@ class MINFLUXSettings(HasTraits):
     defaultDatasourceForAnalysis = CStr('Localizations',label='default datasource for analysis',
                                         desc="the datasource key that will be used by default in the MINFLUX " +
                                         "properties functions (EFO, localisation rate, etc)") # default datasource for acquisition analysis
+    defaultDatasourceCoalesced = CStr('coalesced_nz',label='default datasource for coalesced analysis',
+                                        desc="the datasource key that will be used by default when a " +
+                                        "coalesced data source is required")
+    defaultDatasourceWithClumps = CStr('with_clumps',label='default datasource for clump analysis',
+                                        desc="the datasource key that will be used by default when a " +
+                                        "data source with clump info is required")
     defaultDatasourceForMBM = CStr('coalesced_nz',label='default datasource for MBM analysis and plotting',
                                         desc="the datasource key that will be used by default in the MINFLUX " +
                                         "MBM analysis") # default datasource for MBM analysis
@@ -1210,7 +1218,7 @@ class MINFLUXanalyser():
             plt.tight_layout()
 
     def OnErrorAnalysis(self, event):
-        plot_errors(self.visFr.pipeline)
+        plot_errors(self.visFr.pipeline,ds=self.analysisSettings.defaultDatasourceCoalesced,dsclumps=self.analysisSettings.defaultDatasourceWithClumps)
 
     def OnCluster3D(self, event):
         plot_cluster_analysis(self.visFr.pipeline, ds=self.analysisSettings.datasourceForClusterAnalysis,
