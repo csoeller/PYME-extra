@@ -492,6 +492,9 @@ class DateString(HasTraits):
 class MBMaxisSelection(HasTraits):
     SelectAxis = Enum(['x-y-z','x','y','z','std_x','std_y','std_z'])
 
+class MINFLUXplottingDefaults(HasTraits):
+    FontSize = Float(12)
+    LineWidth = Float(1.5)
 
 class MINFLUXanalyser():
     def __init__(self, visFr):
@@ -502,6 +505,7 @@ class MINFLUXanalyser():
         self.analysisSettings = MINFLUXSettings()
         self.dstring = DateString()
         self.mbmAxisSelection = MBMaxisSelection()
+        self.plottingDefaults = MINFLUXplottingDefaults()
         
         visFr.AddMenuItem('MINFLUX', "Localisation Error analysis", self.OnErrorAnalysis)
         visFr.AddMenuItem('MINFLUX', "Cluster sizes - 3D", self.OnCluster3D)
@@ -509,18 +513,23 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX', "Analyse Localization Rate", self.OnLocalisationRate)
         visFr.AddMenuItem('MINFLUX', "EFO histogram (photon rates)", self.OnEfoAnalysis)
         visFr.AddMenuItem('MINFLUX', "plot tracking correction (if available)", self.OnTrackPlot)
+        visFr.AddMenuItem('MINFLUX', "Analysis settings", self.OnMINFLUXSettings)
+        visFr.AddMenuItem('MINFLUX', "Toggle MINFLUX analysis autosaving", self.OnToggleMINFLUXautosave)
+        visFr.AddMenuItem('MINFLUX', "Manually create Colour panel", self.OnMINFLUXColour)
+
         visFr.AddMenuItem('MINFLUX>Origami', "group and analyse origami sites", self.OnOrigamiSiteRecipe)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami site correction", self.OnOrigamiSiteTrackPlot)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami error estimates", self.OnOrigamiErrorPlot)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami site stats", self.OnOrigamiSiteStats)
         visFr.AddMenuItem('MINFLUX>Origami', "add final filter for site-based corrected data", self.OnOrigamiFinalFilter)
-        visFr.AddMenuItem('MINFLUX', "Analysis settings", self.OnMINFLUXSettings)
-        visFr.AddMenuItem('MINFLUX', "Toggle MINFLUX analysis autosaving", self.OnToggleMINFLUXautosave)
-        visFr.AddMenuItem('MINFLUX', "Manually create Colour panel", self.OnMINFLUXColour)
+
         visFr.AddMenuItem('MINFLUX>Util', "Plot temperature record matching current data series",self.OnMINFLUXplotTemperatureData)
         visFr.AddMenuItem('MINFLUX>Util', "Set MINFLUX temperature folder location", self.OnMINFLUXsetTempDataFolder)
         visFr.AddMenuItem('MINFLUX>Util', "Check if clumpIndex contiguous", self.OnClumpIndexContig)
         visFr.AddMenuItem('MINFLUX>Util', "Plot event scatter as function of position in clump", self.OnClumpScatterPosPlot)
+        visFr.AddMenuItem('MINFLUX>Util', "Set plotting defaults (inc font size)", self.OnSetMINFLUXPlottingdefaults)
+        visFr.AddMenuItem('MINFLUX>Util', "Estimate region size (with output filter)", self.OnEstimateMINFLUXRegionSize)
+        
         visFr.AddMenuItem('MINFLUX>MBM', "Plot mean MBM info (and if present origami info)", self.OnMBMplot)
         visFr.AddMenuItem('MINFLUX>MBM', "Show MBM tracks", self.OnMBMtracks)
         visFr.AddMenuItem('MINFLUX>MBM', "Add MBM track labels to view", self.OnMBMaddTrackLabels)
@@ -531,14 +540,16 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>RyRs', "Plot corner info", self.OnCornerplot)
         visFr.AddMenuItem('MINFLUX>RyRs', "Plot density stats", self.OnDensityStats)
         visFr.AddMenuItem('MINFLUX>RyRs', "Show cluster alpha shapes", self.OnAlphaShapes)
+
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MBM attributes", self.OnMBMAttributes)
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MFX attributes", self.OnMFXAttributes)
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MFX metadata info (now in PYME metadata)", self.OnMFXInfo)
         visFr.AddMenuItem('MINFLUX>Zarr', "Convert zarr file store to zarr zip store", self.OnZarrToZipStore)
+        visFr.AddMenuItem('MINFLUX>Zarr', "Run Paraflux Analysis", self.OnRunParafluxAnalysis)
+
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from clumpIndex)", self.OnAddMINFLUXTracksCI)
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from tid)", self.OnAddMINFLUXTracksTid)
         visFr.AddMenuItem('MINFLUX>Colour', "Plot colour stats", self.OnPlotColourStats)
-        visFr.AddMenuItem('MINFLUX>Zarr', "Run Paraflux Analysis", self.OnRunParafluxAnalysis)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -552,6 +563,18 @@ class MINFLUXanalyser():
                 ID = visFr.AddMenuItem('MINFLUX>Recipes', r, self.OnLoadCustom).GetId()
                 self.minfluxRIDs[ID] = minfluxRecipes[r]
 
+    def OnEstimateMINFLUXRegionSize(self, event):
+        p = self.visFr.pipeline # Get the pipeline from the GUI
+        xsize = p['x'].max() - p['x'].min()
+        ysize = p['y'].max() - p['y'].min()
+        warn("region size is %d x % d nm (%.1f x %.1f um" % (xsize,ysize,1e-3*xsize,1e-3*ysize))
+                
+    def OnSetMINFLUXPlottingdefaults(self, event):
+        if not self.plottingDefaults.configure_traits(kind='modal'):
+            return
+        from PYMEcs.misc.matplotlib import figuredefaults
+        figuredefaults(fontsize=self.plottingDefaults.FontSize,linewidth=self.plottingDefaults.LineWidth)
+        
     # --- Alex B provided function (to save - not yet) and plot ITR stats (Paraflux like) ---
     def OnRunParafluxAnalysis(self, event):
         from pathlib import Path
