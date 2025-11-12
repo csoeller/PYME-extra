@@ -223,3 +223,25 @@ class CircleConvolution(ModuleBase):
         
         return {'outputImage' : imconvol, 'outputKernel' : circleKernel}
     
+
+# split single channel image to two channels for FRC
+# following paper from Riegher et al:
+#      Rieger, B., Droste, I., Gerritsma, F., Ten Brink, T. & Stallinga, S.
+#      Single image Fourier ring correlation. Opt. Express 32, 21767 (2024).
+@register_module('Split1FRC')
+class CircleConvolution(ModuleBase):
+    inputImage = Input('input')
+    outputImage = Output('split_1frc')
+
+    splitProb = Float(0.5)
+
+    def run(self, inputImage):
+        im0 = inputImage.data_xyztc[:,:,0,0,0]
+        rng = np.random.default_rng()
+        im0_1 = rng.binomial(im0,self.splitProb)
+        im0_2 = im0 - im0_1
+        im_1frc = np.stack([im0_1,im0_2],axis=2).astype(inputImage.data_xyztc.dtype)
+        imstack1frc = ImageStack(im_1frc[:,:,None,None,:],mdh=MetaDataHandler.NestedClassMDHandler(inputImage.mdh),titleStub = self.outputImage)
+
+        return imstack1frc
+
