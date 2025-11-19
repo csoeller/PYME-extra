@@ -432,10 +432,10 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
     ax = axs[1,1]
     if plotSmoothingCurve and 'x_nc' in p.keys():
         # plot the MBM track
-        ax.plot(t_s,p['x_ori']-p['x_nc'],alpha=0.5,label='x')
-        plt.plot(t_s,p['y_ori']-p['y_nc'],alpha=0.5,label='y')
+        ax.plot(t_s,-(p['x_ori']-p['x_nc']),alpha=0.5,label='x')
+        plt.plot(t_s,-(p['y_ori']-p['y_nc']),alpha=0.5,label='y')
         if p.mdh.get('MINFLUX.Is3D',False) and 'z_nc' in p.keys():
-            ax.plot(t_s,p['z_ori']-p['z_nc'],alpha=0.5,label='z')
+            ax.plot(t_s,-(p['z_ori']-p['z_nc']),alpha=0.5,label='z')
         ax.set_xlabel('t (s)')
         ax.set_ylabel('MBM corr [nm]')
         ax.legend()
