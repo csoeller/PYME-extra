@@ -5,12 +5,20 @@ import matplotlib.pyplot as plt
 from PYMEcs.pyme_warnings import warn
 
 import pandas as pd
-from PYMEcs.misc.matplotlib import boxswarmplot
+from PYMEcs.misc.matplotlib import boxswarmplot, violinswarmplot
 
-def plot_stats(ds,ax,errdict,sdmax=None,swarmsize=3,siteKey='siteID'):
+def plot_stats(ds,ax,errdict,sdmax=None,swarmsize=3,siteKey='siteID',mode='box',showpoints=True,strip=False):
     df = site_stats(ds,errdict,siteKey=siteKey)
-    kwargs = dict(swarmsize=swarmsize,width=0.2,annotate_means=True,annotate_medians=True,swarmalpha=0.4)
-    boxswarmplot(df,ax=ax,**kwargs)
+    if mode == 'box':
+        kwargs = dict(swarmsize=swarmsize,width=0.2,annotate_means=True,annotate_medians=True,swarmalpha=0.4,
+                      showpoints=showpoints,strip=strip)
+        boxswarmplot(df,ax=ax,**kwargs)
+    elif mode == 'violin':
+        kwargs = dict(swarmsize=swarmsize,width=0.8,annotate_means=True,annotate_medians=True,swarmalpha=0.4,
+                      linecolor="0.4",linewidth=1.0,annotate_width=0.4,showpoints=showpoints,strip=strip)
+        violinswarmplot(df,ax=ax,**kwargs)
+    else:
+        raise RuntimeError("invalid mode, should be on eof 'box' or 'violin', is '%s'" % mode)
     ax.set_ylim(0,sdmax)
     ax.set_ylabel('precision [nm]')
     return df
@@ -24,21 +32,22 @@ def site_stats(ds,sitedict,siteKey='siteID'):
     df = pd.DataFrame.from_dict(sitestats)
     return df[df > 0].dropna() # this drops rows with zeroes; these should not occur but apparently do; probably a bug somewhere
 
-def plotsitestats(p,origamiErrorLimit=10,figsize=None,swarmsize=3,siteKey='siteID',fignum=None):
+def plotsitestats(p,origamiErrorLimit=10,figsize=None,swarmsize=3,siteKey='siteID',fignum=None,mode='box',showpoints=True,strip=False):
     uids = np.unique(p[siteKey])
     fig, axs = plt.subplots(2, 2, figsize=figsize,num=fignum)
     plot_stats(p,axs[0, 0],dict(xd_sd_corr='error_x',x_sd='error_x_nc',x_sd_trace='error_x_ori'),
-                sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey)
+                sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey,mode=mode,showpoints=showpoints,strip=strip)
     plot_stats(p,axs[0, 1],dict(yd_sd_corr='error_y',y_sd='error_y_nc',y_sd_trace='error_y_ori'),
-                sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey)
+                sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey,mode=mode,showpoints=showpoints,strip=strip)
     if p.mdh.get('MINFLUX.Is3D'):
         plot_stats(p,axs[1, 0],dict(zd_sd_corr='error_z',z_sd='error_z_nc',z_sd_trace='error_z_ori'),
-                    sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey)
+                    sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey,mode=mode,showpoints=showpoints,strip=strip)
 
     all_axes = dict(xd_sd_corr='error_x',yd_sd_corr='error_y')
     if p.mdh.get('MINFLUX.Is3D'):
         all_axes['zd_sd_corr'] = 'error_z'
-    df_allaxes = plot_stats(p,axs[1, 1],all_axes,sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey)
+    df_allaxes = plot_stats(p,axs[1, 1],all_axes,sdmax=origamiErrorLimit,swarmsize=swarmsize,
+                            siteKey=siteKey,mode=mode,showpoints=showpoints,strip=strip)
     fig.suptitle('Site stats for %d sites' % df_allaxes.shape[0])
     plt.tight_layout()
     return df_allaxes

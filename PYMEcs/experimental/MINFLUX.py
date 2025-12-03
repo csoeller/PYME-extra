@@ -482,8 +482,15 @@ class MINFLUXSettings(HasTraits):
                           desc="if a full second module set is inserted to also analyse the origami data without any MBM corrections")
     origamiErrorLimit = Float(10.0,label='xLimit when plotting origami errors',
                               desc="sets the upper limit in x (in nm) when plotting origami site errors")
-    origamiSiteMaxNum = Int(100,label='Max number of sites for site stats',
-                            desc="the maximum number of sites for which a SD site stats boxswarmplot is generated, skip otherwise")
+
+
+class MINFLUXSiteSettings(HasTraits):
+    showPoints = Bool(True)
+    plotMode = Enum(['box','violin'])
+    pointsMode = Enum(['swarm','strip'])
+    siteMaxNum = Int(100,label='Max number of sites for box plot',
+                            desc="the maximum number of sites for which site stats boxswarmplot is generated, violinplot otherwise")
+    precisionRange_nm = Float(10)
 
 class DateString(HasTraits):
     TimeStampString = CStr('',label="Time stamp",desc='the time stamp string in format yymmdd-HHMMSS')
@@ -506,6 +513,7 @@ class MINFLUXanalyser():
         self.dstring = DateString()
         self.mbmAxisSelection = MBMaxisSelection()
         self.plottingDefaults = MINFLUXplottingDefaults()
+        self.siteSettings = MINFLUXSiteSettings()
         
         visFr.AddMenuItem('MINFLUX', "Localisation Error analysis", self.OnErrorAnalysis)
         visFr.AddMenuItem('MINFLUX', "Cluster sizes - 3D", self.OnCluster3D)
@@ -522,6 +530,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami error estimates", self.OnOrigamiErrorPlot)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami site stats", self.OnOrigamiSiteStats)
         visFr.AddMenuItem('MINFLUX>Origami', "add final filter for site-based corrected data", self.OnOrigamiFinalFilter)
+        visFr.AddMenuItem('MINFLUX>Origami', "site settings", self.OnMINFLUXSiteSettings)
 
         visFr.AddMenuItem('MINFLUX>Util', "Plot temperature record matching current data series",self.OnMINFLUXplotTemperatureData)
         visFr.AddMenuItem('MINFLUX>Util', "Set MINFLUX temperature folder location", self.OnMINFLUXsetTempDataFolder)
@@ -1411,6 +1420,10 @@ class MINFLUXanalyser():
         if self.analysisSettings.configure_traits(kind='modal'):
             pass
 
+    def OnMINFLUXSiteSettings(self, event):
+        if self.siteSettings.configure_traits(kind='modal'):
+            pass
+
     def OnOrigamiErrorPlot(self, event):
         p = self.visFr.pipeline
         # need to check if the required properties are present in the datasource
@@ -1448,7 +1461,7 @@ class MINFLUXanalyser():
         
         uids = np.unique(p['siteID']) # currently siteID is hard coded - possibly make config option
         from PYMEcs.Analysis.MINFLUX import plotsitestats
-        if uids.size < self.analysisSettings.origamiSiteMaxNum:
+        if uids.size < self.siteSettings.siteMaxNum:
             plotsitestats(p,fignum=('origami site stats %d' % self.origamiErrorFignum))
         self.origamiErrorFignum += 1
 
@@ -1460,14 +1473,18 @@ class MINFLUXanalyser():
         if 'error_x_ori' not in p.keys():
             warn("property 'error_x_ori' not present, possibly not the right datasource for origami site info. Aborting...")
             return
-        
+        plotmode = self.siteSettings.plotMode
         from PYMEcs.Analysis.MINFLUX import plotsitestats
         uids,idx = np.unique(p['siteID'],return_index=True) # currently siteID is hard coded - possibly make config option
-        if uids.size < self.analysisSettings.origamiSiteMaxNum:
+        if uids.size < self.siteSettings.siteMaxNum:
             swarmsize = 3
         else:
             swarmsize = 1.5
-        plotsitestats(p,fignum=('origami site stats %d' % self.origamiErrorFignum),swarmsize=swarmsize)
+
+        plotsitestats(p,fignum=('origami site stats %d' % self.origamiErrorFignum),
+                      swarmsize=swarmsize,mode=plotmode,showpoints=self.siteSettings.showPoints,
+                      origamiErrorLimit=self.siteSettings.precisionRange_nm,
+                      strip=(self.siteSettings.pointsMode == 'strip'))
         plotted = True
         #else:
         #    warn("Number of sites (%d) > max number for plotting (%d); check settings"
