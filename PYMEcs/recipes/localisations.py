@@ -16,6 +16,7 @@ class CorrectForeshortening(ModuleBase):
     outputName = Output('corrected_f')
 
     foreshortening = Float(1.0)
+    compensate_MINFLUX_foreshortening = Bool(True)
     apply_pixel_size_correction = Bool(False)
     pixel_size_um = Float(0.072)
     
@@ -23,9 +24,16 @@ class CorrectForeshortening(ModuleBase):
         from PYME.IO import tabular
         locs = inputName
 
+        factor = self.foreshortening
+        if self.compensate_MINFLUX_foreshortening:
+            logger.info("compensating for MINFLUX fs value of %.2f" % locs.mdh.get('MINFLUX.Foreshortening',1.0))
+            factor /= locs.mdh.get('MINFLUX.Foreshortening',1.0)
+            
         out = tabular.MappingFilter(locs)
-        out.addColumn('z',locs['z']*self.foreshortening)
-        out.addColumn('error_z',locs['error_z']*self.foreshortening)
+        out.addColumn('z',locs['z']*factor)
+        out.addColumn('error_z',locs['error_z']*factor)
+        if 'z_nc' in locs.keys():
+            out.addColumn('z_nc',locs['z_nc']*factor)
 
         if self.apply_pixel_size_correction:
             correction = self.pixel_size_um / (inputName.mdh.voxelsize_nm.x / 1e3)
@@ -36,7 +44,8 @@ class CorrectForeshortening(ModuleBase):
             
         from PYME.IO import MetaDataHandler
         mdh = MetaDataHandler.DictMDHandler(locs.mdh)
-        # mdh['CorrectForeshortening.foreshortening'] = self.foreshortening
+        mdh['MINFLUX.Foreshortening'] = self.foreshortening # we overwrite this now
+        # mdh['CorrectForeshortening.foreshortening'] = self.foreshortening # this will be set automatically because it is a parameter
         if self.apply_pixel_size_correction:
             mdh['Processing.CorrectForeshortening.PixelSizeCorrection'] = correction
             mdh['voxelsize.x'] = self.pixel_size_um

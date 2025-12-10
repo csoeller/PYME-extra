@@ -663,7 +663,7 @@ class NPC3D(object):
             self.bounds = bounds
         else:
             nllm.registerPoints(self.npts)
-            nllm.nll_basin_hopping(p0=(0,0,0,0,0,100.0,100.0)) # why no bounds?
+            nllm.nll_basin_hopping(p0=(0,0,0,0,0,100.0,100.0)) # no bound keyword implies default bounds
             self.opt_result = nllm.opt_result
             self.transformed_pts = nllm.c3dr
             self.bounds = nllm.bounds
