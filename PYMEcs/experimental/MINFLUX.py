@@ -411,23 +411,23 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
     if plotSmoothingCurve:
         axs[0, 0].plot(t_s,p['x_ori']-p['x'],'r',alpha=0.4)
     axs[0, 0].set_ylim(-15,15)
-    axs[0, 0].set_xlabel('t [s]')
-    axs[0, 0].set_ylabel('x [nm]')
+    axs[0, 0].set_xlabel('t (s)')
+    axs[0, 0].set_ylabel('x (nm)')
         
     axs[0, 1].scatter(t_s,p['y_site_nc'],s=0.3,c='black',alpha=0.5)
     if plotSmoothingCurve:
         axs[0, 1].plot(t_s,p['y_ori']-p['y'],'r',alpha=0.4)
     axs[0, 1].set_ylim(-15,15)
-    axs[0, 1].set_xlabel('t [s]')
-    axs[0, 1].set_ylabel('y [nm]')
+    axs[0, 1].set_xlabel('t (s)')
+    axs[0, 1].set_ylabel('y (nm)')
 
     if p.mdh.get('MINFLUX.Is3D',False):
         axs[1, 0].scatter(t_s,p['z_site_nc'],s=0.3,c='black',alpha=0.5)
         if plotSmoothingCurve:
             axs[1, 0].plot(t_s,p['z_ori']-p['z'],'r',alpha=0.4)
         axs[1, 0].set_ylim(-15,15)
-        axs[1, 0].set_xlabel('t [s]')
-        axs[1, 0].set_ylabel('z [nm]')
+        axs[1, 0].set_xlabel('t (s)')
+        axs[1, 0].set_ylabel('z (nm)')
 
     ax = axs[1,1]
     if plotSmoothingCurve and 'x_nc' in p.keys():
@@ -437,7 +437,7 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
         if p.mdh.get('MINFLUX.Is3D',False) and 'z_nc' in p.keys():
             ax.plot(t_s,-(p['z_ori']-p['z_nc']),alpha=0.5,label='z')
         ax.set_xlabel('t (s)')
-        ax.set_ylabel('MBM corr [nm]')
+        ax.set_ylabel('MBM corr (nm)')
         ax.legend()
     else:
         axs[1, 1].plot(t_s,p['x_ori']-p['x'])
@@ -445,7 +445,7 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
         if p.mdh.get('MINFLUX.Is3D',False):
             axs[1, 1].plot(t_s,p['z_ori']-p['z'])
         axs[1, 1].set_xlabel('t [s]')
-        axs[1, 1].set_ylabel('orig. corr [nm]')
+        axs[1, 1].set_ylabel('orig. corr (nm)')
     plt.tight_layout()
 
 from PYMEcs.Analysis.MINFLUX import analyse_locrate
