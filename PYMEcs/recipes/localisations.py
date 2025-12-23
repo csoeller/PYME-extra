@@ -16,6 +16,7 @@ class CorrectForeshortening(ModuleBase):
     outputName = Output('corrected_f')
 
     foreshortening = Float(1.0)
+    compensate_MINFLUX_foreshortening = Bool(True)
     apply_pixel_size_correction = Bool(False)
     pixel_size_um = Float(0.072)
     
@@ -23,9 +24,16 @@ class CorrectForeshortening(ModuleBase):
         from PYME.IO import tabular
         locs = inputName
 
+        factor = self.foreshortening
+        if self.compensate_MINFLUX_foreshortening:
+            logger.info("compensating for MINFLUX fs value of %.2f" % locs.mdh.get('MINFLUX.Foreshortening',1.0))
+            factor /= locs.mdh.get('MINFLUX.Foreshortening',1.0)
+            
         out = tabular.MappingFilter(locs)
-        out.addColumn('z',locs['z']*self.foreshortening)
-        out.addColumn('error_z',locs['error_z']*self.foreshortening)
+        out.addColumn('z',locs['z']*factor)
+        out.addColumn('error_z',locs['error_z']*factor)
+        if 'z_nc' in locs.keys():
+            out.addColumn('z_nc',locs['z_nc']*factor)
 
         if self.apply_pixel_size_correction:
             correction = self.pixel_size_um / (inputName.mdh.voxelsize_nm.x / 1e3)
@@ -36,7 +44,8 @@ class CorrectForeshortening(ModuleBase):
             
         from PYME.IO import MetaDataHandler
         mdh = MetaDataHandler.DictMDHandler(locs.mdh)
-        # mdh['CorrectForeshortening.foreshortening'] = self.foreshortening
+        mdh['MINFLUX.Foreshortening'] = self.foreshortening # we overwrite this now
+        # mdh['CorrectForeshortening.foreshortening'] = self.foreshortening # this will be set automatically because it is a parameter
         if self.apply_pixel_size_correction:
             mdh['Processing.CorrectForeshortening.PixelSizeCorrection'] = correction
             mdh['voxelsize.x'] = self.pixel_size_um
@@ -1085,7 +1094,7 @@ from scipy.interpolate import CubicSpline
 # the choice of savgol_filter for smoothing and CubicSpline for interpolation is a little arbitrary for now
 # and can be in future adjusted as needed
 # the bins need to be chosen in a robust manner - FIX
-def smoothed_site_func(t,coord_site,statistic='mean',bins=75,sgwindow_length=10,sgpolyorder=6):
+def smoothed_site_func(t,coord_site,statistic='mean',bins=75,sgwindow_length=10,sgpolyorder=6,uselowess=False,lowessfrac=0.15):
     csitem, tbins, binnum = binned_statistic(t,coord_site,statistic=statistic,bins=bins)
     # replace NaNs with nearest neighbour values
     nanmask = np.isnan(csitem)
@@ -1093,8 +1102,12 @@ def smoothed_site_func(t,coord_site,statistic='mean',bins=75,sgwindow_length=10,
     # now we should have no NaNs left
     if np.any(np.isnan(csitem)):
         warn("csitem still contains NaNs, should not happen")
-    filtered = savgol_filter(csitem,10,6)
     tmid = 0.5*(tbins[0:-1]+tbins[1:])
+    if uselowess:
+        from statsmodels.nonparametric.smoothers_lowess import lowess
+        filtered = lowess(csitem, tmid, frac=lowessfrac, return_sorted=False)
+    else:
+        filtered = savgol_filter(csitem,10,6)
     return CubicSpline(tmid,filtered)
 
 from scipy.optimize import curve_fit
@@ -1243,6 +1256,8 @@ class OrigamiSiteTrack(ModuleBaseMDHmod):
     binnedStatistic = Enum(['mean','median','Gaussian'],
                            desc="statistic for smoothing when using binned_statistic function on data to obtain the drift trajectory by time windowing of the 'siteclouds'")
     gaussianBinSizeSeconds = Float(500)
+    lowessFraction = Float(0.02)
+    useLowess = Bool(False)
     
     def run(self, inputClusters, inputSites,inputAllPoints=None):
         site_id = self.labelKey
@@ -1288,12 +1303,15 @@ class OrigamiSiteTrack(ModuleBaseMDHmod):
         if self.binnedStatistic in ['mean','median']:
             # we should check that with this choice of nbins we get no issues! (i.e. too few counts in some bins)
             c_xsite = smoothed_site_func(t,xsite,bins=nbins,statistic=self.binnedStatistic,
-                                         sgwindow_length=self.savgolWindowLength,sgpolyorder=self.savgolPolyorder)
+                                         sgwindow_length=self.savgolWindowLength,sgpolyorder=self.savgolPolyorder,
+                                         uselowess=self.useLowess,lowessfrac=self.lowessFraction)
             c_ysite = smoothed_site_func(t,ysite,bins=nbins,statistic=self.binnedStatistic,
-                                         sgwindow_length=self.savgolWindowLength,sgpolyorder=self.savgolPolyorder)
+                                         sgwindow_length=self.savgolWindowLength,sgpolyorder=self.savgolPolyorder,
+                                         uselowess=self.useLowess,lowessfrac=self.lowessFraction)
             if has_z:
                 c_zsite = smoothed_site_func(t,zsite,bins=nbins,statistic=self.binnedStatistic,
-                                             sgwindow_length=self.savgolWindowLength,sgpolyorder=self.savgolPolyorder)
+                                             sgwindow_length=self.savgolWindowLength,sgpolyorder=self.savgolPolyorder,
+                                         uselowess=self.useLowess,lowessfrac=self.lowessFraction)
         else:
             c_xsite = site_fit_gaussian(t,xsite,delta_s=self.smoothingBinWidthsSeconds,width_s=self.gaussianBinSizeSeconds)
             c_ysite = site_fit_gaussian(t,ysite,delta_s=self.smoothingBinWidthsSeconds,width_s=self.gaussianBinSizeSeconds)
@@ -1387,6 +1405,43 @@ class OrigamiSiteTrack(ModuleBaseMDHmod):
         
         return {'outputName': mapped_ds, 'outputAllPoints' : mapped_ap, 'mdh' : None } # pass proper mdh instead of None if metadata output needed
 
+
+@register_module('SiteErrors')
+class SiteErrors(ModuleBase):
+    inputSites = Input('siteclumps')
+    output = Output('with_site_errors') # localisations with site error info
+    
+    labelKey = CStr('siteID',
+                    desc="property name of the ID identifying site clusters; needs to match the ID name generated by DBSCAN clustering module") # should really be siteID
+
+    def run(self, inputSites):
+        site_id = self.labelKey
+        ids = inputSites[site_id].astype('i')
+        idsunique = np.unique(ids)
+        has_z = 'error_z' in inputSites.keys()
+        
+        x = inputSites['x']
+        y = inputSites['y']
+        z = inputSites['z']
+        xerr = np.zeros_like(x)
+        yerr = np.zeros_like(x)
+        zerr = np.zeros_like(x)
+
+        for j,id in enumerate(idsunique):
+            idx = ids == id
+            xerr[idx] = np.std(x[idx])
+            yerr[idx] = np.std(y[idx])
+            if has_z:
+                zerr[idx] = np.std(z[idx])
+
+        mapped_ds = tabular.MappingFilter(inputSites)
+        mapped_ds.addColumn('site_error_x', xerr)
+        mapped_ds.addColumn('site_error_y', yerr)
+        if has_z:
+            mapped_ds.addColumn('site_error_z', zerr)
+        return mapped_ds
+
+         
 
 import numpy as np
 import scipy.special
@@ -2297,3 +2352,29 @@ class SuperClumps(ModuleBase):
         mapped_lm.addColumn('tracedist',np.append([0],ds))
 
         return dict(outputL=mapped_l,outputLM=mapped_lm)
+
+@register_module('ErrorFromClumpIndex')
+class ErrorFromClumpIndex(ModuleBase):
+    inputlocalizations = Input('with_clumps')
+    outputlocalizations = Output('with_errors')
+
+    labelKey = CStr('clumpIndex')
+
+    def run(self, inputlocalizations):
+        from PYMEcs.IO.MINFLUX import get_stddev_property
+
+        locs = inputlocalizations
+        site_id = self.labelKey
+        ids = locs[site_id].astype('i')
+        stdx = get_stddev_property(ids,locs['x'])
+        stdy = get_stddev_property(ids,locs['y'])
+
+        mapped = tabular.MappingFilter(locs)
+        mapped.addColumn('error_x',stdx)
+        mapped.addColumn('error_y',stdy)
+        has_z = 'z' in locs.keys() and np.std(locs['z']) > 1.0
+        if has_z:
+            stdz = get_stddev_property(ids,locs['z'])
+            mapped.addColumn('error_z',stdz)
+
+        return mapped

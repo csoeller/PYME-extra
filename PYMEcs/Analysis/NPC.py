@@ -1,6 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from PYMEcs.pyme_warnings import warn
+import logging
+
+logger = logging.getLogger(__name__)
 
 piover4 = np.pi/4.0
 
@@ -642,14 +645,17 @@ class NPC3D(object):
             dc = 3.0 # max deviation in coordinates (in nm)
             dperc = 5.0 # max deviation in scaling percentage
             bounds = (
-                (max(-maxshift,p0[0]-dc),min(maxshift,p0[0]+dc)), # p[0]
-                (max(-maxshift,p0[1]-dc),min(maxshift,p0[1]+dc)), # p[1]
-                (max(-maxshift,p0[2]-dc),min(maxshift,p0[2]+dc)), # p[2]
+                (p0[0]-dc,p0[0]+dc), # p[0]
+                (p0[1]-dc,p0[1]+dc), # p[1]
+                (p0[2]-dc,p0[2]+dc), # p[2]
                 (-90.0,90.0), # p[3]
                 (-35.0,35.0), # p[4]
-                (max(80.0,p0[5]-dperc),min(120.0,p0[5]+dperc)), # p[5] - limit to 20% variation to avoid misfits
-                (max(80.0,p0[6]-dperc),min(120.0,p0[6]+dperc)) # p[6]  - limit to 20% variation to avoid misfits
+                (p0[5]-dperc,p0[5]+dperc), # p[5] - limit to 20% variation to avoid misfits
+                (p0[6]-dperc,p0[6]+dperc) # p[6]  - limit to 20% variation to avoid misfits
             )
+            logger.info("p0 %s" % p0)
+            logger.info("bounds %s" % repr(bounds))
+
             nllm.registerPoints(self.npts)
             nllm.nll_basin_hopping(p0=p0,bounds=bounds)
             self.opt_result = nllm.opt_result
@@ -657,7 +663,7 @@ class NPC3D(object):
             self.bounds = bounds
         else:
             nllm.registerPoints(self.npts)
-            nllm.nll_basin_hopping(p0=(0,0,0,0,0,100.0,100.0))
+            nllm.nll_basin_hopping(p0=(0,0,0,0,0,100.0,100.0)) # no bound keyword implies default bounds
             self.opt_result = nllm.opt_result
             self.transformed_pts = nllm.c3dr
             self.bounds = nllm.bounds

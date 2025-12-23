@@ -6,12 +6,14 @@ import logging
 logger = logging.getLogger(__file__)
 
 from PYMEcs.pyme_warnings import warn
-def plot_errors(pipeline):
-    if not 'coalesced_nz' in pipeline.dataSources:
-        warn('no data source named "coalesced_nz" - check recipe and ensure this is MINFLUX data')
+import PYMEcs.misc.utils as mu
+
+def plot_errors(pipeline,ds='coalesced_nz',dsclumps='with_clumps'):
+    if not ds in pipeline.dataSources:
+        warn('no data source named "%s" - check recipe and ensure this is MINFLUX data' % ds)
         return
     curds = pipeline.selectedDataSourceKey
-    pipeline.selectDataSource('coalesced_nz')
+    pipeline.selectDataSource(ds)
     p = pipeline
     clumpSize = p['clumpSize']
     plt.figure()
@@ -21,15 +23,17 @@ def plot_errors(pipeline):
     else:
         plt.boxplot([p['error_x'],p['error_y']],labels=['error_x','error_y'])
     plt.ylabel('loc error - coalesced (nm)')
-    pipeline.selectDataSource('with_clumps')
+    pipeline.selectDataSource(dsclumps)
     plt.subplot(222)
-    bp_dict = plt.boxplot([p['nPhotons'],p['fbg']],labels=['photons','background rate'])
-    for line in bp_dict['medians']:
-        # get position data for median line
-        x, y = line.get_xydata()[0] # top of median line
-        # overlay median value
-        plt.text(x, y, '%.0f' % y,
-                 horizontalalignment='right') # draw above, centered
+    if 'nPhotons' in p.keys() and 'fbg' in p.keys():
+        bp_dict = plt.boxplot([p['nPhotons'],p['fbg']],labels=['photons','background rate'])
+        for line in bp_dict['medians']:
+            # get position data for median line
+            x, y = line.get_xydata()[0] # top of median line
+            # overlay median value
+            plt.text(x, y, '%.0f' % y,
+                     horizontalalignment='right') # draw above, centered
+
     uids, idx = np.unique(p['clumpIndex'],return_index=True)
     plt.subplot(223)
     if 'error_z' in pipeline.keys():
@@ -47,6 +51,20 @@ def plot_errors(pipeline):
         plt.text(x, y, '%.0f' % y,
                  horizontalalignment='right') # draw above, centered
     plt.tight_layout()
+    if mu.autosave_check():
+        fpath = mu.get_ds_path(p)
+        plt.savefig(mu.fname_from_timestamp(fpath,p.mdh,'_locError',ext='.png'),
+                    dpi=300, bbox_inches='tight')
+        pipeline.selectDataSource(ds)
+        df = pd.DataFrame({
+            "Metric": ["Photons", "Background", "Clump Size", "Error X", "Error Y"],
+            "Median": [np.median(p[key]) for key in ['nPhotons','fbg','clumpSize','error_x','error_y']],
+            "Unit": ["","","","nm","nm",]
+        })
+        if p.mdh['MINFLUX.Is3D']: # any code needs to check for 2D vs 3D
+            df.loc[df.index.max() + 1] = ["Error Z",np.median(p['error_z']),'nm']
+        mu.autosave_csv(df,fpath,p.mdh,'_locError')
+                                        
     pipeline.selectDataSource(curds)
     
 from PYMEcs.misc.matplotlib import boxswarmplot
@@ -403,7 +421,7 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
     axs[0, 1].set_xlabel('t [s]')
     axs[0, 1].set_ylabel('y [nm]')
 
-    if p.mdh['MINFLUX.Is3D']:
+    if p.mdh.get('MINFLUX.Is3D',False):
         axs[1, 0].scatter(t_s,p['z_site_nc'],s=0.3,c='black',alpha=0.5)
         if plotSmoothingCurve:
             axs[1, 0].plot(t_s,p['z_ori']-p['z'],'r',alpha=0.4)
@@ -412,19 +430,19 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
         axs[1, 0].set_ylabel('z [nm]')
 
     ax = axs[1,1]
-    if plotSmoothingCurve:
+    if plotSmoothingCurve and 'x_nc' in p.keys():
         # plot the MBM track
-        ax.plot(t_s,p['x_ori']-p['x_nc'],alpha=0.5,label='x')
-        plt.plot(t_s,p['y_ori']-p['y_nc'],alpha=0.5,label='y')
-        if p.mdh['MINFLUX.Is3D'] and 'z_nc' in p.keys():
-            ax.plot(t_s,p['z_ori']-p['z_nc'],alpha=0.5,label='z')
+        ax.plot(t_s,-(p['x_ori']-p['x_nc']),alpha=0.5,label='x')
+        plt.plot(t_s,-(p['y_ori']-p['y_nc']),alpha=0.5,label='y')
+        if p.mdh.get('MINFLUX.Is3D',False) and 'z_nc' in p.keys():
+            ax.plot(t_s,-(p['z_ori']-p['z_nc']),alpha=0.5,label='z')
         ax.set_xlabel('t (s)')
         ax.set_ylabel('MBM corr [nm]')
         ax.legend()
     else:
         axs[1, 1].plot(t_s,p['x_ori']-p['x'])
         axs[1, 1].plot(t_s,p['y_ori']-p['y'])
-        if p.mdh['MINFLUX.Is3D']:
+        if p.mdh.get('MINFLUX.Is3D',False):
             axs[1, 1].plot(t_s,p['z_ori']-p['z'])
         axs[1, 1].set_xlabel('t [s]')
         axs[1, 1].set_ylabel('orig. corr [nm]')
@@ -444,6 +462,12 @@ class MINFLUXSettings(HasTraits):
     defaultDatasourceForAnalysis = CStr('Localizations',label='default datasource for analysis',
                                         desc="the datasource key that will be used by default in the MINFLUX " +
                                         "properties functions (EFO, localisation rate, etc)") # default datasource for acquisition analysis
+    defaultDatasourceCoalesced = CStr('coalesced_nz',label='default datasource for coalesced analysis',
+                                        desc="the datasource key that will be used by default when a " +
+                                        "coalesced data source is required")
+    defaultDatasourceWithClumps = CStr('with_clumps',label='default datasource for clump analysis',
+                                        desc="the datasource key that will be used by default when a " +
+                                        "data source with clump info is required")
     defaultDatasourceForMBM = CStr('coalesced_nz',label='default datasource for MBM analysis and plotting',
                                         desc="the datasource key that will be used by default in the MINFLUX " +
                                         "MBM analysis") # default datasource for MBM analysis
@@ -458,8 +482,15 @@ class MINFLUXSettings(HasTraits):
                           desc="if a full second module set is inserted to also analyse the origami data without any MBM corrections")
     origamiErrorLimit = Float(10.0,label='xLimit when plotting origami errors',
                               desc="sets the upper limit in x (in nm) when plotting origami site errors")
-    origamiSiteMaxNum = Int(100,label='Max number of sites for site stats',
-                            desc="the maximum number of sites for which a SD site stats boxswarmplot is generated, skip otherwise")
+
+
+class MINFLUXSiteSettings(HasTraits):
+    showPoints = Bool(True)
+    plotMode = Enum(['box','violin'])
+    pointsMode = Enum(['swarm','strip'])
+    siteMaxNum = Int(100,label='Max number of sites for box plot',
+                            desc="the maximum number of sites for which site stats boxswarmplot is generated, violinplot otherwise")
+    precisionRange_nm = Float(10)
 
 class DateString(HasTraits):
     TimeStampString = CStr('',label="Time stamp",desc='the time stamp string in format yymmdd-HHMMSS')
@@ -468,6 +499,9 @@ class DateString(HasTraits):
 class MBMaxisSelection(HasTraits):
     SelectAxis = Enum(['x-y-z','x','y','z','std_x','std_y','std_z'])
 
+class MINFLUXplottingDefaults(HasTraits):
+    FontSize = Float(12)
+    LineWidth = Float(1.5)
 
 class MINFLUXanalyser():
     def __init__(self, visFr):
@@ -478,6 +512,8 @@ class MINFLUXanalyser():
         self.analysisSettings = MINFLUXSettings()
         self.dstring = DateString()
         self.mbmAxisSelection = MBMaxisSelection()
+        self.plottingDefaults = MINFLUXplottingDefaults()
+        self.siteSettings = MINFLUXSiteSettings()
         
         visFr.AddMenuItem('MINFLUX', "Localisation Error analysis", self.OnErrorAnalysis)
         visFr.AddMenuItem('MINFLUX', "Cluster sizes - 3D", self.OnCluster3D)
@@ -485,17 +521,24 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX', "Analyse Localization Rate", self.OnLocalisationRate)
         visFr.AddMenuItem('MINFLUX', "EFO histogram (photon rates)", self.OnEfoAnalysis)
         visFr.AddMenuItem('MINFLUX', "plot tracking correction (if available)", self.OnTrackPlot)
+        visFr.AddMenuItem('MINFLUX', "Analysis settings", self.OnMINFLUXSettings)
+        visFr.AddMenuItem('MINFLUX', "Toggle MINFLUX analysis autosaving", self.OnToggleMINFLUXautosave)
+        visFr.AddMenuItem('MINFLUX', "Manually create Colour panel", self.OnMINFLUXColour)
+
         visFr.AddMenuItem('MINFLUX>Origami', "group and analyse origami sites", self.OnOrigamiSiteRecipe)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami site correction", self.OnOrigamiSiteTrackPlot)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami error estimates", self.OnOrigamiErrorPlot)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami site stats", self.OnOrigamiSiteStats)
         visFr.AddMenuItem('MINFLUX>Origami', "add final filter for site-based corrected data", self.OnOrigamiFinalFilter)
-        visFr.AddMenuItem('MINFLUX', "Analysis settings", self.OnMINFLUXSettings)
-        visFr.AddMenuItem('MINFLUX', "Manually create Colour panel", self.OnMINFLUXColour)
-        visFr.AddMenuItem('MINFLUX>Util', "Plot temperature record matching current data series",self.OnMINFLUXplotTempData)
+        visFr.AddMenuItem('MINFLUX>Origami', "site settings", self.OnMINFLUXSiteSettings)
+
+        visFr.AddMenuItem('MINFLUX>Util', "Plot temperature record matching current data series",self.OnMINFLUXplotTemperatureData)
         visFr.AddMenuItem('MINFLUX>Util', "Set MINFLUX temperature folder location", self.OnMINFLUXsetTempDataFolder)
         visFr.AddMenuItem('MINFLUX>Util', "Check if clumpIndex contiguous", self.OnClumpIndexContig)
         visFr.AddMenuItem('MINFLUX>Util', "Plot event scatter as function of position in clump", self.OnClumpScatterPosPlot)
+        visFr.AddMenuItem('MINFLUX>Util', "Set plotting defaults (inc font size)", self.OnSetMINFLUXPlottingdefaults)
+        visFr.AddMenuItem('MINFLUX>Util', "Estimate region size (with output filter)", self.OnEstimateMINFLUXRegionSize)
+        
         visFr.AddMenuItem('MINFLUX>MBM', "Plot mean MBM info (and if present origami info)", self.OnMBMplot)
         visFr.AddMenuItem('MINFLUX>MBM', "Show MBM tracks", self.OnMBMtracks)
         visFr.AddMenuItem('MINFLUX>MBM', "Add MBM track labels to view", self.OnMBMaddTrackLabels)
@@ -506,10 +549,13 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>RyRs', "Plot corner info", self.OnCornerplot)
         visFr.AddMenuItem('MINFLUX>RyRs', "Plot density stats", self.OnDensityStats)
         visFr.AddMenuItem('MINFLUX>RyRs', "Show cluster alpha shapes", self.OnAlphaShapes)
+
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MBM attributes", self.OnMBMAttributes)
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MFX attributes", self.OnMFXAttributes)
-        visFr.AddMenuItem('MINFLUX>Zarr', "Show MFX metadata info (experimental)", self.OnMFXInfo)
+        visFr.AddMenuItem('MINFLUX>Zarr', "Show MFX metadata info (now in PYME metadata)", self.OnMFXInfo)
         visFr.AddMenuItem('MINFLUX>Zarr', "Convert zarr file store to zarr zip store", self.OnZarrToZipStore)
+        visFr.AddMenuItem('MINFLUX>Zarr', "Run Paraflux Analysis", self.OnRunParafluxAnalysis)
+
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from clumpIndex)", self.OnAddMINFLUXTracksCI)
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from tid)", self.OnAddMINFLUXTracksTid)
         visFr.AddMenuItem('MINFLUX>Colour', "Plot colour stats", self.OnPlotColourStats)
@@ -525,6 +571,88 @@ class MINFLUXanalyser():
             for r in minfluxRecipes:
                 ID = visFr.AddMenuItem('MINFLUX>Recipes', r, self.OnLoadCustom).GetId()
                 self.minfluxRIDs[ID] = minfluxRecipes[r]
+
+    def OnEstimateMINFLUXRegionSize(self, event):
+        p = self.visFr.pipeline # Get the pipeline from the GUI
+        xsize = p['x'].max() - p['x'].min()
+        ysize = p['y'].max() - p['y'].min()
+        warn("region size is %d x % d nm (%.1f x %.1f um" % (xsize,ysize,1e-3*xsize,1e-3*ysize))
+                
+    def OnSetMINFLUXPlottingdefaults(self, event):
+        if not self.plottingDefaults.configure_traits(kind='modal'):
+            return
+        from PYMEcs.misc.matplotlib import figuredefaults
+        figuredefaults(fontsize=self.plottingDefaults.FontSize,linewidth=self.plottingDefaults.LineWidth)
+        
+    # --- Alex B provided function (to save - not yet) and plot ITR stats (Paraflux like) ---
+    def OnRunParafluxAnalysis(self, event):
+        from pathlib import Path
+
+        # ======================================================================================
+        # --- Select, load Zarr.zip file, convert into DataFrame, Run the analysis functions ---
+        # ======================================================================================
+        pipeline = self.visFr.pipeline # Get the pipeline from the GUI
+
+        if pipeline is None:
+            Error(self.visFr, "No data found. Please load a MINFLUX dataset first.")
+            return
+        if not pipeline.mdh['MINFLUX.Is3D']: # TODO: make paraflux analysis code 2D aware
+            warn('paraflux analysis currently only implemented for 3D data, this is apparently 2D data; giving up...')
+            return
+        try:
+            # if this is a zarr archive we should have a zarr attribute in the FitResults datasource 
+            zarr_archive = pipeline.dataSources['FitResults'].zarr
+        except:
+            warn("data is not from a zarr archive, giving up...")
+            return
+        try:
+            zarr_path = zarr_archive.store.path
+        except AttributeError:
+            warn("cannot get zarr store path from zarr object, not saving analysis data...")
+            zarr_path = None
+        
+        # possible storage code, not yet used/implemented
+        # datasources = pipeline._get_session_datasources()
+        # store_path = datasources.get('FitResults')
+        # store_path = Path(store_path)
+
+        # paraflux analysis with progress dialog follows
+        import PYMEcs.Analysis.Paraflux as pf
+        mfx_zarrsource = pipeline.dataSources['FitResults'] # this should be a MinfluxZarrSource instance
+
+        # check if we have a cached result
+        if mfx_zarrsource._paraflux_analysis is None:
+            # for example use of ProgressDialog see also
+            # https://github.com/Metallicow/wxPython-Sample-Apps-and-Demos/blob/master/101_Common_Dialogs/ProgressDialog/ProgressDialog_extended.py
+            progress = wx.ProgressDialog("Paraflux analysis in progress", "please wait", maximum=4,
+                                         parent=self.visFr,
+                                         style=wx.PD_SMOOTH
+                                         | wx.PD_AUTO_HIDE)
+            def upd(n):
+                progress.Update(n)
+                wx.Yield()
+
+            # read all data from the zarr archive
+            mfxdata = zarr_archive['mfx'][:]; upd(1)
+            # processing 1st step, move data into pandas dataframe
+            df_mfx, failure_map = pf.paraflux_mk_df_fm(mfxdata); upd(2)
+            # Run the analysis steps
+            vld_itr = pf.build_valid_df(df_mfx); upd(3)
+            vld_itr = pf.compute_percentages(vld_itr)
+            vld_itr = pf.analyze_failures(vld_itr, df_mfx, failure_map)
+            initial_count = vld_itr['vld loc count'].iloc[0]
+            vld_itr = pf.add_failure_metrics(vld_itr, initial_count); upd(4)
+            mfx_zarrsource._paraflux_analysis = vld_itr
+        else:
+            vld_itr = mfx_zarrsource._paraflux_analysis
+        
+        vld_paraflux = pf.paraflux_itr_plot(vld_itr[['itr', 'passed itr %', 'CFR failure %', 'No signal % per itr pairs']])
+
+        # here possible storage command, only if autosaving is enabled in config
+        if mu.autosave_check() and zarr_path is not None:
+            mu.autosave_csv(vld_itr.drop(columns='tid', errors='ignore'),
+                            zarr_path,pipeline.mdh,'_iteration_stats_full')
+        ### --- End of Alex B added functionality ---
 
     def OnClumpScatterPosPlot(self,event):
         from scipy.stats import binned_statistic
@@ -644,33 +772,68 @@ class MINFLUXanalyser():
             warn("could not find zarr attribute - is this a MFX zarr file?")
 
     def OnMFXInfo(self, event):
-        import io
-        from  wx.lib.dialogs import ScrolledMessageDialog
+        import wx.html
+
         fres = self.visFr.pipeline.dataSources['FitResults']
         if 'zarr' not in dir(fres):
             warn("could not find zarr attribute - is this a MFX zarr file?")
             return
-        else:
-            try:
-                mfx_attrs = fres.zarr['mfx'].attrs.asdict()
-            except AttributeError:
-                warn("could not access MFX attributes - do we have MFX data in zarr?")
-                return
-            if '_legacy' in mfx_attrs:
-                warn("legacy data detected - no useful MFX metadata in legacy data")
-                return
-            from PYMEcs.IO.MINFLUX import get_metadata_from_mfx_attrs
-            md_itr_info, md_globals = get_metadata_from_mfx_attrs(mfx_attrs)
-            import pprint
-            with io.StringIO() as output:
-                print(md_itr_info.to_string(show_dimensions=False,index=True,line_width=80),file=output)
-                print('\nMFX Globals:',file=output)
-                print(pprint.pformat(md_globals,indent=4),file=output)
-                mfx_info_str = output.getvalue()
-            with ScrolledMessageDialog(self.visFr, mfx_info_str, "MFX info (tentative)", size=(900,400),
-                                        style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE ) as dlg:
-                dlg.ShowModal()            
+        try:
+            mfx_attrs = fres.zarr['mfx'].attrs.asdict()
+        except AttributeError:
+            warn("could not access MFX attributes - do we have MFX data in zarr?")
+            return
+        if '_legacy' in mfx_attrs:
+            warn("legacy data detected - no useful MFX metadata in legacy data")
+            return
 
+        # if we make it to this part of the code there is some useful metadata to be looked at
+        from PYMEcs.IO.MINFLUX import get_metadata_from_mfx_attrs
+        md_itr_info, md_globals = get_metadata_from_mfx_attrs(mfx_attrs)
+
+        # Create an HTML dialog
+        dlg = wx.Dialog(self.visFr, title="MINFLUX Metadata Information", 
+                       size=(950, 600), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        
+        # Create HTML content
+        html_window = wx.html.HtmlWindow(dlg, style=wx.html.HW_SCROLLBAR_AUTO)
+        
+        # Format the DataFrame as an HTML table
+        html_content = "<html><body>"
+        html_content += "<p><b>Note:</b> This info should now be available via the PYME metadata, please inspect your metadata tab if using the GUI.</p>"
+
+        html_content += "<h2>MINFLUX Iteration Parameters</h2>"
+        html_content += md_itr_info.to_html(
+            classes='table table-striped',
+            float_format=lambda x: f"{x:.2f}" if isinstance(x, float) else x
+        )
+        
+        # Format global parameters
+        html_content += "<h2>MINFLUX Global Parameters</h2>"
+        html_content += "<table border=1 class='table table-striped'>"
+        for key, value in sorted(md_globals.items()):
+            html_content += f"<tr><td><b>{key}</b></td><td>{value}</td></tr>"
+        html_content += "</table>"
+        html_content += "</body></html>"
+        
+        html_window.SetPage(html_content)
+        
+        # Add OK button
+        btn_sizer = wx.StdDialogButtonSizer()
+        btn = wx.Button(dlg, wx.ID_OK)
+        btn.SetDefault()
+        btn_sizer.AddButton(btn)
+        btn_sizer.Realize()
+        
+        # Layout
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(html_window, 1, wx.EXPAND | wx.ALL, 5)
+        sizer.Add(btn_sizer, 0, wx.ALIGN_CENTER | wx.ALL, 5)
+        dlg.SetSizer(sizer)
+        
+        dlg.ShowModal()
+        dlg.Destroy()
+        
     def OnZarrToZipStore(self, event):
         with wx.DirDialog(self.visFr, 'Zarr to convert ...',
                           style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST) as ddialog:
@@ -987,7 +1150,22 @@ class MINFLUXanalyser():
         config.update_config({config_var: folder},
                              config='user', create_backup=True)
 
-    def OnMINFLUXplotTempData(self, event):
+    def OnToggleMINFLUXautosave(self, event):
+        import PYME.config as config
+        config_var = 'MINFLUX-autosave'
+
+        if config.get(config_var,False):
+            newval = False
+        else:
+            newval = True
+
+        config.update_config({config_var: newval},
+                             config='user', create_backup=False)
+
+        warn("MINFLUX analysis autosave was set to %s" %  config.get(config_var))
+
+        
+    def OnMINFLUXplotTemperatureData(self, event):
         import PYME.config as config
         import os
         from os.path import basename
@@ -1003,7 +1181,7 @@ class MINFLUXanalyser():
                  ("needs to be a **folder** location, currently set to %s" % (folder)))
             return
 
-        from PYMEcs.misc.utils import read_temp_csv, set_diff, timestamp_to_datetime
+        from PYMEcs.misc.utils import read_temperature_csv, set_diff, timestamp_to_datetime
 
         if len(self.visFr.pipeline.dataSources) == 0:
             warn("no datasources, this is probably an empty pipeline, have you loaded any data?")
@@ -1016,7 +1194,7 @@ class MINFLUXanalyser():
         # Convert t0 from timestamp for comparing it with timedates from csv file
         t0_dt = timestamp_to_datetime(t0)
         
-                # Identify the correct temperature CSV files in the folder
+        # Identify the correct temperature CSV files in the folder
         # Loop over CSVs to find matching file
         timeformat = config.get('MINFLUX-temperature_time_format', ['%d.%m.%Y %H:%M:%S',
                                                                     '%d/%m/%Y %H:%M:%S'])
@@ -1026,7 +1204,7 @@ class MINFLUXanalyser():
             try:
                 # print(f"\nChecking file: {basename(f)}\n")  # Debugging, Show which file is being checked
 
-                df = read_temp_csv(f, timeformat=timeformat)
+                df = read_temperature_csv(f, timeformat=timeformat)
                 
                 if 'datetime' not in df.columns:
                     print(f"File {f} has no 'datetime' column after parsing, skipping.")
@@ -1046,7 +1224,7 @@ class MINFLUXanalyser():
             return
 
         # Read temperature data from the correct CSV file
-        mtemps = read_temp_csv(selected_file, timeformat=timeformat)
+        mtemps = read_temperature_csv(selected_file, timeformat=timeformat)
         
         set_diff(mtemps,timestamp_to_datetime(t0))
         p = self.visFr.pipeline
@@ -1072,7 +1250,7 @@ class MINFLUXanalyser():
             plt.tight_layout()
 
     def OnErrorAnalysis(self, event):
-        plot_errors(self.visFr.pipeline)
+        plot_errors(self.visFr.pipeline,ds=self.analysisSettings.defaultDatasourceCoalesced,dsclumps=self.analysisSettings.defaultDatasourceWithClumps)
 
     def OnCluster3D(self, event):
         plot_cluster_analysis(self.visFr.pipeline, ds=self.analysisSettings.datasourceForClusterAnalysis,
@@ -1242,6 +1420,10 @@ class MINFLUXanalyser():
         if self.analysisSettings.configure_traits(kind='modal'):
             pass
 
+    def OnMINFLUXSiteSettings(self, event):
+        if self.siteSettings.configure_traits(kind='modal'):
+            pass
+
     def OnOrigamiErrorPlot(self, event):
         p = self.visFr.pipeline
         # need to check if the required properties are present in the datasource
@@ -1279,7 +1461,7 @@ class MINFLUXanalyser():
         
         uids = np.unique(p['siteID']) # currently siteID is hard coded - possibly make config option
         from PYMEcs.Analysis.MINFLUX import plotsitestats
-        if uids.size < self.analysisSettings.origamiSiteMaxNum:
+        if uids.size < self.siteSettings.siteMaxNum:
             plotsitestats(p,fignum=('origami site stats %d' % self.origamiErrorFignum))
         self.origamiErrorFignum += 1
 
@@ -1291,14 +1473,18 @@ class MINFLUXanalyser():
         if 'error_x_ori' not in p.keys():
             warn("property 'error_x_ori' not present, possibly not the right datasource for origami site info. Aborting...")
             return
-        
+        plotmode = self.siteSettings.plotMode
         from PYMEcs.Analysis.MINFLUX import plotsitestats
         uids,idx = np.unique(p['siteID'],return_index=True) # currently siteID is hard coded - possibly make config option
-        if uids.size < self.analysisSettings.origamiSiteMaxNum:
+        if uids.size < self.siteSettings.siteMaxNum:
             swarmsize = 3
         else:
             swarmsize = 1.5
-        plotsitestats(p,fignum=('origami site stats %d' % self.origamiErrorFignum),swarmsize=swarmsize)
+
+        plotsitestats(p,fignum=('origami site stats %d' % self.origamiErrorFignum),
+                      swarmsize=swarmsize,mode=plotmode,showpoints=self.siteSettings.showPoints,
+                      origamiErrorLimit=self.siteSettings.precisionRange_nm,
+                      strip=(self.siteSettings.pointsMode == 'strip'))
         plotted = True
         #else:
         #    warn("Number of sites (%d) > max number for plotting (%d); check settings"

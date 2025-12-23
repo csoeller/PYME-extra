@@ -19,6 +19,8 @@ def picasso2pyme(locs,mdh):
     pyme['error_y'] = locs['lpy']*nmperpix
     pyme['t'] = locs['frame']
     pyme['A'] = locs['photons']/(2*math.pi)/(locs['sx']**2) # this is from the PYME kinmodels formula - check
+    if 'z' in locs.keys():
+        pyme['z'] = locs['z'] # from astigmatoc data z should already be scaled to nm?
     return pyme
 
 def struc_from_mdh(mdh):
@@ -36,7 +38,6 @@ def struc_from_mdh(mdh):
     for key in ['HandleY']:
         struc[key] = np.array([(npixels-float(i)-offshalfpix)*nmperpix for i in mdh["Structure.%s" % key].split(',')])
     return struc
-
 
 def parse_dicts(dicts):
     import re
@@ -63,6 +64,14 @@ def read_picasso_hdf(name):
 def pymedf2csv(pymedf,filename):
     cols = ['A','x','y','t','sig','error_x','error_y','nPhotons']
     pymedf.to_csv(filename,columns=cols,index=False)
+
+def pymedf2ds(pymedf):
+    from PYME.IO.tabular import DictSource
+    pymedict={}
+    for key in pymedf.keys():
+        pymedict[key] = pymedf[key].values
+    ds = DictSource(pymedict)
+    return ds
 
 import skimage.morphology as morph
 from PYME.IO.image import ImageStack

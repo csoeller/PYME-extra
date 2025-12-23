@@ -669,7 +669,7 @@ class MinfluxZarrSource(MinfluxNpySource):
         self._keys = list(self.res.dtype.names)
 
         # note: aparently, closing an open zarr archive is not required; accordingly no delete and close methods necessary
-
+        self._paraflux_analysis = None
     
 ##############################
 ### Register IO with PYME ####

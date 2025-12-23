@@ -11,7 +11,8 @@ def figuredefaults(fontsize=10,linewidth=1.5):
     plt.rcParams['svg.fonttype'] = 'none'
 
 def boxswarmplot(df,width=0.4,annotate_means=False,annotate_medians=False,showmeans=True,
-                 meanprops=None,ax=None,swarmsize=7,swarmalpha=None,format="%.1f",strip=False,**kwargs):
+                 meanprops=None,ax=None,swarmsize=7,swarmalpha=None,format="%.1f",
+                 showpoints=True,strip=False,**kwargs):
     import seaborn as sns
     if meanprops is None:
         meanprops={'marker':'o',
@@ -21,23 +22,51 @@ def boxswarmplot(df,width=0.4,annotate_means=False,annotate_medians=False,showme
     flierprops = dict(marker='.', markerfacecolor='none', markersize=0, linestyle='none')
     colours = ['#72a4cdff'] * df.shape[1]
     bp = sns.boxplot(df,boxprops={'facecolor': 'none'},width=width,showmeans=showmeans,meanprops=meanprops,ax=ax,flierprops=flierprops,**kwargs)
-    if strip:
-        sns.stripplot(df,size=swarmsize,palette=colours,ax=ax,alpha=swarmalpha)
-    else:
-        sns.swarmplot(df,size=swarmsize,palette=colours,ax=ax,alpha=swarmalpha)
-    meds = df.median().values
-    means = df.mean().values
+    if showpoints:
+        if strip:
+            sns.stripplot(df,size=swarmsize,palette=colours,ax=ax,alpha=swarmalpha)
+        else:
+            sns.swarmplot(df,size=swarmsize,palette=colours,ax=ax,alpha=swarmalpha)
     if annotate_medians:
+        meds = df.median().values
         for i,xtick in enumerate(bp.get_xticks()):
             bp.text(xtick-0.5*width-0.1,meds[i],format % meds[i], 
                     horizontalalignment='center',verticalalignment='center',
                     size='x-small',color='black',weight='semibold')
     if annotate_means:
+        means = df.mean().values
         for i,xtick in enumerate(bp.get_xticks()):
             bp.text(xtick+0.5*width+0.1,means[i],format % means[i], 
                     horizontalalignment='center',verticalalignment='center',
                     size='x-small',color='g',weight='semibold')
     return bp
+
+def violinswarmplot(df,width=0.8,annotate_means=False,annotate_medians=False,
+                    ax=None,swarmsize=7,swarmalpha=None,format="%.1f",strip=False,
+                    annotate_width=0.4,showpoints=True,**kwargs):
+    import seaborn as sns
+    vp = sns.violinplot(df, ax=ax, color="0.95", width=width, **kwargs)
+    colours = ['#72a4cdff'] * df.shape[1]
+    if showpoints:
+        if strip:
+            sns.stripplot(df,size=swarmsize,palette=colours,ax=ax,alpha=swarmalpha, jitter=True, zorder=1)
+        else:
+            sns.swarmplot(df,size=swarmsize,palette=colours,ax=ax,alpha=swarmalpha, zorder=1)
+   
+    if annotate_medians:
+        meds = df.median().values
+        for i,xtick in enumerate(vp.get_xticks()):
+            vp.text(xtick-0.5*annotate_width-0.1,meds[i],format % meds[i], 
+                    horizontalalignment='center',verticalalignment='center',
+                    size='x-small',color='black',weight='semibold')
+    if annotate_means:
+        means = df.mean().values
+        for i,xtick in enumerate(vp.get_xticks()):
+            vp.text(xtick+0.5*annotate_width+0.1,means[i],format % means[i], 
+                    horizontalalignment='center',verticalalignment='center',
+                    size='x-small',color='g',weight='semibold')
+    return vp
+
 
 # deprecated
 def _scattered_boxplot(ax, x, notch=None, sym=None, vert=None, whis=None, positions=None,
