@@ -30,7 +30,7 @@ dependencies = [
     "alphashape",
 ]
 
-version = "1.0.4"
+version = "1.0.4post"
 
 [project.optional-dependencies]
 opt = [
