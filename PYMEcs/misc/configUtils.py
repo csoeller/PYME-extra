@@ -1,5 +1,56 @@
 import PYME.config as config
 import os
+import logging
+
+DSVIEWER_PLUGINS =
+```
+PYMEcs.experimental.showErrsDh5view
+PYMEcs.experimental.mapTools
+PYMEcs.experimental.meas2DplotDh5view
+PYMEcs.experimental.testChannelByName
+PYMEcs.experimental.FRC
+PYMEcs.experimental.regExtraCmaps
+PYMEcs.experimental.procPoints
+PYMEcs.experimental.combine_maps
+PYMEcs.experimental.Sofi
+PYMEcs.experimental.CalcZfactor
+PYMEcs.experimental.ImageJROItools
+```
+
+VISGUI_PLUGINS =
+```
+PYMEcs.experimental.clusterTrack
+PYMEcs.experimental.fiducials
+PYMEcs.experimental.fiducialsNew
+PYMEcs.experimental.qPAINT
+PYMEcs.experimental.showErrs
+PYMEcs.experimental.showShiftMap
+PYMEcs.experimental.binEventProperty
+PYMEcs.experimental.onTimes
+PYMEcs.experimental.snrEvents
+PYMEcs.experimental.randMap
+PYMEcs.experimental.mortensen
+PYMEcs.experimental.splitRender
+PYMEcs.experimental.timedSpecies
+PYMEcs.experimental.chaining
+PYMEcs.experimental.specLabeling
+PYMEcs.experimental.selectROIfilterTable
+PYMEcs.experimental.regExtraCmaps
+PYMEcs.experimental.pyme2caml
+PYMEcs.experimental.Simpler
+PYMEcs.experimental.MINFLUX
+PYMEcs.experimental.eventProcessing
+PYMEcs.experimental.NPCcalcLM
+```
+
+RECIPES =
+```
+PYMEcs.recipes.processing
+PYMEcs.recipes.output
+PYMEcs.recipes.base
+PYMEcs.recipes.localisations
+PYMEcs.recipes.simpler
+```
 
 def get_legacy_scripts_dir():
     return os.path.join(os.path.dirname(config.__file__), 'Acquire/Scripts')
@@ -21,6 +72,40 @@ def list_config_dirs():
     print('List of configuration directories:')
     for dir in config.config_dirs:
         print(dir)
+
+def install_plugins():
+    # options parsing
+    from pathlib import Path
+    op = argparse.ArgumentParser(description='install PYME-extra plugins')
+    op.add_argument('-u','--user', action='store_true',
+                    help='install plugin info to user config directory')
+    op.add_argument('--dry-run',action="store_true",
+                    help='just process options and merely show what would be done')
+
+    args = op.parse_args()
+    if args.user:
+        installdir = Path(config.user_config_dir)
+    else:
+        installdir = Path(config.dist_config_directory)
+
+    recfile = installdir / 'plugins' / 'recipes' / 'PYMEcsRecipePlugins.txt'
+    visguifile = installdir / 'plugins' / 'visgui' / 'PYMEcsVisguiPlugins.txt'
+    dsviewerfile = installdir / 'plugins' / 'dsviewer' / 'PYMEcsDsviewerPlugins.txt'
+
+    logging.info("will install recipes to\n\t%s" % recfile)
+    logging.info("will install visgui plugins to\n\t%s" % visguifile)
+    logging.info("will install dsviewer plugins to\n\t%s" % dsviewerfile)
+    
+    if args.dry_run:
+    logging.info("dry run, aborting...")
+    import sys
+    sys.exit(0)
+
+    recfile.write_text(RECIPES)
+    visguifile.write_text(VISGUI_PLUGINS)
+    dsviewerfile.write_text(DSVIEWER_PLUGINS)
+
+    logging.info("\nPYME-extra recipes and plugins have been registered...")
 
 def main():
     import sys

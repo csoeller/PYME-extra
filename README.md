@@ -12,34 +12,48 @@ This is a mixed bag of extensions/additions to standard PYME and also used as a 
 
 #### PYME-test-env
 
-These days we recommend installing `PYME-extra` as part of a [PYME-test-env](https://github.com/csoeller/PYME-test-env) controlled install. All further details please see there.
+These days we recommend for any development install of `PYME-extra` the installation as part of a [PYME-test-env](https://github.com/csoeller/PYME-test-env) controlled install. All further details please see there.
 
-#### Manual install
+#### pip install
 
-Installation is achieved with
-
-```
-   # cd to PYME-extra subdirectory
-   python setup.py install
-   python install_plugins.py dist
-```
-
-Alternatively, if you want to edit code in place you may want to use a development install
+For users not interested in following development updates and mainly interested in the stable release for usage as is we now recommend a pip based install:
 
 ```
-   # cd to PYME-extra subdirectory
-   python setup.py develop
-   python install_plugins.py dist
+	# possibly install python-microscopy first and check that the install succeeds
+	pip install-python-microscopy
+	pip install PYME-extra # installation from PyPi
+	pymex_install_plugins # register the plugins systemwide
 ```
 
-For user installs, plugin files can be installed in the per user config directory by leaving out the `dist` argument to install_plugins.py:
+#### Installing from source
+
+Still achieved with pip but from the source directory in which you unpacked PYME-extra (typically done when you cloned the git repository). A plain install from source is done with
 
 ```
-   python install_plugins.py
+	pip install .
 ```
+
+A development install can be achieved by requesting an install in "editable mode". When a package is installed in editable mode, edits to the project source code become effective without the need of a new installation step.
+
+```
+	pip install --no-build-isolation -e . # install in in “development mode”
+```
+
+In either case (plain or development install), you may need to register the various plugins to implement the extra functionality provided by `PYME-extra`. This is achieved with the plugin installer that will have been installed with PYME-extra. You register with the command
+
+```
+	pymex_install_plugins
+```
+
+By default it registers the plugins systemwide but you can supply the `--user` option to register only for the current user:
+
+```
+	pymex_install_plugins --user # for further details see also pymex_install_plugins -h
+```
+
 #### Requirements
 
-External modules required for full functionality are listed in `requirements.txt`, these currently include
+External modules required for full functionality currently include
 
     python-microscopy
     statsmodels # for FRC smoothing with the lowess filter
@@ -50,6 +64,8 @@ External modules required for full functionality are listed in `requirements.txt
     zarr>=2,<3 # for MINFLUX I/O
     seaborn # for some prettier plots
     mrcfile # to output 3D data for FSC from a EM FSC server
+    
+These should be installed by the `pip` based install automatically.
 
 We also often use a couple more dependencies in notebooks, but strictly speaking no functionality in `PYME-extra` depends directly on these:
 
@@ -65,6 +81,6 @@ Bottom line is that these two error display modules will likely not work on anyt
 
 The PYME mac app wrappers are available at the [PYME-apps repository](https://github.com/csoeller/PYME-apps).
 
-### Contact ###
+### Author ###
 
-Christian Soeller (c.soeller _at_ gmail _dot_ com)
+Christian Soeller
