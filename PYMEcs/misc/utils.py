@@ -41,6 +41,59 @@ def unique_name(stem,names):
 
 import pandas as pd
 
+
+def setTempDataFolder(modename,configvar,parent):
+    import wx
+    import PYME.config as config
+    curfolder = config.get(configvar)
+    if curfolder is None:
+        warn("currently the %s temperature file folder is not set. Set the path in the following file dialog" % modename)
+    else:
+        warn("%s temperature file folder currently set to '%s'.\n\nAlter in the following dialog if needed or cancel that dialog if want to leave as is" %
+             (modename,curfolder))
+    with wx.DirDialog(parent, "Choose folder containing temperature CSV files") as dialog:
+        if dialog.ShowModal() == wx.ID_CANCEL:
+            return
+        folder = dialog.GetPath()
+    if config.get(configvar) == folder:
+        warn("config option '%s' already set to %s, leaving as is" % (configvar,folder))
+        return # already set to this value, return
+
+    config.update_config({configvar: folder},
+                         config='user', create_backup=True)
+
+
+def read_room_temp_csv():
+    import PYME.config as config
+    from glob import glob
+    import os
+    import pandas as pd
+
+    def read_temp_csv(file):
+        trec = pd.read_csv(file,sep=';',index_col='Timestamp',parse_dates=['Timestamp'],dayfirst=True)
+        return trec
+
+    configvar = 'MINFLUX-room-temperature_folder'
+    folder = config.get(configvar)
+    if folder is None:
+        warn("Need to set room temperature file location first by setting config variable %s" % configvar)
+        return
+    elif not os.path.isdir(folder):
+        warn(("Config variable %s is not set to a folder;\n" % (configvar)) +
+             ("needs to be a **folder** location, currently set to %s" % (folder)))
+        return
+    
+    tempdata = []
+    reps = sorted(glob(os.path.join(folder, 'Report_*_2025.csv')))
+    if len(reps) > 0:
+        for rep in reps:
+            tempdata.append(read_temp_csv(rep))
+        df = pd.concat(tempdata)
+        df.index.names = ['datetime']
+        return df.reset_index() # move datetime into a value and replace with numeric index
+    else:
+        return None
+
 # makes the reading a little more flexible
 # contributed by Alex B
 def read_temperature_csv(filename, timeformat=['%d.%m.%Y %H:%M:%S', # Newest format
@@ -73,7 +126,7 @@ def read_temperature_csv(filename, timeformat=['%d.%m.%Y %H:%M:%S', # Newest for
             break
         except ValueError:
             continue
-    else: # we get here if the for cloop terminates without breaking implying no format matched
+    else: # we get here if the for loop terminates without breaking implying no format matched
         raise ValueError("None of the provided time formats matched the 'Time' column.")
 
     return trec
@@ -146,7 +199,8 @@ def load_sessionfile(filename,substitute=True):
         session_txt = f.read()
 
     if substitute:
-        session = yaml.safe_load(substitute_sessiondir(session_txt, filename)) # replace any possibly present SESSIONDIR_TOKEN
+        # replace any possibly present SESSIONDIR_TOKEN
+        session = yaml.safe_load(substitute_sessiondir(session_txt, filename))
     else:
         session = yaml.safe_load(session_txt)
         
@@ -167,7 +221,8 @@ def zarrtozipstore(zarr_root,archive_name,verbose=False):
         warn("did not find .zgroup file in directory, this may not be a zarr directory")
 
     if verbose:
-        warn("zarr file archive at\n'%s'\n, zipping to dir\n'%s'\n with name '%s'" % (zarr_root,archive_name.parent,archive_name.name))
+        warn("zarr file archive at\n'%s'\n, zipping to dir\n'%s'\n with name '%s'" %
+             (zarr_root,archive_name.parent,archive_name.name))
     
     from shutil import make_archive
     created = make_archive(archive_name,

@@ -534,6 +534,7 @@ class MINFLUXanalyser():
 
         visFr.AddMenuItem('MINFLUX>Util', "Plot temperature record matching current data series",self.OnMINFLUXplotTemperatureData)
         visFr.AddMenuItem('MINFLUX>Util', "Set MINFLUX temperature folder location", self.OnMINFLUXsetTempDataFolder)
+        visFr.AddMenuItem('MINFLUX>Util', "Set room temperature folder location", self.OnMINFLUXsetRoomTempDataFolder)
         visFr.AddMenuItem('MINFLUX>Util', "Check if clumpIndex contiguous", self.OnClumpIndexContig)
         visFr.AddMenuItem('MINFLUX>Util', "Plot event scatter as function of position in clump", self.OnClumpScatterPosPlot)
         visFr.AddMenuItem('MINFLUX>Util', "Set plotting defaults (inc font size)", self.OnSetMINFLUXPlottingdefaults)
@@ -1132,23 +1133,12 @@ class MINFLUXanalyser():
             ll.update()
 
     def OnMINFLUXsetTempDataFolder(self, event):
-        import PYME.config as config
-        config_var = 'MINFLUX-temperature_folder'
-        curfolder = config.get(config_var)
-        if curfolder is None:
-            warn("currently the MINFLUX temperature file folder is not set. Set the path in the following file dialog")
-        else:
-            warn("MINFLUX temperature file folder currently set to '%s'.\n\nAlter in the following dialog if needed or cancel that dialog if want to leave as is" % curfolder)
-        with wx.DirDialog(self.visFr, "Choose folder containing temperature CSV files") as dialog:
-            if dialog.ShowModal() == wx.ID_CANCEL:
-                return
-            folder = dialog.GetPath()
-        if config.get(config_var) == folder:
-            warn("config option '%s' already set to %s, leaving as is" % (config_var,folder))
-            return # already set to this value, return
+        from PYMEcs.misc.utils import setTempDataFolder
+        setTempDataFolder('MINFLUX', configvar = 'MINFLUX-temperature_folder', parent= self.visFr)
 
-        config.update_config({config_var: folder},
-                             config='user', create_backup=True)
+    def OnMINFLUXsetRoomTempDataFolder(self, event):
+        from PYMEcs.misc.utils import setTempDataFolder
+        setTempDataFolder('room', configvar = 'MINFLUX-room-temperature_folder', parent= self.visFr)
 
     def OnToggleMINFLUXautosave(self, event):
         import PYME.config as config
@@ -1181,7 +1171,7 @@ class MINFLUXanalyser():
                  ("needs to be a **folder** location, currently set to %s" % (folder)))
             return
 
-        from PYMEcs.misc.utils import read_temperature_csv, set_diff, timestamp_to_datetime
+        from PYMEcs.misc.utils import read_temp_csv, set_diff, timestamp_to_datetime, read_room_temp_csv
 
         if len(self.visFr.pipeline.dataSources) == 0:
             warn("no datasources, this is probably an empty pipeline, have you loaded any data?")
@@ -1224,9 +1214,11 @@ class MINFLUXanalyser():
             return
 
         # Read temperature data from the correct CSV file
-        mtemps = read_temperature_csv(selected_file, timeformat=timeformat)
-        
-        set_diff(mtemps,timestamp_to_datetime(t0))
+        mtemps = read_temp_csv(selected_file, timeformat=timeformat)
+        rtemps = read_room_temp_csv()
+
+        ser_tstamp = timestamp_to_datetime(t0)
+        set_diff(mtemps,ser_tstamp)
         p = self.visFr.pipeline
         range = (1e-3*p['t'].min(),1e-3*p['t'].max())
         sertemps = mtemps[mtemps['tdiff_s'].between(range[0],range[1])]
@@ -1234,7 +1226,6 @@ class MINFLUXanalyser():
             warn("no records in requested time window, is series time before or after start/end of available temperature records?\n" +
                  ("current records cover %s to %s" % (mtemps['Time'].iloc[0],mtemps['Time'].iloc[-1])) +
                  ("\nseries starts at %s" % (t0)))
-            return
         else:
             # for now we make 2 subplots so that we can provide both s units and actual time
             fig, axes = plt.subplots(nrows=2, ncols=1)
@@ -1249,6 +1240,19 @@ class MINFLUXanalyser():
             sertemps.plot('tdiff_s','Box',style='.-', ax=axes[1])
             plt.tight_layout()
 
+        if rtemps is not None:
+            set_diff(rtemps,ser_tstamp)
+            ser_rtemps = rtemps[rtemps['tdiff_s'].between(range[0],range[1])]
+            if ser_rtemps.empty:
+                logger.debug("no matching room temps found")
+                return
+            fig, axes = plt.subplots(nrows=2, ncols=1)
+            ser_rtemps.plot('datetime','Temperature',style='.-',
+                          title="room temperature record for series starting at %s" % t0, ax=axes[0])
+            ser_rtemps.plot('tdiff_s','Temperature',style='.-', ax=axes[1])
+            plt.tight_layout()
+            
+            
     def OnErrorAnalysis(self, event):
         plot_errors(self.visFr.pipeline,ds=self.analysisSettings.defaultDatasourceCoalesced,dsclumps=self.analysisSettings.defaultDatasourceWithClumps)
 
