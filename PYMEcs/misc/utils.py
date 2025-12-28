@@ -63,7 +63,7 @@ def setTempDataFolder(modename,configvar,parent):
                          config='user', create_backup=True)
 
 
-def read_room_temp_csv():
+def read_room_temperature_csv():
     import PYME.config as config
     from glob import glob
     import os

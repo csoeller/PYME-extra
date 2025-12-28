@@ -1171,7 +1171,7 @@ class MINFLUXanalyser():
                  ("needs to be a **folder** location, currently set to %s" % (folder)))
             return
 
-        from PYMEcs.misc.utils import read_temp_csv, set_diff, timestamp_to_datetime, read_room_temp_csv
+        from PYMEcs.misc.utils import read_temperature_csv, set_diff, timestamp_to_datetime, read_room_temperature_csv
 
         if len(self.visFr.pipeline.dataSources) == 0:
             warn("no datasources, this is probably an empty pipeline, have you loaded any data?")
@@ -1214,8 +1214,8 @@ class MINFLUXanalyser():
             return
 
         # Read temperature data from the correct CSV file
-        mtemps = read_temp_csv(selected_file, timeformat=timeformat)
-        rtemps = read_room_temp_csv()
+        mtemps = read_temperature_csv(selected_file, timeformat=timeformat)
+        rtemps = read_room_temperature_csv()
 
         ser_tstamp = timestamp_to_datetime(t0)
         set_diff(mtemps,ser_tstamp)
