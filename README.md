@@ -33,7 +33,7 @@ Now you are ready to use `pip` to install `python-microscopy` and `PYME-extra`:
 
 ```
 	# possibly install python-microscopy first and check that the install succeeds
-	pip install-python-microscopy
+	pip install python-microscopy
 	pip install PYME-extra # installation from PyPi
 	pymex_install_plugins # important final step: register the plugins systemwide
 ```
