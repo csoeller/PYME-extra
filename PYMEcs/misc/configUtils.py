@@ -91,9 +91,14 @@ def install_plugins():
     else:
         installdir = Path(config.dist_config_directory)
 
-    recfile = installdir / 'plugins' / 'recipes' / 'PYMEcsRecipePlugins.txt'
-    visguifile = installdir / 'plugins' / 'visgui' / 'PYMEcsVisguiPlugins.txt'
-    dsviewerfile = installdir / 'plugins' / 'dsviewer' / 'PYMEcsDsviewerPlugins.txt'
+    def mk_asrequired(dir,file):
+        dir.mkdir(parents=True, exist_ok=True)
+        full_path = dir / file
+        return full_path
+
+    recfile = mk_asrequired(installdir / 'plugins' / 'recipes','PYMEcsRecipePlugins.txt')
+    visguifile = mk_asrequired(installdir / 'plugins' / 'visgui','PYMEcsVisguiPlugins.txt')
+    dsviewerfile = mk_asrequired(installdir / 'plugins' / 'dsviewer','PYMEcsDsviewerPlugins.txt')
 
     logging.info("will install recipes to\n\t%s" % recfile)
     logging.info("will install visgui plugins to\n\t%s" % visguifile)
