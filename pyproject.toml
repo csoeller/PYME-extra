@@ -28,9 +28,10 @@ dependencies = [
     "mrcfile",
     "circle-fit",
     "alphashape",
+    "pywin32; platform_system=='Windows'", # we add a pywin32 dep to stand in for the missing one in python-microscopy for now
 ]
 
-version = "1.0.5"
+version = "1.0.5.post0"
 
 [project.optional-dependencies]
 opt = [
