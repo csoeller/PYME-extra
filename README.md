@@ -5,7 +5,7 @@ Plugins and associated code for PYME (AKA [python-microscopy](https://python-mic
 This is a mixed bag of extensions/additions to standard PYME and also used as a testbed/platform for
 
 * recipe based processing of SMLM data
-* implementing I/O for new formats
+* implementing I/O for new formats (especially MINFLUX data in `.npy` and (now preferred) `.zarr.zip` format)
 * new ideas for data processing
 
 ### Installation ###
@@ -29,7 +29,7 @@ We highly recommend installing into a fresh virtual environment as can be genera
     conda activate pyme-pip
 ```
 
-Now you are ready to use `pip` to install `python-microscopy` and `PYME-extra`:
+Now you are ready to use `pip` to install `python-microscopy` and `PYME-extra` (`#` is the comment sign on macOS/posix shells, just leave out that text when pasting to windows command prompts):
 
 ```
 	# possibly install python-microscopy first and check that the install succeeds
@@ -38,9 +38,11 @@ Now you are ready to use `pip` to install `python-microscopy` and `PYME-extra`:
 	pymex_install_plugins # important final step: register the plugins systemwide
 ```
 
+This should be all, at this stage you can launch the main applications, i.e. `visgui` (AKA `PymeVis` or `PYMEVisualize`) and `dh5view` (AKA `PYMEImage`) to open and process microscopy data. See also [Verify Installation](https://www.python-microscopy.org/doc/Installation/Installation.html#verify-installation) in the [PYME docs](https://www.python-microscopy.org/doc).
+
 #### Installing from source
 
-Still achieved with pip but from the source directory in which you unpacked PYME-extra (typically done when you cloned the git repository). A plain install from source is done with
+As another alternative you can install directly from the source (e.g. as obtained from github). Still achieved with pip but now called from within the source directory in which you unpacked PYME-extra (typically done when you cloned the git repository). A plain install from source is done with
 
 ```
 	pip install .
