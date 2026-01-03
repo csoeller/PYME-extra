@@ -791,6 +791,7 @@ class DBSCANClustering2(ModuleBase):
     inputName = Input('filtered')
 
     columns = ListStr(['x', 'y', 'z'])
+    algorithm = Enum(['dbscan','hdbscan','optics'])
     searchRadius = Float(10)
     minClumpSize = Int(1)
     
@@ -804,20 +805,47 @@ class DBSCANClustering2(ModuleBase):
     outputName = Output('dbscanClustered')
 
     def execute(self, namespace):
-        from sklearn.cluster import dbscan
+        from sklearn.cluster import dbscan, HDBSCAN, OPTICS
         from scipy.stats import binned_statistic
 
+        def optics(X,min_samples=5,metric='euclidean',n_jobs=None):
+            est = OPTICS(
+                min_samples=min_samples,
+                metric=metric,
+                n_jobs=n_jobs,
+            )
+            est.fit(X)
+            return est.labels_
+
+        def hdbscan(X,min_samples=5,metric='euclidean',n_jobs=None):
+            est = HDBSCAN(
+                min_samples=min_samples,
+                metric=metric,
+                n_jobs=n_jobs,
+            )
+            est.fit(X)
+            return est.labels_
+            
         inp = namespace[self.inputName]
         mapped = tabular.MappingFilter(inp)
 
         # Note that sklearn gives unclustered points label of -1, and first value starts at 0.
         if self.multithreaded:
-            core_samp, dbLabels = dbscan(np.vstack([inp[k] for k in self.columns]).T,
-                                         eps=self.searchRadius, min_samples=self.minClumpSize, n_jobs=self.numberOfJobs)
+            n_jobs = self.numberOfJobs
         else:
-            #NB try-catch from Christians multithreaded example removed as I think we should see failure here
+            n_jobs = None
+        if self.algorithm == 'dbscan':
             core_samp, dbLabels = dbscan(np.vstack([inp[k] for k in self.columns]).T,
-                                     eps=self.searchRadius, min_samples=self.minClumpSize)
+                                         eps=self.searchRadius, min_samples=self.minClumpSize,
+                                         metric='euclidean', n_jobs=n_jobs)
+        elif self.algorithm == 'hdbscan':
+            dbLabels = hdbscan(np.vstack([inp[k] for k in self.columns]).T,
+                               min_samples=self.minClumpSize, metric='euclidean',
+                               n_jobs=n_jobs)
+        elif self.algorithm == 'optics':
+            dbLabels = optics(np.vstack([inp[k] for k in self.columns]).T,
+                               min_samples=self.minClumpSize, metric='euclidean',
+                               n_jobs=n_jobs)
 
         # shift dbscan labels up by one to match existing convention that a clumpID of 0 corresponds to unclumped
         dbids = dbLabels + 1
@@ -846,6 +874,7 @@ class DBSCANClustering2(ModuleBase):
         return [Item('columns', editor=TextEditor(auto_set=False, enter_set=True, evaluate=ListStr)),
                     Item('searchRadius'),
                     Item('minClumpSize'),
+                    Item('algorithm'),
                     Item('multithreaded'),
                     Item('numberOfJobs'),
                     Item('clumpColumnName'),
