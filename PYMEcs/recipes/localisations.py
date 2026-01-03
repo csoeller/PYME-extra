@@ -792,6 +792,7 @@ class DBSCANClustering2(ModuleBase):
 
     columns = ListStr(['x', 'y', 'z'])
     algorithm = Enum(['dbscan','hdbscan','optics'])
+    metric = Enum(['euclidean','manhattan','chebyshev'])
     searchRadius = Float(10)
     minClumpSize = Int(1)
     
@@ -837,14 +838,14 @@ class DBSCANClustering2(ModuleBase):
         if self.algorithm == 'dbscan':
             core_samp, dbLabels = dbscan(np.vstack([inp[k] for k in self.columns]).T,
                                          eps=self.searchRadius, min_samples=self.minClumpSize,
-                                         metric='euclidean', n_jobs=n_jobs)
+                                         metric=self.metric, n_jobs=n_jobs)
         elif self.algorithm == 'hdbscan':
             dbLabels = hdbscan(np.vstack([inp[k] for k in self.columns]).T,
-                               min_samples=self.minClumpSize, metric='euclidean',
+                               min_samples=self.minClumpSize, metric=self.metric,
                                n_jobs=n_jobs)
         elif self.algorithm == 'optics':
             dbLabels = optics(np.vstack([inp[k] for k in self.columns]).T,
-                               min_samples=self.minClumpSize, metric='euclidean',
+                               min_samples=self.minClumpSize, metric=self.metric,
                                n_jobs=n_jobs)
 
         # shift dbscan labels up by one to match existing convention that a clumpID of 0 corresponds to unclumped
@@ -875,6 +876,7 @@ class DBSCANClustering2(ModuleBase):
                     Item('searchRadius'),
                     Item('minClumpSize'),
                     Item('algorithm'),
+                    Item('metric'),
                     Item('multithreaded'),
                     Item('numberOfJobs'),
                     Item('clumpColumnName'),
