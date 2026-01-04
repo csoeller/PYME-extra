@@ -791,9 +791,12 @@ class DBSCANClustering2(ModuleBase):
     inputName = Input('filtered')
 
     columns = ListStr(['x', 'y', 'z'])
-    algorithm = Enum(['dbscan','hdbscan','optics'])
-    metric = Enum(['euclidean','manhattan','chebyshev'])
-    searchRadius = Float(10)
+    algorithm = Enum(['dbscan','hdbscan','optics'],
+                     desc="algorithm used for clustering; HDBSCAN and OPTICS ignore the searchRadius")
+    metric = Enum(['euclidean','manhattan','chebyshev'],
+                  desc="a few metrics for testing, generally eucledian should be the right choice")
+    maxClumpSize = Int(-1,desc="a limit to the size of clusters returned by the cluster selection algorithm; only used for HDBSCAN, there is no limit when value < 0")
+    searchRadius = Float(10,desc="equivalent of epsilon - used for DBSCAN only")
     minClumpSize = Int(1)
     
     #exposes sklearn parallelism. Recipe modules are generally assumed
@@ -818,9 +821,12 @@ class DBSCANClustering2(ModuleBase):
             est.fit(X)
             return est.labels_
 
-        def hdbscan(X,min_samples=5,metric='euclidean',n_jobs=None):
+        def hdbscan(X,min_cluster_size=5,metric='euclidean',n_jobs=None,
+                    max_cluster_size=None):
             est = HDBSCAN(
-                min_samples=min_samples,
+                min_cluster_size=min_cluster_size,
+                max_cluster_size=max_cluster_size,
+                cluster_selection_method='eom',
                 metric=metric,
                 n_jobs=n_jobs,
             )
@@ -829,6 +835,11 @@ class DBSCANClustering2(ModuleBase):
             
         inp = namespace[self.inputName]
         mapped = tabular.MappingFilter(inp)
+
+        if self.maxClumpSize < 0:
+            max_cluster_size = None
+        else:
+            max_cluster_size = self.maxClumpSize
 
         # Note that sklearn gives unclustered points label of -1, and first value starts at 0.
         if self.multithreaded:
@@ -841,7 +852,8 @@ class DBSCANClustering2(ModuleBase):
                                          metric=self.metric, n_jobs=n_jobs)
         elif self.algorithm == 'hdbscan':
             dbLabels = hdbscan(np.vstack([inp[k] for k in self.columns]).T,
-                               min_samples=self.minClumpSize, metric=self.metric,
+                               min_cluster_size=self.minClumpSize, metric=self.metric,
+                               max_cluster_size=max_cluster_size,
                                n_jobs=n_jobs)
         elif self.algorithm == 'optics':
             dbLabels = optics(np.vstack([inp[k] for k in self.columns]).T,
@@ -875,6 +887,7 @@ class DBSCANClustering2(ModuleBase):
         return [Item('columns', editor=TextEditor(auto_set=False, enter_set=True, evaluate=ListStr)),
                     Item('searchRadius'),
                     Item('minClumpSize'),
+                    Item('maxClumpSize'),
                     Item('algorithm'),
                     Item('metric'),
                     Item('multithreaded'),
