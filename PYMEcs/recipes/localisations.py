@@ -2239,6 +2239,32 @@ class LinearDrift(ModuleBase):
 
         return output
 
+@register_module("ObjectSDs")
+class ObjectSDs(ModuleBase):
+    input = Input('localizations')
+    output = Output('with_objectSDs')
+    
+    IDkey = CStr('clumpIndex')
+    IDout = CStr('object')
+
+    def run(self, input):
+        from PYMEcs.IO.MINFLUX import get_stddev_property
+        ids = input[self.IDkey]
+        object_sdx = get_stddev_property(ids,input['x'])
+        object_sdy = get_stddev_property(ids,input['y'])
+        object_sd2 = object_sdx**2 + object_sdy**2
+        if 'error_z' in input.keys():
+            object_sdz = get_stddev_property(ids,input['z'])
+            object_sd2 += object_sdz**2
+            
+        mapped_ds = tabular.MappingFilter(input)
+        mapped_ds.addColumn('%s_sdx' % self.IDout,object_sdx)
+        mapped_ds.addColumn('%s_sdy' % self.IDout,object_sdy)
+        mapped_ds.addColumn('%s_sd' % self.IDout,np.sqrt(object_sd2))
+        if 'error_z' in input.keys():
+            mapped_ds.addColumn('%s_sdz' % self.IDout,object_sdz)
+            
+        return mapped_ds
 
 @register_module("TrackProps")
 class TrackProps(ModuleBase):
