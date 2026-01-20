@@ -659,7 +659,11 @@ class MinfluxZarrSource(MinfluxNpySource):
     def __init__(self, filename):
         """ Input filter for use with ZARR data exported from MINFLUX data (originally residing in MSR files)."""
         import zarr
-        archz = zarr.open(filename)
+        # alternative opening which should work on both v2 and v3 zarr (subject to testing)
+        store = zarr.storage.ZipStore(filename,mode='r')
+        archz = zarr.open(store, mode='r')
+        # previous way of opening .zarr.zip
+        # archz = zarr.open(filename)
         self.zarr = archz
         self._own_file = True # is this necessary? Normally only used by HDF to close HFD on destroy, zarr does not need "closing"
 
@@ -730,7 +734,7 @@ def monkeypatch_npyorzarr_io(visFr):
         ds.filename = filename
         
         ds.mdh = _get_mdh_zarr(filename,ds.zarr)
-
+        logger.info('loaded MINFLUX zarr.zip ...')
         return ds
     
     def _ds_from_file_npyorzarr(self, filename, **kwargs):
