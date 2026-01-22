@@ -84,7 +84,10 @@ def read_room_temperature_csv():
         return
     
     tempdata = []
-    reps = sorted(glob(os.path.join(folder, 'Report_*_2025.csv')))
+    reps = []
+    for year in [2025,2026,2027,2028,2029,2030]:
+        if glob(os.path.join(folder, 'Report_*_%d.csv' % year)):
+            reps += sorted(glob(os.path.join(folder, 'Report_*_%d.csv' % year)))
     if len(reps) > 0:
         for rep in reps:
             tempdata.append(read_temp_csv(rep))
@@ -141,7 +144,7 @@ def get_timestamp_from_filename(fname):
     import re
     
     basename = Path(fname).name
-    match = re.search(r'2[3-5]\d{4}-\d{6}',basename)
+    match = re.search(r'[2-3][0-9]\d{4}-\d{6}',basename) # we match with data from 2020 to 2039
     if match:
         timestamp = match.group()
         return timestamp
