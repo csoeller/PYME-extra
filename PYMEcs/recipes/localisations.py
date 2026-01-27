@@ -1669,6 +1669,8 @@ class MBMcorrection(ModuleBaseMDHmod):
     Median_window = Int(5)
     MBM_lowess_fraction = Float(0.1,label='lowess fraction for MBM smoothing',
                                 desc='lowess fraction used for smoothing of mean MBM trajectories (default 0.1); 0 = no smoothing')
+    MBM_lowess_delta = Float(10.0,label='lowess delta for MBM smoothing',
+                                desc='lowess delta used for smoothing of mean MBM trajectories (default 10.0)')
     MBM_beads = List() # this is a dummy to make sure older style PVS files are read ok - TODO: get rid off at some stage!!!
     _MBM_beads = List() # this one does the real work and with the leading "_" is NOT treated as a parameter that "fires" the module! 
     _mbm_allbeads = List()
@@ -1680,7 +1682,7 @@ class MBMcorrection(ModuleBaseMDHmod):
 
     def lowess_cachetuple(self):
         mbm = self.getmbm()
-        return (Path(self.mbmfile).name,self.MBM_lowess_fraction,self.Median_window,str(mbm.beadisgood))
+        return (Path(self.mbmfile).name,self.MBM_lowess_fraction,self.Median_window,str(mbm.beadisgood),self.MBM_lowess_delta)
     
     def lowess_cachekey(self):
         return tuple_hash(self.lowess_cachetuple())
@@ -1745,7 +1747,7 @@ class MBMcorrection(ModuleBaseMDHmod):
                 axismean_sm = cachehit[axis] # LOWESS CACHE OP
             else:
                 axismean_sm = lowess(axismean_g, t_g, frac=self.MBM_lowess_fraction,
-                                     return_sorted=False)
+                                     delta=self.MBM_lowess_delta, return_sorted=False)
                 self.lowess_cachestore(axis,axismean_sm) # LOWESS CACHE OP
             return (t_g,axismean_sm)
         else:
@@ -1862,6 +1864,7 @@ class MBMcorrection(ModuleBaseMDHmod):
                          ),
                     Item('Median_window'),
                     Item('MBM_lowess_fraction'),
+                    Item('MBM_lowess_delta'),
                     Item('_'),
                     Item('output'),
                     Item('outputTracks'),
