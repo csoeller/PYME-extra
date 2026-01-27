@@ -574,9 +574,9 @@ def get_metadata_from_mfx_attrs(mfx_attrs):
     mfx_itrs = mfx_attrs['measurement']['threads'][0]['sequences'][0]['Itr']
     mfx_globals = mfx_attrs['measurement']['threads'][0]['sequences'][0]
 
-    # the below currently breaks with pandas 3.0.0
-    # therefore pinning pandas<3 for now
-    # investigate at some stage if this is a known change in interface or something else
+    # below code needed fixing with pandas 3.x
+    # fell foul of copy-on-write changes
+    # now fixed with changed use of loc method
     md_by_itrs = pd.DataFrame(columns=['IterationNumber','PinholeAU','ActivationLaser', 'ExcitationLaserAbbrev',
                                        'ExcitationWavelength_nm', 'ExcitationPower_percent', 'ExcitationDAC',
                                        'DetectionChannel01','DetectionChannel02','BackgroundThreshold',
@@ -584,23 +584,23 @@ def get_metadata_from_mfx_attrs(mfx_attrs):
                                        'PatternGeoFactor','PatternRepeat', 'PatternGeometryAbbrev','Strategy'],
                               index=range(len(mfx_itrs)))
     for i, itr in enumerate(mfx_itrs):
-        md_by_itrs.loc[i].IterationNumber = i
-        md_by_itrs.loc[i].PinholeAU = itr['Mode']['phDiaAU']
-        md_by_itrs.loc[i].ActivationLaser = itr['_activation']['laser'] if itr['_activation']['laser'] != '' else 'NA'
-        md_by_itrs.loc[i].ExcitationLaserAbbrev = itr['_excitation']['laser'].replace('MINFLUX','M')
-        md_by_itrs.loc[i].ExcitationWavelength_nm = np.rint(1e9*itr['_excitation']['wavelength'])
-        md_by_itrs.loc[i].ExcitationPower_percent = itr['_excitation']['power']
-        md_by_itrs.loc[i].ExcitationDAC = itr['_excitation']['dac']
-        md_by_itrs.loc[i].DetectionChannel01 = itr['_detection']['channels'][0]
-        md_by_itrs.loc[i].DetectionChannel02 = itr['_detection']['channels'][1] if len(itr['_detection']['channels']) >1 else 'NA'
-        md_by_itrs.loc[i].BackgroundThreshold = itr['bgcThreshold']
-        md_by_itrs.loc[i].PhotonLimit = itr['phtLimit']
-        md_by_itrs.loc[i].CCRLimit = itr['ccrLimit']
-        md_by_itrs.loc[i].DwellTime_ms = 1e3*itr['patDwellTime']
-        md_by_itrs.loc[i].PatternGeoFactor = itr['patGeoFactor']
-        md_by_itrs.loc[i].PatternRepeat = itr['patRepeat']
-        md_by_itrs.loc[i].PatternGeometryAbbrev = itr['Mode']['pattern'].replace('hexagon','hex').replace('zline','zl').replace('square','sq')
-        md_by_itrs.loc[i].Strategy = itr['Mode']['strategy']
+        md_by_itrs.loc[i,'IterationNumber'] = i
+        md_by_itrs.loc[i,'PinholeAU'] = itr['Mode']['phDiaAU']
+        md_by_itrs.loc[i,'ActivationLaser'] = itr['_activation']['laser'] if itr['_activation']['laser'] != '' else 'NA'
+        md_by_itrs.loc[i,'ExcitationLaserAbbrev'] = itr['_excitation']['laser'].replace('MINFLUX','M')
+        md_by_itrs.loc[i,'ExcitationWavelength_nm'] = np.rint(1e9*itr['_excitation']['wavelength'])
+        md_by_itrs.loc[i,'ExcitationPower_percent'] = itr['_excitation']['power']
+        md_by_itrs.loc[i,'ExcitationDAC'] = itr['_excitation']['dac']
+        md_by_itrs.loc[i,'DetectionChannel01'] = itr['_detection']['channels'][0]
+        md_by_itrs.loc[i,'DetectionChannel02'] = itr['_detection']['channels'][1] if len(itr['_detection']['channels']) >1 else 'NA'
+        md_by_itrs.loc[i,'BackgroundThreshold'] = itr['bgcThreshold']
+        md_by_itrs.loc[i,'PhotonLimit'] = itr['phtLimit']
+        md_by_itrs.loc[i,'CCRLimit'] = itr['ccrLimit']
+        md_by_itrs.loc[i,'DwellTime_ms'] = 1e3*itr['patDwellTime']
+        md_by_itrs.loc[i,'PatternGeoFactor'] = itr['patGeoFactor']
+        md_by_itrs.loc[i,'PatternRepeat'] = itr['patRepeat']
+        md_by_itrs.loc[i,'PatternGeometryAbbrev'] = itr['Mode']['pattern'].replace('hexagon','hex').replace('zline','zl').replace('square','sq')
+        md_by_itrs.loc[i,'Strategy'] = itr['Mode']['strategy']
 
     mfx_global_pars = {}
     
