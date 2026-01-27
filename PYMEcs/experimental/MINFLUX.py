@@ -399,7 +399,7 @@ def plot_tracking(pipeline,is_coalesced=False,lowess_fraction=0.05):
     plt.tight_layout()
 
 
-def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
+def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True,alpha=0.5):
     p=pipeline
     t_s = 1e-3*p['t']
     if fignum is not None:
@@ -407,14 +407,14 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
     else:
         fig, axs = plt.subplots(2, 2)
 
-    axs[0, 0].scatter(t_s,p['x_site_nc'],s=0.3,c='black',alpha=0.5)
+    axs[0, 0].scatter(t_s,p['x_site_nc'],s=0.3,c='black',alpha=alpha)
     if plotSmoothingCurve:
         axs[0, 0].plot(t_s,p['x_ori']-p['x'],'r',alpha=0.4)
     axs[0, 0].set_ylim(-15,15)
     axs[0, 0].set_xlabel('t (s)')
     axs[0, 0].set_ylabel('x (nm)')
         
-    axs[0, 1].scatter(t_s,p['y_site_nc'],s=0.3,c='black',alpha=0.5)
+    axs[0, 1].scatter(t_s,p['y_site_nc'],s=0.3,c='black',alpha=alpha)
     if plotSmoothingCurve:
         axs[0, 1].plot(t_s,p['y_ori']-p['y'],'r',alpha=0.4)
     axs[0, 1].set_ylim(-15,15)
@@ -422,7 +422,7 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True):
     axs[0, 1].set_ylabel('y (nm)')
 
     if p.mdh.get('MINFLUX.Is3D',False):
-        axs[1, 0].scatter(t_s,p['z_site_nc'],s=0.3,c='black',alpha=0.5)
+        axs[1, 0].scatter(t_s,p['z_site_nc'],s=0.3,c='black',alpha=alpha)
         if plotSmoothingCurve:
             axs[1, 0].plot(t_s,p['z_ori']-p['z'],'r',alpha=0.4)
         axs[1, 0].set_ylim(-15,15)
@@ -491,6 +491,7 @@ class MINFLUXSiteSettings(HasTraits):
     siteMaxNum = Int(100,label='Max number of sites for box plot',
                             desc="the maximum number of sites for which site stats boxswarmplot is generated, violinplot otherwise")
     precisionRange_nm = Float(10)
+    sitePlottingAlpha = Float(0.5)
 
 class DateString(HasTraits):
     TimeStampString = CStr('',label="Time stamp",desc='the time stamp string in format yymmdd-HHMMSS')
@@ -1417,7 +1418,8 @@ class MINFLUXanalyser():
         p = self.visFr.pipeline
         # need to add checks if the required properties are present in the datasource!!
         plot_site_tracking(p,fignum=self.origamiTrackFignum,
-                           plotSmoothingCurve=self.analysisSettings.withOrigamiSmoothingCurves)
+                           plotSmoothingCurve=self.analysisSettings.withOrigamiSmoothingCurves,
+                           alpha=self.siteSettings.sitePlottingAlpha)
         self.origamiTrackFignum += 1
 
     def OnMINFLUXSettings(self, event):

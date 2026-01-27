@@ -560,6 +560,8 @@ def _get_mdh_zarr(filename,arch):
         for pars in md_by_itrs:
             # make sure we convert to list; otherwise we cannot easily convert to JSON as JSON does not like ndarray
             mdh['MINFLUX.ByItrs.%s' % pars] = md_by_itrs[pars].to_numpy().tolist()
+        if 'MINFLUX.ByItrs.ExcitationWavelength_nm' in mdh: # these are otherwise printed as np.float64, potentially check for more general workaround
+            mdh['MINFLUX.ByItrs.ExcitationWavelength_nm'] = [float(_) for _ in mdh['MINFLUX.ByItrs.ExcitationWavelength_nm']]
         import re
         mdh['MINFLUX.Tracking'] = re.search('tracking', mfx_global_par['ID'], re.IGNORECASE) is not None
     else:
@@ -571,7 +573,10 @@ def _get_mdh_zarr(filename,arch):
 def get_metadata_from_mfx_attrs(mfx_attrs):
     mfx_itrs = mfx_attrs['measurement']['threads'][0]['sequences'][0]['Itr']
     mfx_globals = mfx_attrs['measurement']['threads'][0]['sequences'][0]
-    
+
+    # the below currently breaks with pandas 3.0.0
+    # therefore pinning pandas<3 for now
+    # investigate at some stage if this is a known change in interface or something else
     md_by_itrs = pd.DataFrame(columns=['IterationNumber','PinholeAU','ActivationLaser', 'ExcitationLaserAbbrev',
                                        'ExcitationWavelength_nm', 'ExcitationPower_percent', 'ExcitationDAC',
                                        'DetectionChannel01','DetectionChannel02','BackgroundThreshold',
