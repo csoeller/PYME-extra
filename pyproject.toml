@@ -31,7 +31,7 @@ dependencies = [
     "pywin32; platform_system=='Windows'", # we add a pywin32 dep to stand in for the missing one in python-microscopy for now
 ]
 
-version = "1.0.5.post0"
+dynamic = ["version"]
 
 [project.optional-dependencies]
 opt = [
@@ -45,3 +45,6 @@ Repository = "https://github.com/csoeller/PYME-extra"
 [project.scripts]
 PYMEconfigutils = "PYMEcs.misc.configUtils:main"
 pymex_install_plugins = "PYMEcs.misc.configUtils:install_plugins"
+
+[tool.setuptools.dynamic]
+version = {attr = "PYMEcs.__version__"}
