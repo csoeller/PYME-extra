@@ -1347,7 +1347,7 @@ class MINFLUXanalyser():
         pipeline.selectDataSource(finalFiltered)
         
     def OnOrigamiSiteRecipe(self, event=None):
-        from PYMEcs.recipes.localisations import OrigamiSiteTrack, DBSCANClustering2
+        from PYMEcs.recipes.localisations import OrigamiSiteTrack, DBSCANClustering2, TrackProps
         from PYME.recipes.localisations import MergeClumps
         from PYME.recipes.tablefilters import FilterTable, Mapping
         
@@ -1364,6 +1364,7 @@ class MINFLUXanalyser():
         corrAll = unique_name('corrected_allpoints',pipeline.dataSources.keys())
         siteClumps = unique_name('siteclumps',pipeline.dataSources.keys())
         dbscanClusteredSites = unique_name('dbscanClusteredSites',pipeline.dataSources.keys())
+        sitesWithTracks = unique_name('sitesWithTracks',pipeline.dataSources.keys())
         sites = unique_name('sites',pipeline.dataSources.keys())
         sites_c = unique_name('sites_c',pipeline.dataSources.keys())
         
@@ -1374,8 +1375,12 @@ class MINFLUXanalyser():
                                      searchRadius = 15.0,
                                      clumpColumnName = 'siteID',
                                      sizeColumnName='siteClumpSize'),
-                   FilterTable(recipe,inputName=dbscanClusteredSites,outputName=siteClumps,
-                               filters={'siteClumpSize' : [3,50]}), # need a minimum clumpsize and also maximal to avoid "fused" sites
+                   TrackProps(recipe,input=dbscanClusteredSites,output=sitesWithTracks,IDkey='siteID'),
+                   FilterTable(recipe,inputName=sitesWithTracks,outputName=siteClumps,
+                               filters={'siteClumpSize' : [3,50],
+                                        'trace_bbdiag'  : [0,38],
+                                        'trace_bbz'     : [0,20],
+                                        }), # need a minimum clumpsize and also maximal to avoid "fused" sites
                    MergeClumps(recipe,inputName=siteClumps,outputName=sites,
                                labelKey='siteID',discardTrivial=True),
                    OrigamiSiteTrack(recipe,inputClusters=siteClumps,inputSites=sites,outputName=corrSiteClumps,smoothingBinWidthsSeconds=400,
