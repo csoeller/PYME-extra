@@ -1372,7 +1372,7 @@ class MINFLUXanalyser():
                                      searchRadius = 100.0),
                    FilterTable(recipe,inputName=clustered,outputName=bigCs,
                                filters=filter_bigcs),
-                   SiteDensity(inputLocalisations=bigCs, outputName=cluster_density,
+                   SiteDensity(recipe,inputLocalisations=bigCs, outputName=cluster_density,
                                outputShapes=cluster_shapes),
                    FilterTable(recipe,inputName=cluster_density,outputName=cdens_flat,
                                filters=filter_flat),
@@ -1397,6 +1397,7 @@ class MINFLUXanalyser():
         preFiltered = unique_name('prefiltered',pipeline.dataSources.keys())
         corrSiteClumps = unique_name('corrected_siteclumps',pipeline.dataSources.keys())
         corrAll = unique_name('corrected_allpoints',pipeline.dataSources.keys())
+        preSiteClumps = unique_name('preSiteclumps',pipeline.dataSources.keys())
         siteClumps = unique_name('siteclumps',pipeline.dataSources.keys())
         dbscanClusteredSites = unique_name('dbscanClusteredSites',pipeline.dataSources.keys())
         sitesWithSDs = unique_name('sitesWithSDs',pipeline.dataSources.keys())
@@ -1413,11 +1414,13 @@ class MINFLUXanalyser():
                                      sizeColumnName='siteClumpSize'),
                    ObjectSDs(IDkey='siteID',IDout='site',input=dbscanClusteredSites,output=sitesWithSDs),
                    TrackProps(recipe,input=sitesWithSDs,output=sitesWithTracks,IDkey='siteID'),
-                   FilterTable(recipe,inputName=sitesWithTracks,outputName=siteClumps,
+                   FilterTable(recipe,inputName=sitesWithTracks,outputName=preSiteClumps,
                                filters={'siteClumpSize' : [3,50],
-                                        'trace_bbdiag'  : [0,38],
-                                        'trace_bbz'     : [0,20],
                                         }), # need a minimum clumpsize and also maximal to avoid "fused" sites
+                   FilterTable(recipe,inputName=preSiteClumps,outputName=siteClumps,
+                               filters={'trace_bbdiag'  : [0,38],
+                                        'trace_bbz'     : [0,20],
+                                        }), # additional filtering on BBs; only after clumpsize to avoid 0 values in BB histograms
                    MergeClumps(recipe,inputName=siteClumps,outputName=sites,
                                labelKey='siteID',discardTrivial=True),
                    OrigamiSiteTrack(recipe,inputClusters=siteClumps,inputSites=sites,outputName=corrSiteClumps,smoothingBinWidthsSeconds=400,
