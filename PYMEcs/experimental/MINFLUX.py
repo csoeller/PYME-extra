@@ -549,6 +549,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>MBM', "Save MBM lowess cache", self.OnMBMLowessCacheSave)
         
         visFr.AddMenuItem('MINFLUX>RyRs', "Plot corner info", self.OnCornerplot)
+        visFr.AddMenuItem('MINFLUX>RyRs', "Add modules for RyR density estimate", self.OnRyRClusterDensityRecipe)
         visFr.AddMenuItem('MINFLUX>RyRs', "Plot density stats", self.OnDensityStats)
         visFr.AddMenuItem('MINFLUX>RyRs', "Show cluster alpha shapes", self.OnAlphaShapes)
 
@@ -1345,6 +1346,40 @@ class MINFLUXanalyser():
                                         })]
         recipe.add_modules_and_execute(modules)
         pipeline.selectDataSource(finalFiltered)
+
+    def OnRyRClusterDensityRecipe(self, event=None):
+        from PYMEcs.recipes.localisations import DBSCANClustering2, SiteDensity
+        from PYME.recipes.localisations import MergeClumps
+        from PYME.recipes.tablefilters import FilterTable, Mapping
+
+        pipeline = self.visFr.pipeline
+        recipe = pipeline.recipe
+
+        flatFilter = unique_name('cdens_flat',pipeline.dataSources.keys())
+        clustered = unique_name('clustered',pipeline.dataSources.keys())
+        bigCs = unique_name('bigCs',pipeline.dataSources.keys())
+        cluster_density = unique_name('cluster_density',pipeline.dataSources.keys())
+        cluster_shapes = unique_name('cluster_shapes',pipeline.dataSources.keys())
+        cdens_flat = unique_name('cdens_flat',pipeline.dataSources.keys())
+
+        filter_bigcs = {'dbscanClumpSize' : [10.0,100000.0]}
+        filter_flat = {'clst_area': [5000.0, 100000.0],
+                       'clst_stdz': [0.0, 50.0]}
+
+        curds = pipeline.selectedDataSourceKey
+         
+        modules = [DBSCANClustering2(recipe,inputName=curds,outputName=clustered,
+                                     searchRadius = 100.0),
+                   FilterTable(recipe,inputName=clustered,outputName=bigCs,
+                               filters=filter_bigcs),
+                   SiteDensity(inputLocalisations=bigCs, outputName=cluster_density,
+                               outputShapes=cluster_shapes),
+                   FilterTable(recipe,inputName=cluster_density,outputName=cdens_flat,
+                               filters=filter_flat),
+                   ]
+         
+        recipe.add_modules_and_execute(modules)
+        pipeline.selectDataSource(bigCs)
         
     def OnOrigamiSiteRecipe(self, event=None):
         from PYMEcs.recipes.localisations import OrigamiSiteTrack, DBSCANClustering2, TrackProps, ObjectSDs

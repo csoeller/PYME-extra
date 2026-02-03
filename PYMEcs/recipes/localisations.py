@@ -11,11 +11,11 @@ logger = logging.getLogger(__file__)
 
 @register_module('CorrectForeshortening')
 class CorrectForeshortening(ModuleBase):
-
+    from PYMEcs.IO.MINFLUX import foreshortening
     inputName = Input('localisations')
     outputName = Output('corrected_f')
 
-    foreshortening = Float(1.0)
+    foreshortening = Float(foreshortening)
     compensate_MINFLUX_foreshortening = Bool(True)
     apply_pixel_size_correction = Bool(False)
     pixel_size_um = Float(0.072)
