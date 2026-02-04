@@ -228,8 +228,10 @@ class CircleConvolution(ModuleBase):
 # following paper from Riegher et al:
 #      Rieger, B., Droste, I., Gerritsma, F., Ten Brink, T. & Stallinga, S.
 #      Single image Fourier ring correlation. Opt. Express 32, 21767 (2024).
+# NOTE: presumably this only works properly if input intensities are in photon numbers!
+#       this should apply for Stedycon data
 @register_module('Split1FRC')
-class CircleConvolution(ModuleBase):
+class Split1FRC(ModuleBase):
     inputImage = Input('input')
     outputImage = Output('split_1frc')
 
@@ -241,7 +243,10 @@ class CircleConvolution(ModuleBase):
         im0_1 = rng.binomial(im0,self.splitProb)
         im0_2 = im0 - im0_1
         im_1frc = np.stack([im0_1,im0_2],axis=2).astype(inputImage.data_xyztc.dtype)
-        imstack1frc = ImageStack(im_1frc[:,:,None,None,:],mdh=MetaDataHandler.NestedClassMDHandler(inputImage.mdh),titleStub = self.outputImage)
+        mdh = mdh=MetaDataHandler.NestedClassMDHandler(inputImage.mdh)
+        chname = inputImage.mdh['ChannelNames'][0]
+        mdh['ChannelNames'] = ['%s_1FRC0' % chname, '%s_1FRC1' % chname]
+        imstack1frc = ImageStack(im_1frc[:,:,None,None,:],mdh,titleStub = self.outputImage)
 
         return imstack1frc
 
