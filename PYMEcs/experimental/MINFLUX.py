@@ -558,7 +558,8 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MFX metadata info (now in PYME metadata)", self.OnMFXInfo)
         visFr.AddMenuItem('MINFLUX>Zarr', "Convert zarr file store to zarr zip store", self.OnZarrToZipStore)
         visFr.AddMenuItem('MINFLUX>Zarr', "Run Paraflux Analysis", self.OnRunParafluxAnalysis)
-
+        visFr.AddMenuItem('MINFLUX>Zarr', "Extract MBM data from .zarr.zip and save to .npz", self.OnMBMnpzFromZarrZip)
+        
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from clumpIndex)", self.OnAddMINFLUXTracksCI)
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from tid)", self.OnAddMINFLUXTracksTid)
         visFr.AddMenuItem('MINFLUX>Colour', "Plot colour stats", self.OnPlotColourStats)
@@ -880,7 +881,33 @@ class MINFLUXanalyser():
 
         if do_open:
             self.visFr.OpenFile(str(created))
+
+    def OnMBMnpzFromZarrZip(self, event):
+        from PYMEcs.Analysis.MBMcollection import MBMCollectionDF
+        from PYMEcs.misc.utils import get_timestamp_from_filename
+        from pathlib import Path
         
+        with wx.FileDialog(self.visFr, 'Select .zarr.zip archive ...',
+                           wildcard='ZIP (*.zip)|*.zip',
+                           style=wx.FD_OPEN) as fdialog:
+            if fdialog.ShowModal() != wx.ID_OK:
+                return
+            zarr_name = Path(fdialog.GetPath())
+        mbm = MBMCollectionDF(name=Path(zarr_name).stem,filename=zarr_name)
+        defaultFile = None
+        MINFLUXts = get_timestamp_from_filename(zarr_name)
+        if MINFLUXts is not None:
+            defaultFile = "%s__MBM-beads.npz" % MINFLUXts
+        with wx.FileDialog(self.visFr, 'Save MBM beads as ...',
+                                wildcard='NPZ (*.npz)|*.npz',
+                                defaultFile=defaultFile,
+                                style=wx.FD_SAVE) as fdialog:
+            if fdialog.ShowModal() != wx.ID_OK:
+                return
+            fpath = fdialog.GetPath()
+
+        np.savez(fpath,**mbm._raw_beads)
+
     def OnDensityStats(self, event):
         from PYMEcs.Analysis.MINFLUX import plot_density_stats_sns
         plot_density_stats_sns(self.visFr.pipeline)
@@ -916,6 +943,7 @@ class MINFLUXanalyser():
         pipeline = self.visFr.pipeline
         mbm = findmbm(pipeline)
         if mbm is None:
+            warn("no MBM module found, cannot save MBM info in .npz format")
             return
         defaultFile = None
         MINFLUXts = pipeline.mdh.get('MINFLUX.TimeStamp')
