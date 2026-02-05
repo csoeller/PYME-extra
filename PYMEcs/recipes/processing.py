@@ -244,7 +244,10 @@ class Split1FRC(ModuleBase):
         im0_2 = im0 - im0_1
         im_1frc = np.stack([im0_1,im0_2],axis=2).astype(inputImage.data_xyztc.dtype)
         mdh = mdh=MetaDataHandler.NestedClassMDHandler(inputImage.mdh)
-        chname = inputImage.mdh['ChannelNames'][0]
+        if inputImage.mdh.get('ChannelNames') is not None:
+            chname = inputImage.mdh['ChannelNames'][0]
+        else:
+            chname = 'Channel0'
         mdh['ChannelNames'] = ['%s_1FRC0' % chname, '%s_1FRC1' % chname]
         imstack1frc = ImageStack(im_1frc[:,:,None,None,:],mdh,titleStub = self.outputImage)
 
