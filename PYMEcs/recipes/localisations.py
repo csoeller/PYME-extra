@@ -1584,15 +1584,22 @@ class DcrColour(ModuleBase):
         # cached_output.mdh = output.mdh
         return cached_output
 
-
+from PYMEcs.misc.utils import get_timestamp_from_filename, compare_timestamps_s
 from pathlib import Path
-def check_mbm_name(mbmfilename,timestamp,endswith='__MBM-beads'):
+# for now we ignore the 'endswith' option
+def check_mbm_name(mbmfilename,timestamp,endswith='__MBM-beads',extensions=['.zip','.npz']):
     if timestamp is None:
         return True
     mbmp = Path(mbmfilename)
-    
+
+    mbmts = get_timestamp_from_filename(mbmp)
+    suffix_ok = False
+    for ext in extensions:
+        suffix_ok = suffix_ok or mbmp.suffix.endswith(ext)
     # should return False if warning is necessary
-    return mbmp.stem.startswith(timestamp) and (mbmp.stem.endswith(endswith) or mbmp.suffix.endswith('.zip'))
+    time_ok = abs(compare_timestamps_s(mbmts,timestamp)) < 5
+    return time_ok and suffix_ok
+    # return mbmp.stem.startswith(timestamp) and (mbmp.stem.endswith(endswith) or mbmp.suffix.endswith('.zip'))
 
 def get_bead_dict_from_mbm(mbm):
     beads = {}
@@ -1828,7 +1835,8 @@ class MBMcorrection(ModuleBaseMDHmod):
                 if not check_mbm_name(self.mbmfile,inputLocalizations.mdh.get('MINFLUX.TimeStamp')):
                     warn("check MBM filename (%s) vs Series timestamp (%s)" %
                          (Path(self.mbmfile).name,inputLocalizations.mdh.get('MINFLUX.TimeStamp')))
-                if mbmsettingskey != '' and not check_mbm_name(self.mbmsettings,inputLocalizations.mdh.get('MINFLUX.TimeStamp'),endswith='npz-settings'):
+                if mbmsettingskey != '' and not check_mbm_name(self.mbmsettings,inputLocalizations.mdh.get('MINFLUX.TimeStamp'),
+                                                               endswith='npz-settings',extensions=['.json','.JSON']):
                     warn("check MBM settings filename (%s) vs Series timestamp (%s)" %
                          (Path(self.mbmsettings).name,inputLocalizations.mdh.get('MINFLUX.TimeStamp')))
 
