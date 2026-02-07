@@ -32,22 +32,30 @@ def site_stats(ds,sitedict,siteKey='siteID'):
     df = pd.DataFrame.from_dict(sitestats)
     return df[df > 0].dropna() # this drops rows with zeroes; these should not occur but apparently do; probably a bug somewhere
 
-def plotsitestats(p,origamiErrorLimit=10,figsize=None,swarmsize=3,siteKey='siteID',fignum=None,mode='box',showpoints=True,strip=False):
+def plotsitestats(p,origamiErrorLimit=10,figsize=None,swarmsize=3,siteKey='siteID',fignum=None,mode='box',showpoints=True,strip=False,
+                  forcepoints=False,maxsitepoints=200):
     uids = np.unique(p[siteKey])
+    # if too many sites diasble points (unless forcepoints set) and chose violin mode
+    showpoints_effective = showpoints and (uids.size < maxsitepoints or forcepoints)
+    if uids.size > maxsitepoints:
+        mode = 'violin'
+        
     fig, axs = plt.subplots(2, 2, figsize=figsize,num=fignum)
     plot_stats(p,axs[0, 0],dict(xd_sd_corr='error_x',x_sd='error_x_nc',x_sd_trace='error_x_ori'),
-                sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey,mode=mode,showpoints=showpoints,strip=strip)
+                sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey,mode=mode,showpoints=showpoints_effective,
+                strip=strip)
     plot_stats(p,axs[0, 1],dict(yd_sd_corr='error_y',y_sd='error_y_nc',y_sd_trace='error_y_ori'),
-                sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey,mode=mode,showpoints=showpoints,strip=strip)
+                sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey,mode=mode,showpoints=showpoints_effective,
+                strip=strip)
     if p.mdh.get('MINFLUX.Is3D'):
         plot_stats(p,axs[1, 0],dict(zd_sd_corr='error_z',z_sd='error_z_nc',z_sd_trace='error_z_ori'),
-                    sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey,mode=mode,showpoints=showpoints,strip=strip)
+                   sdmax=origamiErrorLimit,swarmsize=swarmsize,siteKey=siteKey,mode=mode,showpoints=showpoints_effective,strip=strip)
 
     all_axes = dict(xd_sd_corr='error_x',yd_sd_corr='error_y')
     if p.mdh.get('MINFLUX.Is3D'):
         all_axes['zd_sd_corr'] = 'error_z'
     df_allaxes = plot_stats(p,axs[1, 1],all_axes,sdmax=origamiErrorLimit,swarmsize=swarmsize,
-                            siteKey=siteKey,mode=mode,showpoints=showpoints,strip=strip)
+                            siteKey=siteKey,mode=mode,showpoints=showpoints_effective,strip=strip)
     fig.suptitle('Site stats for %d sites' % df_allaxes.shape[0])
     plt.tight_layout()
     return df_allaxes

@@ -486,12 +486,13 @@ class MINFLUXSettings(HasTraits):
 
 class MINFLUXSiteSettings(HasTraits):
     showPoints = Bool(True)
+    forcePoints = Bool(False)
     plotMode = Enum(['box','violin'])
     pointsMode = Enum(['swarm','strip'])
-    siteMaxNum = Int(100,label='Max number of sites for box plot',
-                            desc="the maximum number of sites for which site stats boxswarmplot is generated, violinplot otherwise")
+    siteMaxNum = Int(200,label='Max number of sites for box plot',
+                     desc="the maximum number of sites for which site stats boxswarmplot is generated, violinplot otherwise, no points")
     precisionRange_nm = Float(10)
-    sitePlottingAlpha = Float(0.5)
+    sitePlottingAlpha = Float(0.35)
 
 class DateString(HasTraits):
     TimeStampString = CStr('',label="Time stamp",desc='the time stamp string in format yymmdd-HHMMSS')
@@ -1563,7 +1564,8 @@ class MINFLUXanalyser():
         plotsitestats(p,fignum=('origami site stats %d' % self.origamiErrorFignum),
                       swarmsize=swarmsize,mode=plotmode,showpoints=self.siteSettings.showPoints,
                       origamiErrorLimit=self.siteSettings.precisionRange_nm,
-                      strip=(self.siteSettings.pointsMode == 'strip'))
+                      strip=(self.siteSettings.pointsMode == 'strip'),forcepoints=self.siteSettings.forcePoints,
+                      maxsitepoints=self.siteSettings.siteMaxNum)
         plotted = True
         #else:
         #    warn("Number of sites (%d) > max number for plotting (%d); check settings"
