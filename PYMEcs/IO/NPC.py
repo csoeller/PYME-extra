@@ -6,12 +6,17 @@ import logging
 logger = logging.getLogger(__name__)
 
 def load_NPC_set(fname, ts=None, foreshortening=None, version=None):
+    from PYMEcs.misc.utils import get_timestamp_from_filename, compare_timestamps_s
     with open(fname,'rb') as fi:
         npcs=pickle.load(fi)
     fpath = Path(fname)
-    if ts is not None and ts not in fpath.stem:
-        warn("MINFLUX time stamp not in NPC dataset filename; check correct filename chosen: %s vs %s" %
-             (ts,fpath.stem))
+    if ts is not None:
+        npcts = get_timestamp_from_filename(fname)
+        # should return False if warning is necessary
+        time_ok = abs(compare_timestamps_s(npcts,ts)) < 5
+        if not time_ok:
+            warn("MINFLUX time stamp differs from TS in NPC dataset filename; check correct filename chosen: %s vs %s" %
+                 (ts,fpath.stem))
 
     if foreshortening is not None:
         try:
