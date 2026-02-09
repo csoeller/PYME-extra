@@ -86,19 +86,19 @@ def extractTrajectoriesClump(ds, clumpRadiusVar = 'error_x', clumpRadiusMultipli
                 t_i = t[clump_mask].astype('i')
                 isFiducial[clump_mask] = 1 # mark the event mask that this is a fiducial
                 
-                x_i_f = np.NaN*np.ones_like(t_f)
+                x_i_f = np.nan*np.ones_like(t_f)
                 if align:
                     x_i_f[t_i]= x_i - x_i.mean()
                 else:
                     x_i_f[t_i]= x_i
                     
-                y_i_f = np.NaN*np.ones_like(t_f)
+                y_i_f = np.nan*np.ones_like(t_f)
                 if align:
                     y_i_f[t_i]= y_i - y_i.mean()
                 else:
                     y_i_f[t_i]= y_i
                     
-                z_i_f = np.NaN*np.ones_like(t_f)
+                z_i_f = np.nan*np.ones_like(t_f)
                 if align:
                     z_i_f[t_i]= z_i - z_i.mean()
                 else:

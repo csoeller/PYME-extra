@@ -1256,7 +1256,7 @@ class ModuleBaseMDHmod(ModuleBase):
 
 
 @register_module('OrigamiSiteTrack')
-class OrigamiSiteTrack(ModuleBaseMDHmod):
+class OrigamiSiteTrack(ModuleBase):
     """
     Recipe module aimed at analysing oregami MINFLUX datasets. More docs to be added.
 
@@ -1447,7 +1447,7 @@ class OrigamiSiteTrack(ModuleBaseMDHmod):
             # mapped_ap = tabular.MappingFilter(inputClusters)
             mapped_ap = None # returning none in this case seems better and appears to work
         
-        return {'outputName': mapped_ds, 'outputAllPoints' : mapped_ap, 'mdh' : None } # pass proper mdh instead of None if metadata output needed
+        return {'outputName': mapped_ds, 'outputAllPoints' : mapped_ap }
 
 
 @register_module('SiteErrors')
