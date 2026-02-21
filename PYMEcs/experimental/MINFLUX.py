@@ -412,14 +412,14 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True,alpha=0.5):
         axs[0, 0].plot(t_s,p['x_ori']-p['x'],'r',alpha=0.4)
     axs[0, 0].set_ylim(-15,15)
     axs[0, 0].set_xlabel('t (s)')
-    axs[0, 0].set_ylabel('x (nm)')
+    axs[0, 0].set_ylabel('$\\Delta x$ (nm)')
         
     axs[0, 1].scatter(t_s,p['y_site_nc'],s=0.3,c='black',alpha=alpha)
     if plotSmoothingCurve:
         axs[0, 1].plot(t_s,p['y_ori']-p['y'],'r',alpha=0.4)
     axs[0, 1].set_ylim(-15,15)
     axs[0, 1].set_xlabel('t (s)')
-    axs[0, 1].set_ylabel('y (nm)')
+    axs[0, 1].set_ylabel('$\\Delta y$ (nm)')
 
     if p.mdh.get('MINFLUX.Is3D',False):
         axs[1, 0].scatter(t_s,p['z_site_nc'],s=0.3,c='black',alpha=alpha)
@@ -427,7 +427,7 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True,alpha=0.5):
             axs[1, 0].plot(t_s,p['z_ori']-p['z'],'r',alpha=0.4)
         axs[1, 0].set_ylim(-15,15)
         axs[1, 0].set_xlabel('t (s)')
-        axs[1, 0].set_ylabel('z (nm)')
+        axs[1, 0].set_ylabel('$\\Delta z$ (nm)')
 
     ax = axs[1,1]
     if plotSmoothingCurve and 'x_nc' in p.keys():
