@@ -773,6 +773,23 @@ class MINFLUXanalyser():
             with ScrolledMessageDialog(self.visFr, mfx_attr_str, "MFX attributes", size=(900,400),
                                         style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE ) as dlg:
                 dlg.ShowModal()
+            # offer to save metadata - user can cancel if not wanted
+            import json
+            defaultFile = None
+            MINFLUXts = self.visFr.pipeline.mdh.get('MINFLUX.TimeStamp')
+            if MINFLUXts is not None:
+                defaultFile = "%s-MFXattributes.json" % MINFLUXts
+            with wx.FileDialog(self.visFr, 'Save MFX attributes as...',
+                                    wildcard='JSON (*.json)|*.json',
+                                    defaultFile=defaultFile,
+                                    style=wx.FD_SAVE) as fdialog:
+                if fdialog.ShowModal() != wx.ID_OK:
+                    return
+                fpath = fdialog.GetPath()
+
+            with open(fpath, 'w') as f:
+                json.dump(mfx_attrs, f, indent=4)
+
         else:
             warn("could not find zarr attribute - is this a MFX zarr file?")
 
@@ -923,16 +940,30 @@ class MINFLUXanalyser():
         layer = TrackRenderLayer(self.visFr.pipeline, dsname='cluster_shapes', method='tracks', clump_key='polyIndex', line_width=2.0, alpha=0.5)
         self.visFr.add_layer(layer)
 
-    def OnAddMINFLUXTracksCI(self, event):        
+    def OnAddMINFLUXTracksCI(self, event):
+        pipeline = self.visFr.pipeline
+        if 'clumpSize' in pipeline.keys():
+            vc = 'clumpSize'
+        else:
+            vc = 'tim'
         # now we add a track layer to render our traces
         from PYME.LMVis.layers.tracks import TrackRenderLayer # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
-        layer = TrackRenderLayer(self.visFr.pipeline, dsname='output', method='tracks', clump_key='clumpIndex', line_width=2.0, alpha=0.5)
+        layer = TrackRenderLayer(self.visFr.pipeline, dsname='output', method='tracks', clump_key='clumpIndex',
+                                 vertexColour=vc,cmap='plasma',
+                                 line_width=2.0, alpha=0.5)
         self.visFr.add_layer(layer)
 
-    def OnAddMINFLUXTracksTid(self, event):        
+    def OnAddMINFLUXTracksTid(self, event):
+        pipeline = self.visFr.pipeline
+        if 'tid' in pipeline.keys():
+            vc = 'tid'
+        else:
+            vc = 'tim'
         # now we add a track layer to render our traces
         from PYME.LMVis.layers.tracks import TrackRenderLayer # NOTE: we may rename the clumpIndex variable in this layer to polyIndex or similar
-        layer = TrackRenderLayer(self.visFr.pipeline, dsname='output', method='tracks', clump_key='tid', line_width=2.0, alpha=0.5)
+        layer = TrackRenderLayer(self.visFr.pipeline, dsname='output', method='tracks', clump_key='tid',
+                                 vertexColour=vc,cmap='plasma',
+                                 line_width=2.0, alpha=0.5)
         self.visFr.add_layer(layer)
 
     def OnLoadCustom(self, event):
