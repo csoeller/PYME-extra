@@ -140,10 +140,8 @@ def minflux_check_properties_new(data,mdh=None): # this is aiming at becoming a 
     props = {}
     props['ExtraIter'] = False # default, only one case below in legacy data where this can apply
     
-    if mdh is not None:
+    if mdh is not None and mdh.get('MINFLUX.ByItrs.CCRLimit') is not None:
         logger.info("got mdh that is not None")
-        import re
-        props['Format'] = 'RevAutumn2024'
         ccrl = mdh['MINFLUX.ByItrs.CCRLimit']
         props['FinalIter'] = len(ccrl) - 1
         cfr_iter = np.max(np.nonzero(np.array(ccrl) >= 0))
@@ -154,9 +152,9 @@ def minflux_check_properties_new(data,mdh=None): # this is aiming at becoming a 
             props['CFRIter'] = -1
         
         props['Is3D'] = mdh['MINFLUX.Is3D']
-        props['Format'] = 'RevAutumn2024'
+        props['Format'] = mdh['MINFLUX.Format']
         # we assume that "tracking" is part of the ID
-        props['Tracking'] = re.search('tracking', mdh['MINFLUX.Globals.ID'], re.IGNORECASE) is not None 
+        props['Tracking'] = mdh['MINFLUX.Tracking']
     else:
         if minflux_npy_new_format(data):
             props['Is3D'] = minflux_npy_detect_3D_new(data)
@@ -235,7 +233,7 @@ def minflux_npy2pyme_legacy(data,make_clump_index=True,with_cfr_std=False):
         iterno_loc = 9 # we pick up the most precise localisation from this iteration, also fbg
         iterno_other = 9 # we pick up dcr, efo from this iteration
         iterno_cfr = 6
-    elif minflux_npy_is2Dshort_tracking_legacy(data): # hack for tracking data
+    elif minflux_npy_is2Dshort_tracking_legacy(data): # hack for 2D tracking data with 3 iterations
         tracking = True
         is_3D = False
         iterno_loc = 2
@@ -646,6 +644,7 @@ def _get_mdh(data,filename):
         mdh['MINFLUX.Format'] = props['Format']
         mdh['MINFLUX.Is3D'] = props['Is3D']
         mdh['MINFLUX.Tracking'] = props['Tracking']
+        mdh['MINFLUX.ExtraIteration'] = False
     else:
         mdh['MINFLUX.Format'] = 'Legacy'
         mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_legacy(data)
@@ -674,29 +673,34 @@ def _get_mdh_zarr(filename,arch):
                         warn("acq time stamp (%s) not equal to filename time stamp (%s), delta in s is %d" % (ts,mts,delta_s))
             else:
                 mdh['MINFLUX.TimeStamp'] = ts
-
         md_by_itrs,mfx_global_par = get_metadata_from_mfx_attrs(mfx_attrs)
-        for par in mfx_global_par:
-            mdh['MINFLUX.Globals.%s' % par] = mfx_global_par[par]
-        for pars in md_by_itrs:
-            # make sure we convert to list; otherwise we cannot easily convert to JSON as JSON does not like ndarray
-            mdh['MINFLUX.ByItrs.%s' % pars] = md_by_itrs[pars].to_numpy().tolist()
-        if 'MINFLUX.ByItrs.ExcitationWavelength_nm' in mdh: # these are otherwise printed as np.float64, potentially check for more general workaround
-            mdh['MINFLUX.ByItrs.ExcitationWavelength_nm'] = [float(_) for _ in mdh['MINFLUX.ByItrs.ExcitationWavelength_nm']]
-        import re
-        mdh['MINFLUX.Tracking'] = re.search('tracking', mfx_global_par['ID'], re.IGNORECASE) is not None
-        
-        # some logic to figure out if cfr info can be obtained
-        finaliter = len(mdh['MINFLUX.ByItrs.CCRLimit']) - 1
-        cfr_iter = np.max(np.nonzero(np.array(mdh['MINFLUX.ByItrs.CCRLimit']) >= 0))
-        lastpos_repeated = finaliter + int(mdh['MINFLUX.Globals.Headstart']) + 1
-        if lastpos_repeated <= cfr_iter:
-            mdh['MINFLUX.CFRIter'] = cfr_iter
-        else:
-            mdh['MINFLUX.CFRIter'] = -1
     else:
         mdh['MINFLUX.Format'] = 'LegacyZarrConversion'
         mdh['MINFLUX.Is3D'] = mfx_attrs['_legacy']['_seqs'][0]['Itr'][0]['Mode']['dim'] > 2
+        md_by_itrs,mfx_global_par = get_metadata_from_mfx_attrs_legacy(mfx_attrs)
+    
+    for par in mfx_global_par:
+        mdh['MINFLUX.Globals.%s' % par] = mfx_global_par[par]
+    for pars in md_by_itrs:
+        # make sure we convert to list; otherwise we cannot easily convert to JSON as JSON does not like ndarray
+        mdh['MINFLUX.ByItrs.%s' % pars] = md_by_itrs[pars].to_numpy().tolist()
+    if 'MINFLUX.ByItrs.ExcitationWavelength_nm' in mdh: # these are otherwise printed as np.float64, potentially check for more general workaround
+        mdh['MINFLUX.ByItrs.ExcitationWavelength_nm'] = [float(_) for _ in mdh['MINFLUX.ByItrs.ExcitationWavelength_nm']]
+    import re
+    mdh['MINFLUX.Tracking'] = re.search('(tracking)|(trk)', mfx_global_par['ID'], re.IGNORECASE) is not None
+        
+    # some logic to figure out if cfr info can be obtained
+    finaliter = len(mdh['MINFLUX.ByItrs.CCRLimit']) - 1
+    cfr_iter = np.max(np.nonzero(np.array(mdh['MINFLUX.ByItrs.CCRLimit']) >= 0))
+    lastpos_repeated = finaliter + int(mdh['MINFLUX.Globals.Headstart']) + 1
+    # we can only get useful cfr data if the earliest iteration that is in a trace repeat is before or at the CFR iteration of this sequence
+    # in other words, if the iterations repeated across a trace include the cfr calculating iterations
+    if lastpos_repeated <= cfr_iter:
+        mdh['MINFLUX.CFRIter'] = cfr_iter
+    else: # otherwise mark with a value < 0 as cfr unavailable
+        mdh['MINFLUX.CFRIter'] = -1
+
+    mdh['MINFLUX.ExtraIteration'] = False # we assume this should not happen but "could" be occuring in legacy zarr conversion?
             
     return mdh
 
@@ -748,6 +752,44 @@ def get_metadata_from_mfx_attrs(mfx_attrs):
 
     return (md_by_itrs,mfx_global_pars)
 
+def get_metadata_from_mfx_attrs_legacy(mfx_attrs):
+    mfx_itrs =    mfx_attrs['measurement']['threads'][0]['sequences'][0]['Itr']
+    mfx_globals = mfx_attrs['measurement']['threads'][0]['sequences'][0]
+
+    # below code needed fixing with pandas 3.x
+    # fell foul of copy-on-write changes
+    # now fixed with changed use of loc method
+    md_by_itrs = pd.DataFrame(columns=['IterationNumber','BackgroundThreshold',
+                                       'PhotonLimit', 'CCRLimit', 'DwellTime_ms',
+                                       'PatternGeoFactor','PatternRepeat', 'PatternGeometryAbbrev',
+                                       'Strategy'],
+                              index=range(len(mfx_itrs)))
+    
+    for i, itr in enumerate(mfx_itrs):
+        md_by_itrs.loc[i,'IterationNumber'] = i
+        md_by_itrs.loc[i,'BackgroundThreshold'] = itr['bgcThreshold']
+        md_by_itrs.loc[i,'PhotonLimit'] = itr['phtLimit']
+        md_by_itrs.loc[i,'CCRLimit'] = itr['ccrLimit']
+        md_by_itrs.loc[i,'DwellTime_ms'] = 1e3*itr['patDwellTime']
+        md_by_itrs.loc[i,'PatternGeoFactor'] = itr['patGeoFactor']
+        md_by_itrs.loc[i,'PatternRepeat'] = itr['patRepeat']
+        md_by_itrs.loc[i,'PatternGeometryAbbrev'] = itr['Mode']['pattern'].replace('hexagon','hex').replace('zline','zl').replace('square','sq')
+        md_by_itrs.loc[i,'Strategy'] = itr['Mode']['strategy']
+
+    mfx_global_pars = {}
+    
+    mfx_global_pars['BgcSense'] = mfx_globals['bgcSense']
+    mfx_global_pars['CtrDwellFactor'] = mfx_globals['ctrDwellFactor']
+    mfx_global_pars['Damping'] = mfx_globals['damping']
+    mfx_global_pars['Headstart'] = mfx_globals['headstart']
+    mfx_global_pars['ID'] = mfx_globals['id']
+    mfx_global_pars['LocLimit'] = mfx_globals['locLimit']
+    mfx_global_pars['Stickiness'] = mfx_globals['stickiness']
+    mfx_global_pars['FieldAlgorithm'] = mfx_globals['field']['algo']
+    mfx_global_pars['FieldGeoFactor'] = mfx_globals['field']['fldGeoFactor']
+    mfx_global_pars['FieldStride'] = mfx_globals['field']['stride']
+
+    return (md_by_itrs,mfx_global_pars)
 
 ##############################
 ### tabular classes  #########
