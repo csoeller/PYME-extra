@@ -763,7 +763,6 @@ def get_metadata_from_mfx_attrs(mfx_attrs):
 
 def get_metadata_from_mfx_attrs_legacy(mfx_attrs):
     mfx_itrs =    mfx_attrs['measurement']['threads'][0]['sequences'][0]['Itr']
-    mfx_globals = mfx_attrs['measurement']['threads'][0]['sequences'][0]
 
     # below code needed fixing with pandas 3.x
     # fell foul of copy-on-write changes
