@@ -704,9 +704,30 @@ def _get_mdh_zarr(filename,arch):
             
     return mdh
 
+def get_global_pars_from_mfx_attrs(mfx_attrs):
+    mfx_globals = mfx_attrs['measurement']['threads'][0]['sequences'][0]
+    mfx_global_pars = {}
+    
+    mfx_global_pars['BgcSense'] = mfx_globals['bgcSense']
+    mfx_global_pars['CtrDwellFactor'] = mfx_globals['ctrDwellFactor']
+    mfx_global_pars['Damping'] = mfx_globals['damping']
+    mfx_global_pars['Headstart'] = mfx_globals['headstart']
+    mfx_global_pars['ID'] = mfx_globals['id']
+    if 'liveview' in mfx_globals: # not present in legacy exports
+        mfx_global_pars['Liveview'] = mfx_globals['liveview']['show']
+    mfx_global_pars['LocLimit'] = mfx_globals['locLimit']
+    mfx_global_pars['Stickiness'] = mfx_globals['stickiness']
+    mfx_global_pars['FieldAlgorithm'] = mfx_globals['field']['algo']
+    mfx_global_pars['FieldGeoFactor'] = mfx_globals['field']['fldGeoFactor']
+    mfx_global_pars['FieldStride'] = mfx_globals['field']['stride']
+
+    if '_lasSelected' in mfx_globals: # should only be in legacy exports
+        mfx_global_pars['LaserSelectedLegacy'] = mfx_globals['_lasSelected']
+
+    return mfx_global_pars
+
 def get_metadata_from_mfx_attrs(mfx_attrs):
     mfx_itrs =    mfx_attrs['measurement']['threads'][0]['sequences'][0]['Itr']
-    mfx_globals = mfx_attrs['measurement']['threads'][0]['sequences'][0]
 
     # below code needed fixing with pandas 3.x
     # fell foul of copy-on-write changes
@@ -736,19 +757,7 @@ def get_metadata_from_mfx_attrs(mfx_attrs):
         md_by_itrs.loc[i,'PatternGeometryAbbrev'] = itr['Mode']['pattern'].replace('hexagon','hex').replace('zline','zl').replace('square','sq')
         md_by_itrs.loc[i,'Strategy'] = itr['Mode']['strategy']
 
-    mfx_global_pars = {}
-    
-    mfx_global_pars['BgcSense'] = mfx_globals['bgcSense']
-    mfx_global_pars['CtrDwellFactor'] = mfx_globals['ctrDwellFactor']
-    mfx_global_pars['Damping'] = mfx_globals['damping']
-    mfx_global_pars['Headstart'] = mfx_globals['headstart']
-    mfx_global_pars['ID'] = mfx_globals['id']
-    mfx_global_pars['Liveview'] = mfx_globals['liveview']['show']
-    mfx_global_pars['LocLimit'] = mfx_globals['locLimit']
-    mfx_global_pars['Stickiness'] = mfx_globals['stickiness']
-    mfx_global_pars['FieldAlgorithm'] = mfx_globals['field']['algo']
-    mfx_global_pars['FieldGeoFactor'] = mfx_globals['field']['fldGeoFactor']
-    mfx_global_pars['FieldStride'] = mfx_globals['field']['stride']
+    mfx_global_pars = get_global_pars_from_mfx_attrs(mfx_attrs)
 
     return (md_by_itrs,mfx_global_pars)
 
@@ -776,18 +785,7 @@ def get_metadata_from_mfx_attrs_legacy(mfx_attrs):
         md_by_itrs.loc[i,'PatternGeometryAbbrev'] = itr['Mode']['pattern'].replace('hexagon','hex').replace('zline','zl').replace('square','sq')
         md_by_itrs.loc[i,'Strategy'] = itr['Mode']['strategy']
 
-    mfx_global_pars = {}
-    
-    mfx_global_pars['BgcSense'] = mfx_globals['bgcSense']
-    mfx_global_pars['CtrDwellFactor'] = mfx_globals['ctrDwellFactor']
-    mfx_global_pars['Damping'] = mfx_globals['damping']
-    mfx_global_pars['Headstart'] = mfx_globals['headstart']
-    mfx_global_pars['ID'] = mfx_globals['id']
-    mfx_global_pars['LocLimit'] = mfx_globals['locLimit']
-    mfx_global_pars['Stickiness'] = mfx_globals['stickiness']
-    mfx_global_pars['FieldAlgorithm'] = mfx_globals['field']['algo']
-    mfx_global_pars['FieldGeoFactor'] = mfx_globals['field']['fldGeoFactor']
-    mfx_global_pars['FieldStride'] = mfx_globals['field']['stride']
+    mfx_global_pars = get_global_pars_from_mfx_attrs(mfx_attrs)
 
     return (md_by_itrs,mfx_global_pars)
 
