@@ -77,7 +77,7 @@ def zip_is_minflux_zarr_data(filename, warning=False, return_msg=False):
         valid = False
         msg = "error opening %s as zarr ZipStore" % filename
 
-    if 'mfx' not in archz:
+    if valid and 'mfx' not in archz:
         valid = False
         msg = "cannot find mfx data in zarr ZipStore '%s'" % filename
     
@@ -95,6 +95,7 @@ def minflux_npy_is_new_format(data):
 
 # here we check for size either 5 (2D) or 10 (3D); any other size raises an error
 def minflux_npy_detect_3D_legacy(data):
+    # heuristics based detection
     if data['itr'].shape[1] == 10 or data['itr'].shape[1] == 11:
         return True # 3D
     elif data['itr'].shape[1] == 5 or data['itr'].shape[1] == 6 or data['itr'].shape[1] == 3:
@@ -104,6 +105,7 @@ def minflux_npy_detect_3D_legacy(data):
                             (data['itr'].shape[1]))
 
 def minflux_npy_detect_3D_new(data):
+    # heuristics based detection
     dfin = data[data['fnl'] == True]
     if dfin['itr'][0] == 9:
         if not np.all(dfin['itr'] == 9):
@@ -162,19 +164,22 @@ def minflux_check_properties_new(data,mdh=None): # this is aiming at becoming a 
         props['Tracking'] = mdh['MINFLUX.Tracking']
     else:
         if minflux_npy_is_new_format(data):
+            # fall back to heuristics
             props['Is3D'] = minflux_npy_detect_3D_new(data)
             props['Tracking'] = minflux_npy_detect_2Dtracking_new(data)
             props['Format'] = 'RevAutumn2024'
             dfin = data[data['fnl'] == True]
             props['FinalIter'] = dfin['itr'][0]
         else:
+            # fall back to heuristics
             props['Is3D'] = minflux_npy_detect_3D_legacy(data)
             props['Format'] = 'Legacy'
             props['Tracking'] = minflux_npy_detect_2Dshort_tracking_legacy(data)
             props['FinalIter'] = data['itr'].shape[1] - 1
             if minflux_npy_has_extra_iter_legacy(data):
                 props['ExtraIter'] = True
-
+        # some further heuristics
+        # probably not very robust
         if props['Is3D']:
             props['CFRIter'] = 6
         elif props['Tracking']:
@@ -231,20 +236,13 @@ def minflux_zarr2pyme(archz,return_original_array=False,make_clump_index=True,wi
     
 # this one should be able to deal both with 2d and 3D
 def minflux_npy2pyme_legacy(data,make_clump_index=True,with_cfr_std=False):
-
+    # all format checking is now done via the properties routine
     props = minflux_check_properties_new(data)
-    # eventually we may replace the assignments below and use props directly
-    tracking = props['Tracking']
-    is_3D = props['Is3D']
-    iterno_loc = props['FinalIter']
-    iterno_other = props['FinalIter']
-    iterno_cfr = props['CFRIter']
-    has_extra_iter = props['ExtraIter']
 
-    posnm = 1e9*data['itr']['loc'][:,iterno_loc] # we keep all distances in units of nm
+    posnm = 1e9*data['itr']['loc'][:,props['FinalIter']] # we keep all distances in units of nm
     posnm[:,2] *= foreshortening
     if 'lnc' in data['itr'].dtype.fields:
-        posnm_nc = 1e9*data['itr']['lnc'][:,iterno_loc]
+        posnm_nc = 1e9*data['itr']['lnc'][:,props['FinalIter']]
         posnm_nc[:,2] *= foreshortening
         has_lnc = True
     else:
@@ -276,15 +274,15 @@ def minflux_npy2pyme_legacy(data,make_clump_index=True,with_cfr_std=False):
     stdx[stdx < 1e-3] = 100.0 # if error estimate is too small, replace with 100 as "large" flag
     stdy = get_stddev_property(ids,posnm[:,1])
     stdy[stdy < 1e-3] = 100.0
-    if is_3D:
+    if props['Is3D']:
         stdz = get_stddev_property(ids,posnm[:,2])
         stdz[stdz < 1e-3] = 100.0
         pymedct.update({'z':posnm[:,2], 'error_z' : stdz})
 
     if with_cfr_std: # we also compute on request a cfr std dev across a trace ID (=clump in PYME)
-        pymedct.update({'cfr_std':get_stddev_property(ids,data['itr']['cfr'][:,iterno_cfr])})
+        pymedct.update({'cfr_std':get_stddev_property(ids,data['itr']['cfr'][:,props['CFRIter']])})
         
-    if tracking: # NOTE: for now 2D only, must fix in future for 3D!
+    if props['Tracking']: # NOTE: for now 2D only, must fix in future for 3D!
 
         # estimating the experimental localization precision σ for each track by calculating the
         # standard deviation (SD) of coordinate difference between consecutive localizations
@@ -320,12 +318,12 @@ def minflux_npy2pyme_legacy(data,make_clump_index=True,with_cfr_std=False):
                     # for t we use time to ms precision (without rounding); this is a reasonably close
                     # correspondence to frame numbers as time coordinates in SMLM data
                     't': (1e3*data['tim']).astype('i'),
-                    'cfr':data['itr']['cfr'][:,iterno_cfr],
-                    'efo':data['itr']['efo'][:,iterno_other],
-                    'dcr':data['itr']['dcr'][:,iterno_other],
+                    'cfr':data['itr']['cfr'][:,props['CFRIter']],
+                    'efo':data['itr']['efo'][:,props['FinalIter']],
+                    'dcr':data['itr']['dcr'][:,props['FinalIter']],
                     'error_x' : stdx,
                     'error_y' : stdy,
-                    'fbg': data['itr']['fbg'][:,iterno_other],
+                    'fbg': data['itr']['fbg'][:,props['FinalIter']],
                     # we assume for now the offset counts can be used to sum up
                     # and get the total photons harvested
                     # check with abberior
@@ -338,7 +336,7 @@ def minflux_npy2pyme_legacy(data,make_clump_index=True,with_cfr_std=False):
     if has_lnc:
         pymedct.update({'x_nc' : posnm_nc[:,0],
                         'y_nc' : posnm_nc[:,1]})
-        if is_3D:
+        if props['Is3D']:
             pymedct.update({'z_nc' : posnm_nc[:,2]})
 
     # copy a few entries verbatim
