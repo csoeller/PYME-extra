@@ -146,6 +146,7 @@ def minflux_npy_detect_2Dshort_tracking_legacy(data):
 def minflux_check_properties_new(data,mdh=None): # this is aiming at becoming a single stop to check MINFLUX file/dataset properties
     props = {}
     props['ExtraIter'] = False # default, only one case below in legacy data where this can apply
+    props['DwellTime_ms_final'] = None # unknown by default
     
     if mdh is not None and mdh.get('MINFLUX.ByItrs.CCRLimit') is not None:
         logger.info("got mdh that is not None")
@@ -162,6 +163,7 @@ def minflux_check_properties_new(data,mdh=None): # this is aiming at becoming a 
         props['Format'] = mdh['MINFLUX.Format']
         # we assume that "tracking" is part of the ID
         props['Tracking'] = mdh['MINFLUX.Tracking']
+        props['DwellTime_ms_final'] = mdh['MINFLUX.ByItrs.DwellTime_ms'][-1] # this one we use for eta calculations in tracking mode
     else:
         if minflux_npy_is_new_format(data):
             # fall back to heuristics
@@ -320,6 +322,7 @@ def minflux_npy2pyme_legacy(data,make_clump_index=True,with_cfr_std=False):
                     't': (1e3*data['tim']).astype('i'),
                     'cfr':data['itr']['cfr'][:,props['CFRIter']],
                     'efo':data['itr']['efo'][:,props['FinalIter']],
+                    'eco':data['itr']['eco'][:,props['FinalIter']],
                     'dcr':data['itr']['dcr'][:,props['FinalIter']],
                     'error_x' : stdx,
                     'error_y' : stdy,
@@ -473,6 +476,7 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False,mdh=None)
                     't': (1e3*dfin['tim']).astype('i'),
                     'cfr': cfr,
                     'efo': dfin['efo'],
+                    'eco': dfin['eco'],
                     'fbg': dfin['fbg'],
                     # check with abberior
                     # NOTE CS 3/2024: there seems to be an extra iteration in the newer files with MBM
@@ -531,6 +535,13 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False,mdh=None)
                         'track_errx':stdx.copy(), 'track_erry':stdy.copy(),
                         'track_lims':track_lims,
                         })
+        if props['DwellTime_ms_final'] is not None:
+            # eta is capturing the number of TCP cycles per localization as detailed in
+            # Vogler, B. T. L., De Angelis, G., Zhao, Z., Eggeling, C. & Reina, F.
+            # Parameter optimization for MINFLUX microscopy enabled single particle tracking.
+            # Commun Biol 8, 1573 (2025).
+            eta = dfin['eco']/(dfin['efo']*props['DwellTime_ms_final']*1e-3) # 1e-3 to account for ms units
+            pymedct.update({'eta' : eta})
 
     pymedct.update({'error_x' : stdx,'error_y' : stdy})
     if props['Is3D']:

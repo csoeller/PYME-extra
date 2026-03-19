@@ -171,10 +171,18 @@ def plot_stats_minflux(deltas, durations, tdintrace, efo_or_dtovertime, times,
     h = ax2[0].hist(tdintrace_ms,bins=50,range=(0,tdmean + 2*tdiqr))
     ax2[0].plot([tdmedian,tdmedian],[0,h[0].max()])
     # these are times between repeated localisations of the same dye molecule
+    if tdmedian < 50.0:
+        medstring = 'median %.1f ms'
+    else:
+        medstring = 'median %.0f ms'
+    if tdmean < 50.0:
+        meanstring = '  mean %.1f ms'
+    else:
+        meanstring = '  mean %.0f ms'  
     ax2[0].set_xlabel('time between localisations in same trace [ms]')
-    ax2[0].text(0.95, 0.8, 'median %.0f ms' % (tdmedian), horizontalalignment='right',
+    ax2[0].text(0.95, 0.8, medstring % (tdmedian), horizontalalignment='right',
              verticalalignment='bottom', transform=ax2[0].transAxes)
-    ax2[0].text(0.95, 0.7, '  mean %.0f ms' % (tdmean), horizontalalignment='right',
+    ax2[0].text(0.95, 0.7, meanstring % (tdmean), horizontalalignment='right',
              verticalalignment='bottom', transform=ax2[0].transAxes)
     # ax2[0].set_xlim(0,tdmean + 2*tdiqr) # superfluous since we are using the range keyword in hist
 
