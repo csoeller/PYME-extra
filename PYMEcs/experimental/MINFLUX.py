@@ -564,6 +564,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from clumpIndex)", self.OnAddMINFLUXTracksCI)
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from tid)", self.OnAddMINFLUXTracksTid)
         visFr.AddMenuItem('MINFLUX>Tracking', "Calculate consensus time step (using tid for traces)", self.OnCalcDtConsensus)
+        visFr.AddMenuItem('MINFLUX>Tracking', "Tracks MSD overview", self.OnTrackMSDOverview)
         visFr.AddMenuItem('MINFLUX>Colour', "Plot colour stats", self.OnPlotColourStats)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
@@ -975,6 +976,12 @@ class MINFLUXanalyser():
         dtc = find_timestep(pipeline)
         
         warn("Tracking consensus time step is %f us" %  float(1e6*dtc))
+
+    def OnTrackMSDOverview(self, event):
+        from PYMEcs.Analysis.Tracking import trackoverview
+        pipeline = self.visFr.pipeline
+        
+        trackoverview(pipeline, use_clumpIndex=True, scaleDT=1.0) # for now no tweaking of scaleDT
         
     def OnLoadCustom(self, event):
         self.visFr._recipe_manager.LoadRecipe(self.minfluxRIDs[event.GetId()])

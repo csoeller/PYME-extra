@@ -1,5 +1,6 @@
 import numpy as np
 from scipy import optimize
+import matplotlib.pyplot as plt
 
 # lightly edited version of same function in
 # https://github.com/ahansenlab/chromatin_dynamics/blob/main/02_data_processing/01_MINFLUX/loading.py
@@ -85,3 +86,36 @@ def gen_tconsensus(data,use_clumpIndex=False,scaleDT=1.0):
         tdt_ms[ind] = t_trace_dtms
 
     return tt_ms, tdt_ms
+
+def trackoverview(data,use_clumpIndex=False,scaleDT=1.0): # this is a preliminary place holder
+    import noctiluca as nl
+
+    dtc = scaleDT * float(find_timestep(data,use_clumpIndex=use_clumpIndex))
+    tim = data['tim']
+    if use_clumpIndex:
+        tid = data['clumpIndex']
+    else:
+        tid = data['tid']    
+    utid = np.unique(tid)
+    loc = np.zeros((data['x'].shape[0],2))
+    loc[:,0] = data['x']
+    loc[:,1] = data['y']
+
+    data = nl.TaggedSet()
+    for my_tid in utid:
+        ind = tid == my_tid
+        my_tim = tim[ind]
+        my_loc = loc[ind]
+        
+        lag = np.round(np.diff(my_tim)/dtc).astype(int)
+        t = np.insert(np.cumsum(lag), 0, 0)
+        
+        traj = nl.Trajectory(my_loc, t=t, tid=my_tid, dt=dtc)
+        data.add(traj)
+
+    #relfile = file.relative_to(relpath)
+    #data.addTags(f'file={str(relfile)}')
+    data.makeSelection()
+
+    nl.plot.msd_overview(data, linewidth=0.5, alpha=0.1)
+    plt.show()
