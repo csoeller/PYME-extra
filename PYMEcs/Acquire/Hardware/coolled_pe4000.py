@@ -294,20 +294,24 @@ class PE4000:
 from PYME.Acquire.Hardware.lasers import Laser
 
 class pe4000laser(Laser):
-   def __init__(self, name, turnOn=False, portname='COM3', start_power=0.02):
+   def __init__(self, name, turnOn=False, portname='COM3', start_power=0.02, wavelength=580):
       self.device = PE4000(portname)
       self.channel = 'C'
       self.name = name
       self.powerControlable = True
-      self.device.load_wavelength(560) # check the wavelengths that we actually have
+      self.wavelength = wavelength
+      self.device.load_wavelength(wavelength) # check the wavelengths that we actually have
       self.SetPower(start_power) 
 
    def IsOn(self):
       return self.isOn
 
-   def TurnOn(self):
+   def TurnOn(self,duration=None):
       self.device.channel_on(self.channel)
       # self.device.set_channel('C', intensity=100.0*self.power, on=True)
+      if duration is not None:
+          import threading
+          threading.Timer(duration, self.TurnOff).start()
       self.isOn = True
       
    def TurnOff(self):
