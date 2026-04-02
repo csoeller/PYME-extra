@@ -2471,11 +2471,12 @@ class TrackingConsensusTimes(ModuleBase):
         from PYMEcs.Analysis.Tracking import gen_tconsensus
 
         locs = inputlocalizations
-        tt_ms, tt_dtms = gen_tconsensus(locs,scaleDT=self.scaleDT)
+        tt_ms, tt_dtms, tt_steps = gen_tconsensus(locs,scaleDT=self.scaleDT)
         
         mapped = tabular.MappingFilter(locs)
         
         mapped.addColumn('track_tcms',tt_ms)
+        mapped.addColumn('track_tcsteps',tt_steps)
         mapped.addColumn('track_dtcms',tt_dtms)
 
         return mapped

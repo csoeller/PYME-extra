@@ -73,21 +73,25 @@ def gen_tconsensus(data,use_clumpIndex=False,scaleDT=1.0):
     utid = np.unique(tid)
 
     tt_ms = np.zeros_like(tim)
+    tt_steps = np.zeros_like(tim)
     tdt_ms = np.zeros_like(tim)
     
     for my_tid in utid:
         ind = tid == my_tid
         my_tim = tim[ind]
-        
-        lag = np.round(np.diff(my_tim)/dtc).astype(int) * dtc
+
+        steps = np.round(np.diff(my_tim)/dtc).astype(int)
+        lag = steps * dtc
         t_trace_ms = 1e3*np.insert(np.cumsum(lag), 0, 0)
         t_trace_dtms = 1e3*np.insert(lag, 0, 0)
+        t_trace_steps = np.insert(np.cumsum(steps), 0, 0)
         tt_ms[ind] = t_trace_ms
         tdt_ms[ind] = t_trace_dtms
+        tt_steps[ind] = t_trace_steps
 
-    return tt_ms, tdt_ms
+    return tt_ms, tdt_ms, tt_steps
 
-def trackoverview(data,use_clumpIndex=False,scaleDT=1.0): # this is a preliminary place holder
+def trackoverview(data, use_clumpIndex=False, scaleDT=1.0, return_data=False): # this is a preliminary place holder
     import noctiluca as nl
 
     dtc = scaleDT * float(find_timestep(data,use_clumpIndex=use_clumpIndex))
@@ -119,3 +123,7 @@ def trackoverview(data,use_clumpIndex=False,scaleDT=1.0): # this is a preliminar
 
     nl.plot.msd_overview(data, linewidth=0.5, alpha=0.1)
     plt.show()
+
+    if return_data:
+        return data
+
