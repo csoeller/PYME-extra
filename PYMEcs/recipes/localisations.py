@@ -2459,3 +2459,24 @@ class ErrorFromClumpIndex(ModuleBase):
             mapped.addColumn('error_z',stdz)
 
         return mapped
+
+@register_module('TrackingConsensusTimes')
+class TrackingConsensusTimes(ModuleBase):
+    inputlocalizations = Input('localizations')
+    outputlocalizations = Output('with_ctim')
+
+    scaleDT = Float(1.0)
+
+    def run(self, inputlocalizations):
+        from PYMEcs.Analysis.Tracking import gen_tconsensus
+
+        locs = inputlocalizations
+        tt_ms, tt_dtms, tt_steps = gen_tconsensus(locs,scaleDT=self.scaleDT)
+        
+        mapped = tabular.MappingFilter(locs)
+        
+        mapped.addColumn('track_tcms',tt_ms)
+        mapped.addColumn('track_tcsteps',tt_steps)
+        mapped.addColumn('track_dtcms',tt_dtms)
+
+        return mapped

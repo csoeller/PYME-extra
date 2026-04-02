@@ -20,6 +20,13 @@ foreshortening = PYME.config.get('MINFLUX-foreshortening',0.72)
 
 warning_msg = ""
 
+import logging
+logger = logging.getLogger(__name__)
+
+#############################
+### MINFLUX utility funcs ###
+#############################
+
 def get_stddev_property(ids, prop, statistic='std'):
     maxid = int(ids.max())
     edges = -0.5+np.arange(maxid+2)
@@ -30,6 +37,10 @@ def get_stddev_property(ids, prop, statistic='std'):
     propstd[np.isnan(propstd)] = 1000.0 # (mark as huge error)
     std_events = propstd[ids]
     return std_events
+
+###############################
+### MINFLUX property checks ###
+###############################
 
 from PYMEcs.pyme_warnings import warn
 def npy_is_minflux_data(filename, warning=False, return_msg=False):
@@ -55,10 +66,21 @@ def npy_is_minflux_data(filename, warning=False, return_msg=False):
     else:
         return valid
 
-def zip_is_minflux_zarr_data(filename, warning=False, return_msg=False): # currently just placeholder
+def zip_is_minflux_zarr_data(filename, warning=False, return_msg=False):
     valid = True
     msg = None
+    import zarr
+    try:
+        store = zarr.storage.ZipStore(filename,mode='r')
+        archz = zarr.open(store, mode='r')
+    except zarr.errors.PathNotFoundError:
+        valid = False
+        msg = "error opening %s as zarr ZipStore" % filename
 
+    if valid and 'mfx' not in archz:
+        valid = False
+        msg = "cannot find mfx data in zarr ZipStore '%s'" % filename
+    
     if not valid and warning:
         if not msg is None:
                 warn(msg)
@@ -68,67 +90,22 @@ def zip_is_minflux_zarr_data(filename, warning=False, return_msg=False): # curre
     else:
         return valid
 
-def minflux_npy_new_format(data):
+def minflux_npy_is_new_format(data):
     return 'fnl' in data.dtype.fields
-
-# wrapper around legacy vs new format IO
-def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,with_cfr_std=False):
-    data = np.load(fname)
-    
-    if minflux_npy_new_format(data):
-        pymedf = minflux_npy2pyme_new(data,
-                                    make_clump_index=make_clump_index,with_cfr_std=with_cfr_std)
-    else:
-        pymedf = minflux_npy2pyme_legacy(data,
-                                         make_clump_index=make_clump_index,with_cfr_std=with_cfr_std)
-
-    pyme_recArray = pymedf.to_records(index=False) # convert into NUMPY recarray
-    if return_original_array:
-        return (pyme_recArray,data)
-    else:
-        return pyme_recArray
-
-def minflux_zarr2pyme(archz,return_original_array=False,make_clump_index=True,with_cfr_std=False):
-    # make data array
-    mfx = archz['mfx']
-    mfxv = mfx[:][mfx['vld'] == 1]
-    seqidsm, incseqs = mk_seqids_maxpos(mfxv)
-    data = mfxv[np.logical_not(np.isin(seqidsm,incseqs))] # remove any incomplete sequences
-    pymedf = minflux_npy2pyme_new(data,
-                                  make_clump_index=make_clump_index,with_cfr_std=with_cfr_std)
-
-    pyme_recArray = pymedf.to_records(index=False) # convert into NUMPY recarray
-    if return_original_array:
-        return (pyme_recArray,data)
-    else:
-        return pyme_recArray
-
-
-###############################
-### MINFLUX property checks ###
-###############################
 
 # here we check for size either 5 (2D) or 10 (3D); any other size raises an error
 def minflux_npy_detect_3D_legacy(data):
+    # heuristics based detection
     if data['itr'].shape[1] == 10 or data['itr'].shape[1] == 11:
         return True # 3D
-    elif data['itr'].shape[1] == 5 or data['itr'].shape[1] == 6:
+    elif data['itr'].shape[1] == 5 or data['itr'].shape[1] == 6 or data['itr'].shape[1] == 3:
         return False # 2D
     else:
-        raise RuntimeError('unknown size of itr array, neither 5 (2D) nor 10 (3D), is actually: %d' %
+        raise RuntimeError('unknown size of itr array, neither 5 (2D) nor 10 (3D), nor 3 (2D tracking), is actually: %d' %
                             (data['itr'].shape[1]))
 
-def minflux_check_poperties(data): # this is aiming at becoming a single stop to check MINFLUX file/dataset properties
-    props = {}
-    props['Is3D'] = minflux_npy_detect_3D_new(data)
-    props['Tracking'] = minflux_npy_detect_2Dtracking_new(data)
-    if minflux_npy_new_format(data):
-        props['Format'] = 'RevAutumn2024'
-    else:
-        props['Format'] = 'Legacy'
-    return props
-    
 def minflux_npy_detect_3D_new(data):
+    # heuristics based detection
     dfin = data[data['fnl'] == True]
     if dfin['itr'][0] == 9:
         if not np.all(dfin['itr'] == 9):
@@ -142,13 +119,17 @@ def minflux_npy_detect_3D_new(data):
         if not np.all(dfin['itr'] == 3):
             raise RuntimeError('2D tracking detected but some "last iterations" have an index different from 3, giving up')
         return False # 2D
+    elif dfin['itr'][0] == 2: # 2D tracking
+        if not np.all(dfin['itr'] == 2):
+            raise RuntimeError('2D tracking detected but some "last iterations" have an index different from 2, giving up')
+        return False # 2D
     else:
         raise RuntimeError('unknown number of final iteration, neither 3, (2D tracking), 4 (2D) nor 9 (3D), is actually: %d' %
                             (dfin['itr'][0]))
 
 def minflux_npy_detect_2Dtracking_new(data):
     dfin = data[data['fnl'] == True]
-    if np.all(dfin['itr'] == 3):
+    if np.all(dfin['itr'] == 3) or np.all(dfin['itr'] == 2):
         return True
     else:
         return False
@@ -159,6 +140,96 @@ def minflux_npy_has_extra_iter_legacy(data):
     else:
         return False
 
+def minflux_npy_detect_2Dshort_tracking_legacy(data):
+    return data['itr'].shape[1] == 3
+    
+def minflux_check_properties_new(data,mdh=None): # this is aiming at becoming a single stop to check MINFLUX file/dataset properties
+    props = {}
+    props['ExtraIter'] = False # default, only one case below in legacy data where this can apply
+    props['DwellTime_ms_final'] = None # unknown by default
+    
+    if mdh is not None and mdh.get('MINFLUX.ByItrs.CCRLimit') is not None:
+        logger.info("got mdh that is not None")
+        ccrl = mdh['MINFLUX.ByItrs.CCRLimit']
+        props['FinalIter'] = len(ccrl) - 1
+        cfr_iter = np.max(np.nonzero(np.array(ccrl) >= 0))
+        lastpos_repeated = props['FinalIter'] + int(mdh['MINFLUX.Globals.Headstart']) + 1
+        if lastpos_repeated <= cfr_iter:
+            props['CFRIter'] = cfr_iter
+        else:
+            props['CFRIter'] = -1
+        
+        props['Is3D'] = mdh['MINFLUX.Is3D']
+        props['Format'] = mdh['MINFLUX.Format']
+        # we assume that "tracking" is part of the ID
+        props['Tracking'] = mdh['MINFLUX.Tracking']
+        props['DwellTime_ms_final'] = mdh['MINFLUX.ByItrs.DwellTime_ms'][-1] # this one we use for eta calculations in tracking mode
+    else:
+        if minflux_npy_is_new_format(data):
+            # fall back to heuristics
+            props['Is3D'] = minflux_npy_detect_3D_new(data)
+            props['Tracking'] = minflux_npy_detect_2Dtracking_new(data)
+            props['Format'] = 'RevAutumn2024'
+            dfin = data[data['fnl'] == True]
+            props['FinalIter'] = dfin['itr'][0]
+        else:
+            # fall back to heuristics
+            props['Is3D'] = minflux_npy_detect_3D_legacy(data)
+            props['Format'] = 'Legacy'
+            props['Tracking'] = minflux_npy_detect_2Dshort_tracking_legacy(data)
+            props['FinalIter'] = data['itr'].shape[1] - 1
+            if minflux_npy_has_extra_iter_legacy(data):
+                props['ExtraIter'] = True
+        # some further heuristics
+        # probably not very robust
+        if props['Is3D']:
+            props['CFRIter'] = 6
+        elif props['Tracking']:
+            props['CFRIter'] = 2
+        else: # 2D imaging
+            props['CFRIter'] = 4
+
+    if props['ExtraIter']:
+        props['CFRIter'] += 1
+            
+    return props
+
+#####################
+### MAIN WRAPPERS ###
+#####################
+
+# wrappers around legacy vs new format IO
+def minflux_npy2pyme(fname,return_original_array=False,make_clump_index=True,with_cfr_std=False):
+    data = np.load(fname)
+    
+    if minflux_npy_is_new_format(data):
+        pymedf = minflux_npy2pyme_new(data,
+                                    make_clump_index=make_clump_index,with_cfr_std=with_cfr_std)
+    else:
+        pymedf = minflux_npy2pyme_legacy(data,
+                                         make_clump_index=make_clump_index,with_cfr_std=with_cfr_std)
+
+    pyme_recArray = pymedf.to_records(index=False) # convert into NUMPY recarray
+    if return_original_array:
+        return (pyme_recArray,data)
+    else:
+        return pyme_recArray
+
+def minflux_zarr2pyme(archz,return_original_array=False,make_clump_index=True,with_cfr_std=False,mdh=None):
+    # make data array
+    mfx = archz['mfx']
+    mfxv = mfx[:][mfx['vld'] == 1]
+    seqidsm, incseqs = mk_seqids_maxpos(mfxv)
+    data = mfxv[np.logical_not(np.isin(seqidsm,incseqs))] # remove any incomplete sequences
+    pymedf = minflux_npy2pyme_new(data,
+                                  make_clump_index=make_clump_index,with_cfr_std=with_cfr_std,mdh=mdh)
+
+    pyme_recArray = pymedf.to_records(index=False) # convert into NUMPY recarray
+    if return_original_array:
+        return (pyme_recArray,data)
+    else:
+        return pyme_recArray
+
 
 ##################
 ### LEGACY IO ####
@@ -167,35 +238,13 @@ def minflux_npy_has_extra_iter_legacy(data):
     
 # this one should be able to deal both with 2d and 3D
 def minflux_npy2pyme_legacy(data,make_clump_index=True,with_cfr_std=False):
+    # all format checking is now done via the properties routine
+    props = minflux_check_properties_new(data)
 
-    if minflux_npy_detect_3D_legacy(data):
-        is_3D = True
-        iterno_loc = 9 # we pick up the most precise localisation from this iteration, also fbg
-        iterno_other = 9 # we pick up dcr, efo from this iteration
-        iterno_cfr = 6
-    else:
-        is_3D = False
-        iterno_loc = 4
-        iterno_other = 4
-        iterno_cfr = 3
-
-    # NOTE CS 3/2024: latest data with MBM active seems to generate an "empty" iteration (at position 0)
-    # that has NaNs or zeros in the relevant properties
-    # we seem to be able to deal with this by just moving our pointers into the iteration just one position up
-    # this is subject to confirmation
-    if minflux_npy_has_extra_iter_legacy(data):
-        has_extra_iter = True
-        iterno_loc += 1
-        iterno_other += 1
-        iterno_cfr += 1
-    else:
-        has_extra_iter = False
-
-
-    posnm = 1e9*data['itr']['loc'][:,iterno_loc] # we keep all distances in units of nm
+    posnm = 1e9*data['itr']['loc'][:,props['FinalIter']] # we keep all distances in units of nm
     posnm[:,2] *= foreshortening
     if 'lnc' in data['itr'].dtype.fields:
-        posnm_nc = 1e9*data['itr']['lnc'][:,iterno_loc]
+        posnm_nc = 1e9*data['itr']['lnc'][:,props['FinalIter']]
         posnm_nc[:,2] *= foreshortening
         has_lnc = True
     else:
@@ -227,25 +276,57 @@ def minflux_npy2pyme_legacy(data,make_clump_index=True,with_cfr_std=False):
     stdx[stdx < 1e-3] = 100.0 # if error estimate is too small, replace with 100 as "large" flag
     stdy = get_stddev_property(ids,posnm[:,1])
     stdy[stdy < 1e-3] = 100.0
-    if is_3D:
+    if props['Is3D']:
         stdz = get_stddev_property(ids,posnm[:,2])
         stdz[stdz < 1e-3] = 100.0
         pymedct.update({'z':posnm[:,2], 'error_z' : stdz})
 
     if with_cfr_std: # we also compute on request a cfr std dev across a trace ID (=clump in PYME)
-        pymedct.update({'cfr_std':get_stddev_property(ids,data['itr']['cfr'][:,iterno_cfr])})
+        pymedct.update({'cfr_std':get_stddev_property(ids,data['itr']['cfr'][:,props['CFRIter']])})
         
+    if props['Tracking']: # NOTE: for now 2D only, must fix in future for 3D!
+
+        # estimating the experimental localization precision σ for each track by calculating the
+        # standard deviation (SD) of coordinate difference between consecutive localizations
+        # from supplement in Deguchi, T. et al. Direct observation of motor protein stepping in
+        #                             living cells using MINFLUX. Science 379, 1010–1015 (2023).
+        def diffstd(data):
+            # take differential and then look at std_dev of that
+            # 1/sqrt(2) to account for variance increase on differences
+            return np.diff(data).std()/1.41
+        
+        track_stdx = stdx
+        track_stdy = stdy
+        #LOCERR_MAX = 15.0
+        #stdx = np.clip(stdx,None,LOCERR_MAX) # current workaround, need better loc err estimation
+        #stdy = np.clip(stdy,None,LOCERR_MAX) # current workaround, need better loc err estimation
+        stdx = get_stddev_property(ids,posnm[:,0],statistic=diffstd)
+        stdy = get_stddev_property(ids,posnm[:,1],statistic=diffstd)
+        track_tmin = get_stddev_property(ids,data['tim'],'min')
+        track_tms = 1e3*(data['tim']-track_tmin)
+        track_lims = np.zeros_like(ids)
+        track_lims[np.diff(ids,prepend=0) > 0] = 1 # mark beginning of tracks with 1
+        track_lims[np.diff(ids,append=ids.max()+1) > 0] = 2 # mark end of tracks with 2
+        pymedct.update({'track_stdx':track_stdx, 'track_stdy':track_stdy, 'track_tms':track_tms,
+                        # we return track_err[xy] in addition to error_x, error_y since it avoids
+                        # special treatment on coalescing and therefore allows comparison between
+                        # track_stdx and track_errx etc on a per track basis
+                        'track_errx':stdx.copy(), 'track_erry':stdy.copy(),
+                        'track_lims':track_lims,
+                        })
+
     pymedct.update({'x' : posnm[:,0],
                     'y': posnm[:,1],
                     # for t we use time to ms precision (without rounding); this is a reasonably close
                     # correspondence to frame numbers as time coordinates in SMLM data
                     't': (1e3*data['tim']).astype('i'),
-                    'cfr':data['itr']['cfr'][:,iterno_cfr],
-                    'efo':data['itr']['efo'][:,iterno_other],
-                    'dcr':data['itr']['dcr'][:,iterno_other],
+                    'cfr':data['itr']['cfr'][:,props['CFRIter']],
+                    'efo':data['itr']['efo'][:,props['FinalIter']],
+                    'eco':data['itr']['eco'][:,props['FinalIter']],
+                    'dcr':data['itr']['dcr'][:,props['FinalIter']],
                     'error_x' : stdx,
                     'error_y' : stdy,
-                    'fbg': data['itr']['fbg'][:,iterno_other],
+                    'fbg': data['itr']['fbg'][:,props['FinalIter']],
                     # we assume for now the offset counts can be used to sum up
                     # and get the total photons harvested
                     # check with abberior
@@ -258,7 +339,7 @@ def minflux_npy2pyme_legacy(data,make_clump_index=True,with_cfr_std=False):
     if has_lnc:
         pymedct.update({'x_nc' : posnm_nc[:,0],
                         'y_nc' : posnm_nc[:,1]})
-        if is_3D:
+        if props['Is3D']:
             pymedct.update({'z_nc' : posnm_nc[:,2]})
 
     # copy a few entries verbatim
@@ -325,24 +406,23 @@ def mk_posinid(ids):
     return posinid
 
 # this one should be able to deal both with 2d and 3D
-def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
+def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False,mdh=None):
     lastits = data['fnl'] == True
     wherelast = np.nonzero(lastits)[0]
     dfin = data[lastits]
 
-    props = minflux_check_poperties(data)
+    props = minflux_check_properties_new(data,mdh)
+    import pprint
+    logger.info("props from minflux_check_properties_new:\n" + pprint.pformat(props,indent=4))
 
-    if props['Is3D']:
-        wherecfr = wherelast - 3
-        if not np.all(data[wherecfr]['itr'] == 6):
-            raise RuntimeError('CFR check_3D: 3D detected but some "cfr iterations" have an index different from 6, giving up')
+    # here we derive the props from metadata if possible and also set CFRIter
+    # this makes the checks simpler and should allow loading from custom sequences
+    if props['CFRIter'] >= 0:
+        wherecfr = wherelast - (props['FinalIter']-props['CFRIter'])
+        if not np.all(data[wherecfr]['itr'] == props['CFRIter']):
+            warn('CFR check: "cfr iterations" have an index different from %d, giving up' % props['CFRIter'])
     else:
-        if props['Tracking']:
-            wherecfr = wherelast # this is bogus for now; we really need to get CFR from previous itr==2 that belongs to the same trace
-        else:
-            wherecfr = wherelast - 1 # in 2D we do use the last but one iteration (iteration 3)
-            if not np.all(data[wherecfr]['itr'] == 3):
-                raise RuntimeError('CFR check_2D: 2D detected but some "cfr iterations" have an index different from 3, giving up')
+        wherecfr = None 
 
     posnm = 1e9*dfin['loc'] # we keep all distances in units of nm
     posnm[:,2] *= foreshortening
@@ -381,16 +461,22 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
     nphotons_all = get_stddev_property(seqid,data['eco'],statistic='sum')
     niterations_all = get_stddev_property(seqid,data['eco'],statistic='count') # we also count how many iterations were done, to see complete vs partial sequences
     
-    if with_cfr_std: # we also compute on request a cfr std dev across a trace ID (=clump in PYME)
+    if with_cfr_std and wherecfr is not None: # we also compute on request a cfr std dev across a trace ID (=clump in PYME)
         pymedct.update({'cfr_std':get_stddev_property(ids,data[wherecfr]['cfr'])})
+
+    if wherecfr is not None:
+        cfr = data[wherecfr]['cfr']
+    else:
+        cfr = np.zeros_like(ids,dtype='f')
 
     pymedct.update({'x' : posnm[:,0],
                     'y': posnm[:,1],
                     # for t we use time to ms precision (without rounding); this is a reasonably close
                     # correspondence to frame numbers as time coordinates in SMLM data
                     't': (1e3*dfin['tim']).astype('i'),
-                    'cfr':data[wherecfr]['cfr'],
-                    'efo':dfin['efo'],
+                    'cfr': cfr,
+                    'efo': dfin['efo'],
+                    'eco': dfin['eco'],
                     'fbg': dfin['fbg'],
                     # check with abberior
                     # NOTE CS 3/2024: there seems to be an extra iteration in the newer files with MBM
@@ -449,6 +535,13 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False):
                         'track_errx':stdx.copy(), 'track_erry':stdy.copy(),
                         'track_lims':track_lims,
                         })
+        if props['DwellTime_ms_final'] is not None:
+            # eta is capturing the number of TCP cycles per localization as detailed in
+            # Vogler, B. T. L., De Angelis, G., Zhao, Z., Eggeling, C. & Reina, F.
+            # Parameter optimization for MINFLUX microscopy enabled single particle tracking.
+            # Commun Biol 8, 1573 (2025).
+            eta = dfin['eco']/(dfin['efo']*props['DwellTime_ms_final']*1e-3) # 1e-3 to account for ms units
+            pymedct.update({'eta' : eta})
 
     pymedct.update({'error_x' : stdx,'error_y' : stdy})
     if props['Is3D']:
@@ -520,16 +613,17 @@ def _get_basic_MINFLUX_metadata(filename):
     
 def _get_mdh(data,filename):
     mdh = _get_basic_MINFLUX_metadata(filename)
-    if minflux_npy_new_format(data):
-        props = minflux_check_poperties(data)
+    if minflux_npy_is_new_format(data):
+        props = minflux_check_properties_new(data)
         mdh['MINFLUX.Format'] = props['Format']
         mdh['MINFLUX.Is3D'] = props['Is3D']
         mdh['MINFLUX.Tracking'] = props['Tracking']
+        mdh['MINFLUX.ExtraIteration'] = False
     else:
         mdh['MINFLUX.Format'] = 'Legacy'
         mdh['MINFLUX.Is3D'] = minflux_npy_detect_3D_legacy(data)
         mdh['MINFLUX.ExtraIteration'] = minflux_npy_has_extra_iter_legacy(data)
-        mdh['MINFLUX.Tracking'] = False # for now we do not support tracking with legacy data
+        mdh['MINFLUX.Tracking'] = minflux_npy_detect_2Dshort_tracking_legacy(data) # for now we do not support tracking with legacy data
 
     return mdh
 
@@ -553,26 +647,61 @@ def _get_mdh_zarr(filename,arch):
                         warn("acq time stamp (%s) not equal to filename time stamp (%s), delta in s is %d" % (ts,mts,delta_s))
             else:
                 mdh['MINFLUX.TimeStamp'] = ts
-
         md_by_itrs,mfx_global_par = get_metadata_from_mfx_attrs(mfx_attrs)
-        for par in mfx_global_par:
-            mdh['MINFLUX.Globals.%s' % par] = mfx_global_par[par]
-        for pars in md_by_itrs:
-            # make sure we convert to list; otherwise we cannot easily convert to JSON as JSON does not like ndarray
-            mdh['MINFLUX.ByItrs.%s' % pars] = md_by_itrs[pars].to_numpy().tolist()
-        if 'MINFLUX.ByItrs.ExcitationWavelength_nm' in mdh: # these are otherwise printed as np.float64, potentially check for more general workaround
-            mdh['MINFLUX.ByItrs.ExcitationWavelength_nm'] = [float(_) for _ in mdh['MINFLUX.ByItrs.ExcitationWavelength_nm']]
-        import re
-        mdh['MINFLUX.Tracking'] = re.search('tracking', mfx_global_par['ID'], re.IGNORECASE) is not None
     else:
         mdh['MINFLUX.Format'] = 'LegacyZarrConversion'
         mdh['MINFLUX.Is3D'] = mfx_attrs['_legacy']['_seqs'][0]['Itr'][0]['Mode']['dim'] > 2
+        md_by_itrs,mfx_global_par = get_metadata_from_mfx_attrs_legacy(mfx_attrs)
+    
+    for par in mfx_global_par:
+        mdh['MINFLUX.Globals.%s' % par] = mfx_global_par[par]
+    for pars in md_by_itrs:
+        # make sure we convert to list; otherwise we cannot easily convert to JSON as JSON does not like ndarray
+        mdh['MINFLUX.ByItrs.%s' % pars] = md_by_itrs[pars].to_numpy().tolist()
+    if 'MINFLUX.ByItrs.ExcitationWavelength_nm' in mdh: # these are otherwise printed as np.float64, potentially check for more general workaround
+        mdh['MINFLUX.ByItrs.ExcitationWavelength_nm'] = [float(_) for _ in mdh['MINFLUX.ByItrs.ExcitationWavelength_nm']]
+    import re
+    mdh['MINFLUX.Tracking'] = re.search('(tracking)|(trk)', mfx_global_par['ID'], re.IGNORECASE) is not None
+        
+    # some logic to figure out if cfr info can be obtained
+    finaliter = len(mdh['MINFLUX.ByItrs.CCRLimit']) - 1
+    cfr_iter = np.max(np.nonzero(np.array(mdh['MINFLUX.ByItrs.CCRLimit']) >= 0))
+    lastpos_repeated = finaliter + int(mdh['MINFLUX.Globals.Headstart']) + 1
+    # we can only get useful cfr data if the earliest iteration that is in a trace repeat is before or at the CFR iteration of this sequence
+    # in other words, if the iterations repeated across a trace include the cfr calculating iterations
+    if lastpos_repeated <= cfr_iter:
+        mdh['MINFLUX.CFRIter'] = cfr_iter
+    else: # otherwise mark with a value < 0 as cfr unavailable
+        mdh['MINFLUX.CFRIter'] = -1
+
+    mdh['MINFLUX.ExtraIteration'] = False # we assume this should not happen but "could" be occuring in legacy zarr conversion?
             
     return mdh
 
-def get_metadata_from_mfx_attrs(mfx_attrs):
-    mfx_itrs = mfx_attrs['measurement']['threads'][0]['sequences'][0]['Itr']
+def get_global_pars_from_mfx_attrs(mfx_attrs):
     mfx_globals = mfx_attrs['measurement']['threads'][0]['sequences'][0]
+    mfx_global_pars = {}
+    
+    mfx_global_pars['BgcSense'] = mfx_globals['bgcSense']
+    mfx_global_pars['CtrDwellFactor'] = mfx_globals['ctrDwellFactor']
+    mfx_global_pars['Damping'] = mfx_globals['damping']
+    mfx_global_pars['Headstart'] = mfx_globals['headstart']
+    mfx_global_pars['ID'] = mfx_globals['id']
+    if 'liveview' in mfx_globals: # not present in legacy exports
+        mfx_global_pars['Liveview'] = mfx_globals['liveview']['show']
+    mfx_global_pars['LocLimit'] = mfx_globals['locLimit']
+    mfx_global_pars['Stickiness'] = mfx_globals['stickiness']
+    mfx_global_pars['FieldAlgorithm'] = mfx_globals['field']['algo']
+    mfx_global_pars['FieldGeoFactor'] = mfx_globals['field']['fldGeoFactor']
+    mfx_global_pars['FieldStride'] = mfx_globals['field']['stride']
+
+    if '_lasSelected' in mfx_globals: # should only be in legacy exports
+        mfx_global_pars['LaserSelectedLegacy'] = mfx_globals['_lasSelected']
+
+    return mfx_global_pars
+
+def get_metadata_from_mfx_attrs(mfx_attrs):
+    mfx_itrs =    mfx_attrs['measurement']['threads'][0]['sequences'][0]['Itr']
 
     # below code needed fixing with pandas 3.x
     # fell foul of copy-on-write changes
@@ -602,22 +731,36 @@ def get_metadata_from_mfx_attrs(mfx_attrs):
         md_by_itrs.loc[i,'PatternGeometryAbbrev'] = itr['Mode']['pattern'].replace('hexagon','hex').replace('zline','zl').replace('square','sq')
         md_by_itrs.loc[i,'Strategy'] = itr['Mode']['strategy']
 
-    mfx_global_pars = {}
-    
-    mfx_global_pars['BgcSense'] = mfx_globals['bgcSense']
-    mfx_global_pars['CtrDwellFactor'] = mfx_globals['ctrDwellFactor']
-    mfx_global_pars['Damping'] = mfx_globals['damping']
-    mfx_global_pars['Headstart'] = mfx_globals['headstart']
-    mfx_global_pars['ID'] = mfx_globals['id']
-    mfx_global_pars['Liveview'] = mfx_globals['liveview']['show']
-    mfx_global_pars['LocLimit'] = mfx_globals['locLimit']
-    mfx_global_pars['Stickiness'] = mfx_globals['stickiness']
-    mfx_global_pars['FieldAlgorithm'] = mfx_globals['field']['algo']
-    mfx_global_pars['FieldGeoFactor'] = mfx_globals['field']['fldGeoFactor']
-    mfx_global_pars['FieldStride'] = mfx_globals['field']['stride']
+    mfx_global_pars = get_global_pars_from_mfx_attrs(mfx_attrs)
 
     return (md_by_itrs,mfx_global_pars)
 
+def get_metadata_from_mfx_attrs_legacy(mfx_attrs):
+    mfx_itrs =    mfx_attrs['measurement']['threads'][0]['sequences'][0]['Itr']
+
+    # below code needed fixing with pandas 3.x
+    # fell foul of copy-on-write changes
+    # now fixed with changed use of loc method
+    md_by_itrs = pd.DataFrame(columns=['IterationNumber','BackgroundThreshold',
+                                       'PhotonLimit', 'CCRLimit', 'DwellTime_ms',
+                                       'PatternGeoFactor','PatternRepeat', 'PatternGeometryAbbrev',
+                                       'Strategy'],
+                              index=range(len(mfx_itrs)))
+    
+    for i, itr in enumerate(mfx_itrs):
+        md_by_itrs.loc[i,'IterationNumber'] = i
+        md_by_itrs.loc[i,'BackgroundThreshold'] = itr['bgcThreshold']
+        md_by_itrs.loc[i,'PhotonLimit'] = itr['phtLimit']
+        md_by_itrs.loc[i,'CCRLimit'] = itr['ccrLimit']
+        md_by_itrs.loc[i,'DwellTime_ms'] = 1e3*itr['patDwellTime']
+        md_by_itrs.loc[i,'PatternGeoFactor'] = itr['patGeoFactor']
+        md_by_itrs.loc[i,'PatternRepeat'] = itr['patRepeat']
+        md_by_itrs.loc[i,'PatternGeometryAbbrev'] = itr['Mode']['pattern'].replace('hexagon','hex').replace('zline','zl').replace('square','sq')
+        md_by_itrs.loc[i,'Strategy'] = itr['Mode']['strategy']
+
+    mfx_global_pars = get_global_pars_from_mfx_attrs(mfx_attrs)
+
+    return (md_by_itrs,mfx_global_pars)
 
 ##############################
 ### tabular classes  #########
@@ -672,8 +815,9 @@ class MinfluxZarrSource(MinfluxNpySource):
         self.zarr = archz
         self._own_file = True # is this necessary? Normally only used by HDF to close HFD on destroy, zarr does not need "closing"
 
+        self.mdh = _get_mdh_zarr(filename,archz)
         # NOTE: no further 'locations valid' check should be necessary - we filter already in the conversion function
-        self.res = minflux_zarr2pyme(archz)
+        self.res = minflux_zarr2pyme(archz,mdh=self.mdh)
         
         self._keys = list(self.res.dtype.names)
 
@@ -738,7 +882,7 @@ def monkeypatch_npyorzarr_io(visFr):
         ds = MinfluxZarrSource(filename)
         ds.filename = filename
         
-        ds.mdh = _get_mdh_zarr(filename,ds.zarr)
+        # ds.mdh = _get_mdh_zarr(filename,ds.zarr)
         logger.info('loaded MINFLUX zarr.zip ...')
         return ds
     
@@ -854,7 +998,7 @@ class Pipeline(pipeline.Pipeline):
             if not zip_is_minflux_zarr_data(filename,warning=True):
                 raise RuntimeError("can't read pipeline data from MINFLUX zarr file - not a MINFLUX data set?")
             ds = MinfluxZarrSource(filename)
-            ds.mdh = _get_mdh_zarr(filename,ds.zarr)
+            # ds.mdh = _get_mdh_zarr(filename,ds.zarr)
             return ds
         else:
             return super()._ds_from_file(filename, **kwargs)
