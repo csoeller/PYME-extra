@@ -336,6 +336,14 @@ def minflux_npy2pyme_legacy(data,make_clump_index=True,with_cfr_std=False):
                     'tim': data['tim'], # we also keep the original float time index, units are [s]                  
                     })
 
+    if props['DwellTime_ms_final'] is not None:
+        # eta is capturing the number of TCP cycles per localization as detailed in
+        # Vogler, B. T. L., De Angelis, G., Zhao, Z., Eggeling, C. & Reina, F.
+        # Parameter optimization for MINFLUX microscopy enabled single particle tracking.
+        # Commun Biol 8, 1573 (2025).
+        eta = pymedct['eco']/(pymedct['efo']*props['DwellTime_ms_final']*1e-3) # 1e-3 to account for ms units
+        pymedct.update({'eta' : eta})
+
     if has_lnc:
         pymedct.update({'x_nc' : posnm_nc[:,0],
                         'y_nc' : posnm_nc[:,1]})
@@ -535,15 +543,14 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False,mdh=None)
                         'track_errx':stdx.copy(), 'track_erry':stdy.copy(),
                         'track_lims':track_lims,
                         })
-        if props['DwellTime_ms_final'] is not None:
-            # eta is capturing the number of TCP cycles per localization as detailed in
-            # Vogler, B. T. L., De Angelis, G., Zhao, Z., Eggeling, C. & Reina, F.
-            # Parameter optimization for MINFLUX microscopy enabled single particle tracking.
-            # Commun Biol 8, 1573 (2025).
-            eta = dfin['eco']/(dfin['efo']*props['DwellTime_ms_final']*1e-3) # 1e-3 to account for ms units
-            pymedct.update({'eta' : eta})
-
     pymedct.update({'error_x' : stdx,'error_y' : stdy})
+    if props['DwellTime_ms_final'] is not None:
+        # eta is capturing the number of TCP cycles per localization as detailed in
+        # Vogler, B. T. L., De Angelis, G., Zhao, Z., Eggeling, C. & Reina, F.
+        # Parameter optimization for MINFLUX microscopy enabled single particle tracking.
+        # Commun Biol 8, 1573 (2025).
+        eta = dfin['eco']/(dfin['efo']*props['DwellTime_ms_final']*1e-3) # 1e-3 to account for ms units
+        pymedct.update({'eta' : eta})
     if props['Is3D']:
         pymedct.update({'z':posnm[:,2], 'error_z' : stdz})
 
