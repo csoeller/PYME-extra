@@ -541,6 +541,8 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Util', "Plot event scatter as function of position in clump", self.OnClumpScatterPosPlot)
         visFr.AddMenuItem('MINFLUX>Util', "Set plotting defaults (inc font size)", self.OnSetMINFLUXPlottingdefaults)
         visFr.AddMenuItem('MINFLUX>Util', "Estimate region size (with output filter)", self.OnEstimateMINFLUXRegionSize)
+        visFr.AddMenuItem('MINFLUX>Util', "Add MINFLUX confocal data to 3D scene", self.OnAddConfocalView,
+                          helpText='add confocal view; image origin metadata MUST already be set correctly from MSR data; use PYMEImage to make suitable TIFF images from MSR')
         
         visFr.AddMenuItem('MINFLUX>MBM', "Plot mean MBM info (and if present origami info)", self.OnMBMplot)
         visFr.AddMenuItem('MINFLUX>MBM', "Show MBM tracks", self.OnMBMtracks)
@@ -565,6 +567,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Tracking', "Add traces as tracks (from tid)", self.OnAddMINFLUXTracksTid)
         visFr.AddMenuItem('MINFLUX>Tracking', "Calculate consensus time step (using tid for traces)", self.OnCalcDtConsensus)
         visFr.AddMenuItem('MINFLUX>Tracking', "Tracks MSD overview", self.OnTrackMSDOverview)
+        
         visFr.AddMenuItem('MINFLUX>Colour', "Plot colour stats", self.OnPlotColourStats)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
@@ -584,7 +587,31 @@ class MINFLUXanalyser():
         xsize = p['x'].max() - p['x'].min()
         ysize = p['y'].max() - p['y'].min()
         warn("region size is %d x % d nm (%.1f x %.1f um" % (xsize,ysize,1e-3*xsize,1e-3*ysize))
-                
+
+    def OnAddConfocalView(self, event):
+        from PYME.IO.FileUtils import nameUtils
+        pipeline = self.visFr.pipeline
+        imagename = unique_name('image',pipeline.dataSources.keys())
+
+        filename = wx.FileSelector("Choose a file to open",
+                                   nameUtils.genResultDirectoryPath(),
+                                   wildcard='|'.join(['TIFF image (*.tif)|*.tif']) # need to check if constraining to tiff is ok
+                                   )
+        if filename == '':
+            return
+
+        pipeline.load_extra_datasources(**{imagename:filename})
+        zsz = pipeline.dataSources[imagename].data_xyztc.shape[2]
+        if zsz > 1:
+            zpos = zsz // 2
+        else:
+            zpos = 0
+
+        from PYME.LMVis.layers.image_layer import ImageRenderLayer
+        layer = ImageRenderLayer(self.visFr.pipeline, dsname=imagename, method='image',
+                                 cmap='gray', z_pos=zpos)
+        self.visFr.add_layer(layer)
+
     def OnSetMINFLUXPlottingdefaults(self, event):
         if not self.plottingDefaults.configure_traits(kind='modal'):
             return
@@ -954,7 +981,7 @@ class MINFLUXanalyser():
                                  vertexColour=vc,cmap='plasma',
                                  line_width=2.0, alpha=0.5)
         self.visFr.add_layer(layer)
-
+        
     def OnAddMINFLUXTracksTid(self, event):
         pipeline = self.visFr.pipeline
         if 'tid' in pipeline.keys():
@@ -967,8 +994,6 @@ class MINFLUXanalyser():
                                  vertexColour=vc,cmap='plasma',
                                  line_width=2.0, alpha=0.5)
         self.visFr.add_layer(layer)
-
-
 
     def OnCalcDtConsensus(self, event):
         from PYMEcs.Analysis.Tracking import find_timestep
