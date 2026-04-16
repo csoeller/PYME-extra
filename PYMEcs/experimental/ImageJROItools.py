@@ -68,6 +68,8 @@ class ImageJROItools:
         else:
             origin_z = 0
         mdh['Origin.z'] = origin_z
+
+        warn("Informational message only: \n\nadded image origin at\n\n    %.1f, %.1f\n\nfrom MSR metdata" % (mdh['Origin.x'],mdh['Origin.y']))
         
     def OnROISet(self, event=None):
         roi_filename = wx.FileSelector('Load ROI set...',
