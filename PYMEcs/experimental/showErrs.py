@@ -39,7 +39,7 @@ class ShowErr:
             Warn(None,'aborting: cannot find log file, tried %s and %s' % (self.getLogFileName(pidoffset = -1),
                                                                            self.getLogFileName(pidoffset = 0)))
       if ok:
-         with open(fname,"r") as f:
+         with open(fname,"r",encoding='utf-8') as f:
             txt = "\n".join(f.readlines())
             dlg = ScrolledMessageDialog(self.visFr, txt, "VisGUI Error Output", size=(900,400),
                                         style=wx.RESIZE_BORDER | wx.DEFAULT_DIALOG_STYLE )
