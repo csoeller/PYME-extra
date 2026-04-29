@@ -835,6 +835,47 @@ class MinfluxZarrSource(MinfluxNpySource):
 ### Register IO with PYME ####
 ##############################
 
+# the top-level functions below are reused in the visFr method patching and the derived Pipeline object further below
+def _load_ds_npy(filename):
+    ds = MinfluxNpySource(filename)
+    ds.filename = filename
+        
+    data = np.load(filename)
+    ds.mdh = _get_mdh(data,filename)
+
+    return ds
+
+def _load_ds_zarrzip(filename):
+    ds = MinfluxZarrSource(filename)
+    ds.filename = filename
+        
+    # ds.mdh = _get_mdh_zarr(filename,ds.zarr)
+    logger.info('loaded MINFLUX zarr.zip ...')
+    return ds
+
+### we now also need to monkey_patch the _load_input method of the pipeline recipe
+### this should allow session loading to succeed
+def _load_input_npyorzarr(self, filename, key='input', metadata_defaults={}, cache={}, default_to_image=True, args={}):
+    """
+    Load input data from a file and inject into namespace
+    """
+    from PYME.IO import unifiedIO
+    import os
+
+    if '?' in filename:
+        self._load_input_original(filename,key=key,metadata_defaults=metadata_defaults,
+                                  cache=cache,default_to_image=default_to_image,args=args)
+    if os.path.splitext(filename)[1] == '.npy': # MINFLUX NPY file
+        logger.info('.npy file, trying to load as MINFLUX npy ...')
+        self.namespace[key] = _load_ds_npy(filename)
+    elif os.path.splitext(filename)[1] == '.zip': # MINFLUX NPY file
+        logger.info('.npy file, trying to load as MINFLUX zarr ...')
+        self.namespace[key] = _load_ds_zarrzip(filename)
+    else:
+        self._load_input_original(filename,key=key,metadata_defaults=metadata_defaults,
+                                  cache=cache,default_to_image=default_to_image,args=args)
+
+
 # we are monkeypatching pipeline and VisGUIFrame methods to sneak MINFLUX npy IO in;
 # this gets called from the MINFLUX plugin in the Plug routine;
 # this way it can patch the relevant VisGUIFrame and Pipeline methods in the instances
@@ -875,23 +916,6 @@ def monkeypatch_npyorzarr_io(visFr):
 
     visFr._populate_open_args_original = visFr._populate_open_args
     visFr._populate_open_args = types.MethodType(_populate_open_args_npyorzarr,visFr)
-
-    def _load_ds_npy(filename):
-        ds = MinfluxNpySource(filename)
-        ds.filename = filename
-        
-        data = np.load(filename)
-        ds.mdh = _get_mdh(data,filename)
-
-        return ds
-
-    def _load_ds_zarrzip(filename):
-        ds = MinfluxZarrSource(filename)
-        ds.filename = filename
-        
-        # ds.mdh = _get_mdh_zarr(filename,ds.zarr)
-        logger.info('loaded MINFLUX zarr.zip ...')
-        return ds
     
     def _ds_from_file_npyorzarr(self, filename, **kwargs):
         if os.path.splitext(filename)[1] == '.npy': # MINFLUX NPY file
@@ -908,28 +932,6 @@ def monkeypatch_npyorzarr_io(visFr):
 
     from PYMEcs.IO.NPC import findNPCset
     visFr.pipeline.get_npcs = types.MethodType(findNPCset,visFr.pipeline) # we make this a method for pipeline to make access easier
-
-    ### we now also need to monkey_patch the _load_input method of the pipeline recipe
-    ### this should allow session loading to succeed
-    def _load_input_npyorzarr(self, filename, key='input', metadata_defaults={}, cache={}, default_to_image=True, args={}):
-        """
-        Load input data from a file and inject into namespace
-        """
-        from PYME.IO import unifiedIO
-        import os
-
-        if '?' in filename:
-            self._load_input_original(filename,key=key,metadata_defaults=metadata_defaults,
-                                      cache=cache,default_to_image=default_to_image,args=args)
-        if os.path.splitext(filename)[1] == '.npy': # MINFLUX NPY file
-            logger.info('.npy file, trying to load as MINFLUX npy ...')
-            self.namespace[key] = _load_ds_npy(filename)
-        elif os.path.splitext(filename)[1] == '.zip': # MINFLUX NPY file
-            logger.info('.npy file, trying to load as MINFLUX zarr ...')
-            self.namespace[key] = _load_ds_zarrzip(filename)
-        else:
-            self._load_input_original(filename,key=key,metadata_defaults=metadata_defaults,
-                                      cache=cache,default_to_image=default_to_image,args=args)
 
     if '_load_input' in dir(visFr.pipeline.recipe):
         visFr.pipeline.recipe._load_input_original = visFr.pipeline.recipe._load_input
@@ -1014,46 +1016,6 @@ class Pipeline(pipeline.Pipeline):
     # we need init in this derived class to "patch" the "_load_input" method of the created recipe instance
     def __init__(self, filename=None, visFr=None, execute_on_invalidation=True):
         import types
-        def _load_ds_npy(filename):
-            ds = MinfluxNpySource(filename)
-            ds.filename = filename
-        
-            data = np.load(filename)
-            ds.mdh = _get_mdh(data,filename)
-
-            return ds
-
-        def _load_ds_zarrzip(filename):
-            ds = MinfluxZarrSource(filename)
-            ds.filename = filename
-        
-            # ds.mdh = _get_mdh_zarr(filename,ds.zarr)
-            logger.info('loaded MINFLUX zarr.zip ...')
-            return ds
-        
-        ### we now also need to monkey_patch the _load_input method of the pipeline recipe
-        ### this should allow session loading to succeed
-        def _load_input_npyorzarr(self, filename, key='input', metadata_defaults={}, cache={}, default_to_image=True, args={}):
-            """
-            Load input data from a file and inject into namespace
-            """
-            from PYME.IO import unifiedIO
-            import os
-
-            #print("in _load_input_npyorzarr, key=%s, filename=%s" % (key,filename))
-            if '?' in filename:
-                self._load_input_original(filename,key=key,metadata_defaults=metadata_defaults,
-                                          cache=cache,default_to_image=default_to_image,args=args)
-            if os.path.splitext(filename)[1] == '.npy': # MINFLUX NPY file
-                logger.info('.npy file, trying to load as MINFLUX npy ...')
-                self.namespace[key] = _load_ds_npy(filename)
-            elif os.path.splitext(filename)[1] == '.zip': # MINFLUX NPY file
-                logger.info('.npy file, trying to load as MINFLUX zarr ...')
-                #print("loading MINFLUX zarr...")
-                self.namespace[key] = _load_ds_zarrzip(filename)
-            else:
-                self._load_input_original(filename,key=key,metadata_defaults=metadata_defaults,
-                                          cache=cache,default_to_image=default_to_image,args=args)
 
         super().__init__(filename, visFr, execute_on_invalidation)
         self.recipe._load_input_original = self.recipe._load_input
