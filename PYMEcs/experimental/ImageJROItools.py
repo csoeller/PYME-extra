@@ -19,10 +19,10 @@ class ImageJROItools:
                           'Generate ROI mask from Fiji ROISet',
                           self.OnROISet,
                           helpText='Load at FIJI ROISet (e.g. ROISet.zip) and construct a ROI mask from it')
-        dsviewer.AddMenuItem('Experimental>Overlays',
-                          'Obtain Origin Info from bioformats metadata',
+        dsviewer.AddMenuItem('Experimental>OBF',
+                          'Obtain Origin Info from OBF metadata (for .obf and .msr sourced data)',
                           self.OnBFOrigin,
-                          helpText='works only for data loaded from MSR files; get origin info from metadata; used for image overlays for MINFLUX data')
+                          helpText='works only for data loaded from MSR or OBF files; get origin info from metadata; used for image overlays for MINFLUX data')
 
     def OnBFOrigin(self, event=None):
         mdh = self.image.mdh
