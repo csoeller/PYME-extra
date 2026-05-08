@@ -2483,3 +2483,146 @@ class TrackingConsensusTimes(ModuleBase):
         mapped.addColumn('track_dtcms',tt_dtms)
 
         return mapped
+
+
+def calcmean_bead_props(beads):
+    meanbeads = {}
+    ids = beads['beadID'].astype('i')
+    idsunique = np.unique(ids)
+    bdict = {}
+    has_z = True
+
+    for j,id in enumerate(idsunique):
+        idkey = "R%d" % id
+        bprops = {}
+        idx = ids == id
+        bprops['beadID'] = id
+        bprops['x'] = np.mean(beads['x'][idx])
+        bprops['y'] = np.mean(beads['y'][idx])
+        bprops['error_x'] = np.std(beads['x'][idx])
+        bprops['error_y'] = np.std(beads['y'][idx])
+        if has_z:
+            bprops['z'] = np.mean(beads['z'][idx])
+            bprops['error_z'] = np.std(beads['z'][idx])
+        bprops['good'] = np.mean(beads['good'][idx]) # this SHOULD be a constant value for all elements
+        bprops['A'] = np.mean(beads['A'][idx])
+        
+        meanbeads[idkey] = bprops
+        
+    return meanbeads
+
+# match up good beads and calculate mean shifts
+# if not enough good intersecting beads: shift = 0
+def calcshifts(srcbeads,targetbeads):
+    shifts_dict = {}
+    usable_shifts = dict(x=[],y=[],z=[])
+    for key in ['x','y','z',
+                'error_x','error_y','error_z',
+                'error_target_x','error_target_y','error_target_z',
+                'beadID', 'good', 'target_good', 'A', 'target_A',
+                'shift_x', 'shift_y', 'shift_z']:
+        shifts_dict[key] = []
+    for bead in srcbeads:
+        bdict = srcbeads[bead]
+        for key in ['x','y','z',
+                    'error_x','error_y','error_z',
+                    'beadID', 'good','A']:
+            shifts_dict[key].append(bdict[key])
+        if bead in targetbeads:
+            tbdict = targetbeads[bead]
+            shifts_dict['error_target_x'].append(tbdict['error_x'])
+            shifts_dict['error_target_y'].append(tbdict['error_y'])
+            shifts_dict['error_target_z'].append(tbdict['error_z'])
+            shifts_dict['target_A'].append(tbdict['A'])
+            shifts_dict['target_good'].append(tbdict['good'])
+            # now check if both beads are good
+            if tbdict['good'] and bdict['good']:
+                shift_x = bdict['x']-tbdict['x']
+                shift_y = bdict['y']-tbdict['y']
+                shift_z = bdict['z']-tbdict['z']
+                usable_shifts['x'].append(shift_x)
+                usable_shifts['y'].append(shift_y)
+                usable_shifts['z'].append(shift_z)
+                shifts_dict['shift_x'].append(shift_x)
+                shifts_dict['shift_y'].append(shift_y)
+                shifts_dict['shift_z'].append(shift_z)
+            else:
+                for key in ['shift_x', 'shift_y', 'shift_z']:
+                    shifts_dict[key].append(0)
+        else:
+            for key in ['error_target_x','error_target_y','error_target_z','target_A',
+                        'shift_x', 'shift_y', 'shift_z','target_good']:
+                shifts_dict[key].append(0)
+
+    shifts_dict_np = {}
+    for key in shifts_dict:
+        shifts_dict_np[key] = np.array(shifts_dict[key])
+
+    if len(usable_shifts['x']) > 0:
+        shifts = [np.mean(usable_shifts['x']),np.mean(usable_shifts['y']),np.mean(usable_shifts['z'])]
+    else:
+        shifts = [0,0,0]
+
+    return shifts, shifts_dict_np
+
+@register_module('AlignFromMBMs')
+class AlignFromMBMs(ModuleBase):
+    inputlocalizations = Input('localizations')
+    inputSrcMBM = Input('source_mbmtracks')
+    inputTargetMBM = Input('target_mbmtracks')
+
+    outputlocalizations = Output('localizations_aligned')
+    outputMBMshifts = Output('mbm_shifts') # this will be a small set of shifts, one per src mbm bead
+    outputsrcMBM = Output('source_mbmtracks_aligned')
+
+    tolerance = Float(50.0) # biggest allowed shifts without warning - checking not yet implemented
+
+    def run(self, inputlocalizations, inputSrcMBM, inputTargetMBM):
+        
+        locs = inputlocalizations
+        srcmbm = inputSrcMBM
+        tmbm = inputTargetMBM
+
+        # check srcmbm and tmbm have the required fields: beadID, good
+        for field in ['beadID', 'good']:
+            if field not in srcmbm.keys():
+                raise RuntimeError("inputSrcMBM lacks required property '%s'" % field)
+            if field not in tmbm.keys():
+                raise RuntimeError("inputTargetMBM lacks required property '%s'" % field)
+        
+        # calculate mean positions and stddevs
+        srcbeads = calcmean_bead_props(srcmbm)
+        targetbeads = calcmean_bead_props(tmbm)
+
+        # match up good beads and calculate mean shifts
+        # if not enough good intersecting beads: shift = 0
+        shifts, shifts_dict = calcshifts(srcbeads,targetbeads)
+
+        has_z = 'z' in locs.keys() and np.std(locs['z']) > 1.0
+        # apply shifts to locs to make locs_aligned
+        mapped = tabular.MappingFilter(locs)
+        mapped.addColumn('x',locs['x']-shifts[0])
+        mapped.addColumn('y',locs['y']-shifts[1])
+        if has_z:
+            mapped.addColumn('z',locs['z']-shifts[2])
+
+        # apply shifts to srcmbm to make srcmbm_aligned
+        mappedmbm = tabular.MappingFilter(srcmbm)
+        mappedmbm.addColumn('x',srcmbm['x']-shifts[0])
+        mappedmbm.addColumn('y',srcmbm['y']-shifts[1])
+        if has_z:
+            mappedmbm.addColumn('z',srcmbm['z']-shifts[2])
+
+        from PYME.IO.tabular import DictSource
+        shifts_ds = DictSource(shifts_dict)
+        
+        # store shift in metadata
+        from PYME.IO import MetaDataHandler
+        mdh = MetaDataHandler.DictMDHandler(locs.mdh)
+        mdh['MINFLUX.MBMAlignmentShift'] = shifts
+        mapped.mdh = mdh
+        mdh = MetaDataHandler.DictMDHandler(mapped.mdh)
+        mappedmbm.mdh = mdh
+
+        return dict(outputlocalizations=mapped, outputsrcMBM=mappedmbm, outputMBMshifts=shifts_ds)
+
