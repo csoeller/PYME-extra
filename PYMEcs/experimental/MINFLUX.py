@@ -520,7 +520,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX', "Localisation Error analysis", self.OnErrorAnalysis)
         visFr.AddMenuItem('MINFLUX', "Cluster sizes - 3D", self.OnCluster3D)
         visFr.AddMenuItem('MINFLUX', "Cluster sizes - 2D", self.OnCluster2D)
-        visFr.AddMenuItem('MINFLUX', "Analyse Localization Rate", self.OnLocalisationRate)
+        visFr.AddMenuItem('MINFLUX', "Analyse Localization Rate", self.OnLocalizationRate)
         visFr.AddMenuItem('MINFLUX', "EFO histogram (photon rates)", self.OnEfoAnalysis)
         visFr.AddMenuItem('MINFLUX', "plot tracking correction (if available)", self.OnTrackPlot)
         visFr.AddMenuItem('MINFLUX', "Analysis settings", self.OnMINFLUXSettings)
@@ -1387,7 +1387,7 @@ class MINFLUXanalyser():
 
         warn(msg)
 
-    def OnLocalisationRate(self, event):
+    def OnLocalizationRate(self, event):
         pipeline = self.visFr.pipeline
         curds = pipeline.selectedDataSourceKey
         pipeline.selectDataSource(self.analysisSettings.defaultDatasourceForAnalysis)
@@ -1401,7 +1401,9 @@ class MINFLUXanalyser():
             return
         pipeline.selectDataSource(curds)
 
-        analyse_locrate(pipeline,datasource=self.analysisSettings.defaultDatasourceForAnalysis,showTimeAverages=True)
+        analyse_locrate(pipeline,datasource=self.analysisSettings.defaultDatasourceForAnalysis,
+                        ds_coalesced=self.analysisSettings.defaultDatasourceCoalesced,
+                        showTimeAverages=True)
 
     def OnEfoAnalysis(self, event):
         pipeline = self.visFr.pipeline
@@ -1413,8 +1415,9 @@ class MINFLUXanalyser():
         plt.figure()
         h = plt.hist(1e-3*pipeline['efo'],bins='auto',range=(0,200))
         dskey = pipeline.selectedDataSourceKey
+        ts = pipeline.mdh.get('MINFLUX.TimeStamp','UNKNOWN') # grep the timestamp from the datasource we analyzed
         plt.xlabel('efo (photon rate in kHz)')
-        plt.title("EFO stats, using datasource '%s'" % dskey)
+        plt.title('EFO stats for series %s, from DS "%s"' % (ts,dskey))
 
         pipeline.selectDataSource(curds)
 

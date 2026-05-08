@@ -134,7 +134,7 @@ def plot_density_stats_sns(ds,objectID='dbscanClumpID'):
 
 def plot_stats_minflux(deltas, durations, tdintrace, efo_or_dtovertime, times,
                        showTimeAverages=False, dsKey=None, areaString=None,
-                       statStrings=None):
+                       statStrings=None, timeStamp=None):
     from scipy.stats import iqr
     
     fig, (ax1, ax2) = plt.subplots(2, 2)
@@ -207,8 +207,14 @@ def plot_stats_minflux(deltas, durations, tdintrace, efo_or_dtovertime, times,
         h = ax2[1].hist(1e-3*efo_or_dtovertime,bins=100,range=(0,200))
         # ax2[0].plot([tdmedian,tdmedian],[0,h[0].max()])
         ax2[1].set_xlabel('efo (photon rate kHz)')
+    if timeStamp is None:
+        ts = "UNKNOWN"
+    else:
+        ts = timeStamp
     if dsKey is not None:
-        plt.suptitle('Loc rate analysis from DS %s' % dsKey)
+        plt.suptitle('Series %s loc rates for DS "%s"' % (ts,dsKey))
+    else:
+        plt.suptitle('Series %s loc rates for unknown DS' % (ts))
     plt.tight_layout()
 
 
@@ -268,7 +274,8 @@ def analyse_locrate_pdframe(datain,use_invalid=False,showTimeAverages=True):
 
 
 # similar version but now using a pipeline
-def analyse_locrate(data,datasource='Localizations',showTimeAverages=True, plot=True):
+def analyse_locrate(data,datasource='Localizations',ds_coalesced='coalesced_nz',
+                    showTimeAverages=True, plot=True):
     curds = data.selectedDataSourceKey
     data.selectDataSource(datasource)
     bins = np.arange(int(data['clumpIndex'].max())+1) + 0.5
@@ -290,14 +297,16 @@ def analyse_locrate(data,datasource='Localizations',showTimeAverages=True, plot=
     durations_proper = durations + tdmedian # we count one extra localisation, using the median duration
     # the extra is because we leave at least one localisation out from the total timing when we subtract ends-starts
 
+    ts = data.mdh.get('MINFLUX.TimeStamp') # grep the timestamp from the datasource we analyzed
+    
     lenx_um = 1e-3*(data['x'].max()-data['x'].min())
     leny_um = 1e-3*(data['y'].max()-data['y'].min())
     area_string = 'Area %.1fx%.1f um^2' % (lenx_um,leny_um)
     durationh = data['tim'].max()/3.6e3
     ntraces = deltas.size + 1
     traces_per_min = ntraces / data['tim'].max() * 60
-    if 'coalesced_nz' in data.dataSources.keys():
-        data.selectDataSource('coalesced_nz')
+    if ds_coalesced in data.dataSources.keys():
+        data.selectDataSource(ds_coalesced) # this could be wrong if more than 1 datasource!
         kept_traces = data['x'].size
         kept_traces_str = " (%d post filt)" % kept_traces
     else:
@@ -313,8 +322,9 @@ def analyse_locrate(data,datasource='Localizations',showTimeAverages=True, plot=
             delta_av_times = 0.5*(bin_edges[:-1] + bin_edges[1:]) # bin centres
             plot_stats_minflux(deltas, durations_proper, tdintrace, delta_averages, delta_av_times,
                                showTimeAverages=True, dsKey = datasource, areaString=area_string,
-                               statStrings=stat_strings)
+                               statStrings=stat_strings,timeStamp=ts)
         else:
-            plot_stats_minflux(deltas, durations_proper, tdintrace, data['efo'], None, dsKey = datasource, areaString=area_string)
+            plot_stats_minflux(deltas, durations_proper, tdintrace, data['efo'], None, dsKey = datasource,
+                               areaString=area_string, timeStamp=ts)
 
     return (starts,ends,deltas,durations_proper,tdintrace)
