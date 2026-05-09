@@ -2520,7 +2520,7 @@ def calcshifts(srcbeads,targetbeads):
                 'error_x','error_y','error_z',
                 'error_target_x','error_target_y','error_target_z',
                 'beadID', 'good', 'target_good', 'A', 'target_A',
-                'shift_x', 'shift_y', 'shift_z']:
+                'shift_x', 'shift_y', 'shift_z', 'shift_used']:
         shifts_dict[key] = []
     for bead in srcbeads:
         bdict = srcbeads[bead]
@@ -2536,19 +2536,19 @@ def calcshifts(srcbeads,targetbeads):
             shifts_dict['target_A'].append(tbdict['A'])
             shifts_dict['target_good'].append(tbdict['good'])
             # now check if both beads are good
+            shift_x = bdict['x']-tbdict['x']
+            shift_y = bdict['y']-tbdict['y']
+            shift_z = bdict['z']-tbdict['z']
+            shifts_dict['shift_x'].append(shift_x)
+            shifts_dict['shift_y'].append(shift_y)
+            shifts_dict['shift_z'].append(shift_z)
             if tbdict['good'] and bdict['good']:
-                shift_x = bdict['x']-tbdict['x']
-                shift_y = bdict['y']-tbdict['y']
-                shift_z = bdict['z']-tbdict['z']
                 usable_shifts['x'].append(shift_x)
                 usable_shifts['y'].append(shift_y)
                 usable_shifts['z'].append(shift_z)
-                shifts_dict['shift_x'].append(shift_x)
-                shifts_dict['shift_y'].append(shift_y)
-                shifts_dict['shift_z'].append(shift_z)
+                shifts_dict['shift_used'].append(1)
             else:
-                for key in ['shift_x', 'shift_y', 'shift_z']:
-                    shifts_dict[key].append(0)
+                shifts_dict['shift_used'].append(0)
         else:
             for key in ['error_target_x','error_target_y','error_target_z','target_A',
                         'shift_x', 'shift_y', 'shift_z','target_good']:
@@ -2623,6 +2623,10 @@ class AlignFromMBMs(ModuleBase):
         mapped.mdh = mdh
         mdh = MetaDataHandler.DictMDHandler(mapped.mdh)
         mappedmbm.mdh = mdh
-
+        
+        mdh = MetaDataHandler.DictMDHandler()
+        mdh['MINFLUX.MBMAlignmentShift'] = shifts
+        shifts_ds.mdh = mdh
+        
         return dict(outputlocalizations=mapped, outputsrcMBM=mappedmbm, outputMBMshifts=shifts_ds)
 

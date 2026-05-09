@@ -550,6 +550,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>MBM', "Save MBM bead trajectories to npz file", self.OnMBMSave)
         visFr.AddMenuItem('MINFLUX>MBM', "Save MBM bead settings to json file", self.OnMBMSettingsSave)
         visFr.AddMenuItem('MINFLUX>MBM', "Save MBM lowess cache", self.OnMBMLowessCacheSave)
+        visFr.AddMenuItem('MINFLUX>MBM', "Plot MBM alignment", self.OnMBMAlignmentPlot)
         
         visFr.AddMenuItem('MINFLUX>RyRs', "Plot corner info", self.OnCornerplot)
         visFr.AddMenuItem('MINFLUX>RyRs', "Add modules for RyR density estimate", self.OnRyRClusterDensityRecipe)
@@ -763,6 +764,11 @@ class MINFLUXanalyser():
         axs[1].set_ylabel('#')
         axs[1].legend(loc="upper right")
         plt.tight_layout()
+
+    def OnMBMAlignmentPlot(self,event):
+        from PYMEcs.Analysis.MINFLUX import plot_alignment_shifts
+        pipeline = self.visFr.pipeline
+        plot_alignment_shifts(pipeline)
 
     def OnMBMLowessCacheSave(self,event):
         pipeline = self.visFr.pipeline
