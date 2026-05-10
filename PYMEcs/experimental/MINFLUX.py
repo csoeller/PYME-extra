@@ -465,6 +465,9 @@ class MINFLUXSettings(HasTraits):
     defaultDatasourceCoalesced = CStr('coalesced_nz',label='default datasource for coalesced analysis',
                                         desc="the datasource key that will be used by default when a " +
                                         "coalesced data source is required")
+    defaultDatasourceCoalescedBBfilt = CStr('wtp_f_merged',label='default datasource for coalesced analysis post BB filtering',
+                                        desc="the datasource key that will be used by default when a " +
+                                        "coalesced data source with bounding box filtering is required")
     defaultDatasourceWithClumps = CStr('with_clumps',label='default datasource for clump analysis',
                                         desc="the datasource key that will be used by default when a " +
                                         "data source with clump info is required")
@@ -1409,6 +1412,7 @@ class MINFLUXanalyser():
 
         analyse_locrate(pipeline,datasource=self.analysisSettings.defaultDatasourceForAnalysis,
                         ds_coalesced=self.analysisSettings.defaultDatasourceCoalesced,
+                        ds_coalesced_bbfilt=self.analysisSettings.defaultDatasourceCoalescedBBfilt,
                         showTimeAverages=True)
 
     def OnEfoAnalysis(self, event):

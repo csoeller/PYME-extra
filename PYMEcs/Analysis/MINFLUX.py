@@ -198,11 +198,20 @@ def plot_stats_minflux(deltas, durations, tdintrace, efo_or_dtovertime, times,
         ax2[1].set_xlabel('TBT running time average [s]')
         ax2[1].set_ylim([0, None])
         if statStrings is not None:
-            ax2[1].text(0.95, 0.17, statStrings[0], horizontalalignment='right',
+            if len(statStrings)>2:
+                topy=0.23
+                midy=0.13
+                boty=0.03
+            else:
+                topy=0.17
+                midy=0.07
+            ax2[1].text(0.95, topy, statStrings[0], horizontalalignment='right',
                         verticalalignment='bottom', transform=ax2[1].transAxes)
-            ax2[1].text(0.95, 0.07, statStrings[1], horizontalalignment='right',
+            ax2[1].text(0.95, midy, statStrings[1], horizontalalignment='right',
                         verticalalignment='bottom', transform=ax2[1].transAxes)
-
+            if len(statStrings)>2:
+                ax2[1].text(0.95, boty, statStrings[2], horizontalalignment='right',
+                            verticalalignment='bottom', transform=ax2[1].transAxes)
     else:
         h = ax2[1].hist(1e-3*efo_or_dtovertime,bins=100,range=(0,200))
         # ax2[0].plot([tdmedian,tdmedian],[0,h[0].max()])
@@ -275,6 +284,7 @@ def analyse_locrate_pdframe(datain,use_invalid=False,showTimeAverages=True):
 
 # similar version but now using a pipeline
 def analyse_locrate(data,datasource='Localizations',ds_coalesced='coalesced_nz',
+                    ds_coalesced_bbfilt='wtp_f_merged',
                     showTimeAverages=True, plot=True):
     curds = data.selectedDataSourceKey
     data.selectDataSource(datasource)
@@ -312,8 +322,18 @@ def analyse_locrate(data,datasource='Localizations',ds_coalesced='coalesced_nz',
     else:
         kept_traces = -1 # need to come up with better option here
         kept_traces_str = ''
+    if ds_coalesced_bbfilt in data.dataSources.keys() and kept_traces>0:
+        data.selectDataSource(ds_coalesced_bbfilt) # this could be wrong if more than 1 datasource!
+        bbfiltered_traces = data['x'].size
+        bbfpercent = 100.0*bbfiltered_traces/kept_traces
+        bbfiltered_traces_str = "%d traces bbf, %.1f %%" % (bbfiltered_traces,bbfpercent)
+    else:
+        bbfiltered_traces = -1
+        bbfiltered_traces_str = ''
     stat_strings = [ "%.1f h, %.1f traces/min" % (durationh,traces_per_min),
-                     f"{ntraces} traces" + kept_traces_str]
+                     f"{ntraces} traces" + kept_traces_str ]
+    if bbfiltered_traces > 0:
+        stat_strings.append(bbfiltered_traces_str)
     data.selectDataSource(curds)
 
     if plot:
@@ -364,7 +384,7 @@ def plot_alignment_shifts(pipeline):
 
     if shifts is not None:
         plt.scatter([shifts[0]],[shifts[1]], c='orange', alpha=0.5, lw=0, s=80)
-        valuestr = ": %.1f, %.1f nm" % (shifts[0],shifts[1])
+        valuestr = ": %.1f, %.1f nm, z=%.1f" % (shifts[0],shifts[1],shifts[2]) # need to check for 3D really
     else:
         valuestr = ""
     
