@@ -651,7 +651,10 @@ def _get_mdh_zarr(filename,arch):
                 if mts != ts:
                     delta_s = compare_timestamps_s(mts,ts)
                     if delta_s > 5: # there can be rounding errors from the different TS sources, we tolerate up to 5s difference
-                        warn("acq time stamp (%s) not equal to filename time stamp (%s), delta in s is %d" % (ts,mts,delta_s))
+                        warn("acq time stamp (%s) not equal to filename time stamp (%s), delta in s is %d, overriding to acq date" % (ts,mts,delta_s))
+                        # we are overriding the time stamp from the zarr acquisition date
+                        mdh['MINFLUX.TimeStamp'] = ts
+                        ndh['MINFLUX.TimeStamp.Overridden'] = True # mark as overridden
             else:
                 mdh['MINFLUX.TimeStamp'] = ts
         md_by_itrs,mfx_global_par = get_metadata_from_mfx_attrs(mfx_attrs)

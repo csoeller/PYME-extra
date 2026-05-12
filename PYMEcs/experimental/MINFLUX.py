@@ -453,6 +453,12 @@ from PYMEcs.misc.guiMsgBoxes import Error
 from PYMEcs.misc.utils import unique_name
 from PYMEcs.IO.MINFLUX import findmbm
 
+def unique_names(namelist,keys):
+    returnlist = []
+    for name in namelist:
+        returnlist.append(unique_name(name,keys))
+    return tuple(returnlist)
+
 from PYME.recipes.traits import HasTraits, Float, Enum, CStr, Bool, Int, List
 import PYME.config
 
@@ -559,6 +565,9 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>RyRs', "Add modules for RyR density estimate", self.OnRyRClusterDensityRecipe)
         visFr.AddMenuItem('MINFLUX>RyRs', "Plot density stats", self.OnDensityStats)
         visFr.AddMenuItem('MINFLUX>RyRs', "Show cluster alpha shapes", self.OnAlphaShapes)
+        visFr.AddMenuItem('MINFLUX>RyRs', "HDBSCAN to detect RyRs", self.OnRyRHdbscanRecipe)
+        visFr.AddMenuItem('MINFLUX>RyRs', "Show HDBSCAN RyR Blobs", self.OnRyRShowBlobs)
+
 
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MBM attributes", self.OnMBMAttributes)
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MFX attributes", self.OnMFXAttributes)
@@ -1495,7 +1504,58 @@ class MINFLUXanalyser():
          
         recipe.add_modules_and_execute(modules)
         pipeline.selectDataSource(bigCs)
+
+    def OnRyRHdbscanRecipe(self, event=None):
+        from PYMEcs.recipes.localisations import DBSCANClustering2, ObjectSDs
+        from PYME.recipes.localisations import MergeClumps
+        from PYME.recipes.tablefilters import FilterTable, Mapping
         
+        pipeline = self.visFr.pipeline
+        recipe = pipeline.recipe
+
+        cfClustered, with_objectSDs, cfClusteredOnly, \
+            blockClusters, blockClusters_f = unique_names(['cfClustered',
+                                                           'with_objectSDs',
+                                                           'cfClusteredOnly',
+                                                           'blockClusters',
+                                                           'blockClusters_f'],
+                                                          pipeline.dataSources.keys())
+        
+        curds = pipeline.selectedDataSourceKey
+        modules = [
+            DBSCANClustering2(recipe,inputName=curds,outputName=cfClustered,
+                              searchRadius = 9.0,
+                              clumpColumnName = 'ClustClumpID',
+                              sizeColumnName='ClustClumpSize',
+                              maxClumpSize=50,
+                              minClumpSize=5,
+                              algorithm='hdbscan'
+                              ),
+            ObjectSDs(recipe,IDkey='ClustClumpID',IDout='clustclump',input=cfClustered,output=with_objectSDs),
+            FilterTable(recipe,inputName=with_objectSDs,outputName=cfClusteredOnly,
+                        filters={'ClustClumpID' : [0.5,1e5],
+                                 }),
+            MergeClumps(recipe,inputName=cfClusteredOnly,outputName=blockClusters,
+                        labelKey='ClustClumpID',discardTrivial=True),
+            FilterTable(recipe,inputName=blockClusters,outputName=blockClusters_f,
+                        filters={'clustclump_sd'  : [0,25],
+                                 }),
+            ]
+        recipe.add_modules_and_execute(modules)
+
+    def OnRyRShowBlobs(self, event=None):
+        pipeline = self.visFr.pipeline
+
+        if 'blockClusters_f' not in pipeline.dataSources.keys():
+            warn("Need 'blockClusters_f' data source in recipe to show RyR blobs, not found; terminating...")
+            return
+
+        from PYME.LMVis.layers.pointcloud import PointCloudRenderLayer
+        layer = PointCloudRenderLayer(self.visFr.pipeline, dsname='blockClusters_f', method='transparent_points',
+                                      cmap='gray', clim=[0.6,1.2], alpha=0.4, point_size=25.0, vertexColour='vld')
+        self.visFr.add_layer(layer)
+
+
     def OnOrigamiSiteRecipe(self, event=None):
         from PYMEcs.recipes.localisations import OrigamiSiteTrack, DBSCANClustering2, TrackProps, ObjectSDs
         from PYME.recipes.localisations import MergeClumps
