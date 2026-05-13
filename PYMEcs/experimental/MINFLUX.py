@@ -1513,14 +1513,14 @@ class MINFLUXanalyser():
         pipeline = self.visFr.pipeline
         recipe = pipeline.recipe
 
-        cfClustered, with_objectSDs, cfClusteredOnly, \
-            blockClusters, blockClusters_f = unique_names(['cfClustered',
-                                                           'with_objectSDs',
-                                                           'cfClusteredOnly',
-                                                           'blockClusters',
-                                                           'blockClusters_f'],
-                                                          pipeline.dataSources.keys())
-        
+        (cfClustered, with_objectSDs, cfClusteredOnly,
+         blockClusters, blockClusters_f) = unique_names(['cfClustered',
+                                                         'with_objectSDs',
+                                                         'cfClusteredOnly',
+                                                         'blockClusters',
+                                                         'blockClusters_f'],
+                                                        pipeline.dataSources.keys())
+
         curds = pipeline.selectedDataSourceKey
         modules = [
             DBSCANClustering2(recipe,inputName=curds,outputName=cfClustered,
@@ -1555,7 +1555,6 @@ class MINFLUXanalyser():
                                       cmap='gray', clim=[0.6,1.2], alpha=0.4, point_size=25.0, vertexColour='vld')
         self.visFr.add_layer(layer)
 
-
     def OnOrigamiSiteRecipe(self, event=None):
         from PYMEcs.recipes.localisations import OrigamiSiteTrack, DBSCANClustering2, TrackProps, ObjectSDs
         from PYME.recipes.localisations import MergeClumps
@@ -1568,18 +1567,15 @@ class MINFLUXanalyser():
                  'error_y' : [0,3.5]}
         if 'error_z' in pipeline.keys():
             filters['error_z'] = [0,3.5]
-        
-        preFiltered = unique_name('prefiltered',pipeline.dataSources.keys())
-        corrSiteClumps = unique_name('corrected_siteclumps',pipeline.dataSources.keys())
-        corrAll = unique_name('corrected_allpoints',pipeline.dataSources.keys())
-        preSiteClumps = unique_name('preSiteclumps',pipeline.dataSources.keys())
-        siteClumps = unique_name('siteclumps',pipeline.dataSources.keys())
-        dbscanClusteredSites = unique_name('dbscanClusteredSites',pipeline.dataSources.keys())
-        sitesWithSDs = unique_name('sitesWithSDs',pipeline.dataSources.keys())
-        sitesWithTracks = unique_name('sitesWithTracks',pipeline.dataSources.keys())
-        sites = unique_name('sites',pipeline.dataSources.keys())
-        sites_c = unique_name('sites_c',pipeline.dataSources.keys())
-        
+
+        (preFiltered,corrSiteClumps,corrAll,preSiteClumps,
+         siteClumps,dbscanClusteredSites,sitesWithSDs,
+         sitesWithTracks,sites,sites_c) =  unique_names(['prefiltered','corrected_siteclumps',
+                                                         'corrected_allpoints','preSiteclumps',
+                                                         'siteclumps','dbscanClusteredSites',
+                                                         'sitesWithSDs','sitesWithTracks',
+                                                         'sites','sites_c'],pipeline.dataSources.keys())
+
         curds = pipeline.selectedDataSourceKey
         modules = [FilterTable(recipe,inputName=curds,outputName=preFiltered,
                                filters=filters),
