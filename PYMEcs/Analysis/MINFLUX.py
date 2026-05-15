@@ -379,32 +379,42 @@ def plot_alignment_shifts(pipeline):
     su = sh['shift_used'][doplot]
     sid = sh['beadID'][doplot]
 
-    plt.figure()
-    plt.scatter(sx,sy,c=su,marker="+",cmap='RdYlGn',vmin=0,vmax=1) # make sure we use the range 0,1 for the cmap
+    if 'shift_z' in sh.keys() and len(shifts) > 2:
+        fig, (ax0,ax1) = plt.subplots(1,2, layout="constrained")
+    else:
+        fig, ax0 = plt.subplots(1,1)
+    
+    ax0.scatter(sx,sy,c=su,marker="+",cmap='RdYlGn',vmin=0,vmax=1) # make sure we use the range 0,1 for the cmap
 
     if shifts is not None:
-        plt.scatter([shifts[0]],[shifts[1]], c='orange', alpha=0.5, lw=0, s=80)
-        valuestr = ": %.1f, %.1f nm, z=%.1f" % (shifts[0],shifts[1],shifts[2]) # need to check for 3D really
+        ax0.scatter([shifts[0]],[shifts[1]], c='orange', alpha=0.5, lw=0, s=80)
+        if len(shifts) > 2:
+            valuestr = ": %.1f, %.1f nm, z=%.1f nm" % (shifts[0],shifts[1],shifts[2]) # need to check for 3D really
+        else:
+            valuestr = ": %.1f, %.1f nm" % (shifts[0],shifts[1])
     else:
         valuestr = ""
     
-    plt.xlim(-50,50)
-    plt.ylim(-50,50)
-    plt.gca().set_aspect('equal')
-    plt.plot([-50,50],[0,0],'b--')
-    plt.plot([0,0],[-50,50],'b--')
+    ax0.set_xlim(-50,50)
+    ax0.set_ylim(-50,50)
+    ax0.set_aspect('equal')
+    ax0.plot([-50,50],[0,0],'b--')
+    ax0.plot([0,0],[-50,50],'b--')
 
+    ax0.set_xlabel(r"$\Delta x$ (nm)")
+    ax0.set_ylabel(r"$\Delta y$ (nm)")
+    
     kwargs = dict(color='black',fill=False,lw=1.0)
     c10 = plt.Circle((0, 0), 10.0, **kwargs)
-    plt.gca().add_patch(c10)
+    ax0.add_patch(c10)
     c20 = plt.Circle((0, 0), 20.0, **kwargs)
-    plt.gca().add_patch(c20)
+    ax0.add_patch(c20)
     c30 = plt.Circle((0, 0), 30.0, **kwargs)
-    plt.gca().add_patch(c30)
+    ax0.add_patch(c30)
     c30 = plt.Circle((0, 0), 30.0, **kwargs)
-    plt.gca().add_patch(c30)
+    ax0.add_patch(c30)
     c40 = plt.Circle((0, 0), 40.0, **kwargs)
-    plt.gca().add_patch(c40)
+    ax0.add_patch(c40)
 
     offsetx = 0.5
     offsety = 0.5
@@ -416,7 +426,28 @@ def plot_alignment_shifts(pipeline):
             c = 'g'
         else:
             c = 'r'
-        plt.text(sx[i]+offsetx, sy[i]+offsety, beadname, alpha=0.35, c=c)
+        ax0.text(sx[i]+offsetx, sy[i]+offsety, beadname, alpha=0.35, c=c)
     
-   
-    plt.title("x-y shift from MBM alignment" + valuestr)
+    if 'shift_z' in sh.keys() and len(shifts) > 2:
+        zshifts = sh['shift_z']
+        suz = sh['shift_used']
+        ax1.scatter(0.5+0*zshifts,zshifts,c=suz,marker="+",cmap='RdYlGn',vmin=0,vmax=1) # make sure we use the range 0,1 for the cmap
+        for i in range(zshifts.size):
+            beadID = sh['beadID'][i]
+            beadname = "R%d" % beadID
+            if suz[i]:
+                c = 'g'
+            else:
+                c = 'r'
+            if abs(zshifts[i]) <= 50:
+                ax1.text(0.7, zshifts[i], beadname, alpha=0.35, c=c)
+        ax1.set_xlim(0,1)
+        ax1.set_ylim(-50,50)
+        ax1.set_ylabel(r"$\Delta z$ (nm)")
+        ax1.set_xticks([0.5], labels=['z'])
+
+        if shifts is not None:
+            ax1.scatter([0.5],[shifts[2]], c='orange', alpha=0.5, lw=0, s=80)
+
+    fig.suptitle("x-y shift from MBM alignment" + valuestr)
+    # fig.tight_layout(w_pad=2.0)

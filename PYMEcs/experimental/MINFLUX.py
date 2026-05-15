@@ -450,9 +450,9 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True,alpha=0.5):
 
 from PYMEcs.Analysis.MINFLUX import analyse_locrate
 from PYMEcs.misc.guiMsgBoxes import Error
-from PYMEcs.misc.utils import unique_name
 from PYMEcs.IO.MINFLUX import findmbm
 
+from PYMEcs.misc.utils import unique_name
 def unique_names(namelist,keys):
     returnlist = []
     for name in namelist:
