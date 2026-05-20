@@ -536,6 +536,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX', "Analysis settings", self.OnMINFLUXSettings)
         visFr.AddMenuItem('MINFLUX', "Toggle MINFLUX analysis autosaving", self.OnToggleMINFLUXautosave)
         visFr.AddMenuItem('MINFLUX', "Manually create Colour panel", self.OnMINFLUXColour)
+        visFr.AddMenuItem('MINFLUX', "Load extra MINFLUX data set with standard MBM recipe", self.MINFLUXloadExtraDatasource)
 
         visFr.AddMenuItem('MINFLUX>Origami', "group and analyse origami sites", self.OnOrigamiSiteRecipe)
         visFr.AddMenuItem('MINFLUX>Origami', "plot origami site correction", self.OnOrigamiSiteTrackPlot)
@@ -597,6 +598,63 @@ class MINFLUXanalyser():
                 ID = visFr.AddMenuItem('MINFLUX>Recipes', r, self.OnLoadCustom).GetId()
                 self.minfluxRIDs[ID] = minfluxRecipes[r]
 
+    def MINFLUXloadExtraDatasource(self,event):
+        from PYMEcs.recipes.localisations import TrackProps, MBMcorrection, CorrectForeshortening
+        from PYME.recipes.localisations import MergeClumps, Pipelineify
+        from PYME.recipes.tablefilters import FilterTable
+        from PYME.IO.FileUtils import nameUtils
+        
+        filename = wx.FileSelector("Choose a MINFLUX data file to open", 
+                                   nameUtils.genResultDirectoryPath())
+        if filename == '':
+            return
+
+        pipeline = self.visFr.pipeline
+        recipe = pipeline.recipe
+        ds_fitresults = unique_name('FitResults',pipeline.dataSources.keys())
+        pipeline.load_extra_datasources(**{ds_fitresults:filename})
+
+        (localizations,filteredlocs,
+         wtrackprops,wtp_f,wtp_f_merged,mbm_corrected,
+         mbm_tracks,mbm_tracks_corrected,mbm_corrected_f) = unique_names(['Localizations',
+                                                                          'filtered_localizations',
+                                                                          'with_trackprops',
+                                                                          'wtp_f',
+                                                                          'wtp_f_merged',
+                                                                          'mbm_corrected',
+                                                                          'mbm_tracks',
+                                                                          'mbm_tracks_corrected',
+                                                                          'mbm_corrected_f',
+                                                                          ],pipeline.dataSources.keys())
+
+        modules = [Pipelineify(recipe,inputFitResults=ds_fitresults,outputLocalizations=localizations),
+                   FilterTable(recipe,inputName=localizations,outputName=filteredlocs,
+                               filters={'cfr'       : [0,0.8],
+                                        'error_x'   : [0,15],
+                                        'error_y'   : [0,15],
+                                        'error_z'   : [0,20],
+                                        'clumpSize' : [3.1,1000],
+                                        }), # additional filtering on BBs; only after clumpsize to avoid 0 values in BB histograms
+                   TrackProps(recipe,input=filteredlocs,output=wtrackprops),
+                   FilterTable(recipe,inputName=wtrackprops,outputName=wtp_f,
+                               filters={'efo'              : [0,1e5],
+                                        'trace_bbz'        : [0,25.0],
+                                        'trace_bbspcdiag'  : [0,60.0],
+                                        }), # additional filtering on BBs; only after clumpsize to avoid 0 values in BB histograms
+                   MergeClumps(recipe,inputName=wtp_f,outputName=wtp_f_merged,
+                               discardTrivial=True),
+                   MBMcorrection(MBM_lowess_fraction=0.01,Median_window=11,inputLocalizations=wtp_f_merged,
+                                 output=mbm_corrected,outputTracks=mbm_tracks,outputTracksCorr=mbm_tracks_corrected),
+                   CorrectForeshortening(foreshortening=0.72,inputName=mbm_corrected,outputName=mbm_corrected_f)]
+        
+        recipe.add_modules_and_execute(modules)
+
+        from PYME.LMVis.layers.pointcloud import PointCloudRenderLayer
+        layer = PointCloudRenderLayer(pipeline, dsname=mbm_corrected_f, method='points',
+                                      cmap='plasma', point_size=5.0, vertexColour='tim')
+        self.visFr.add_layer(layer)
+
+        
     def OnEstimateMINFLUXRegionSize(self, event):
         p = self.visFr.pipeline # Get the pipeline from the GUI
         xsize = p['x'].max() - p['x'].min()
@@ -1507,30 +1565,6 @@ class MINFLUXanalyser():
         recipe.add_modules_and_execute(modules)
         pipeline.selectDataSource(bigCs)
 
-    def OnRyRPlotBlobNNdist(self, event=None):
-        pipeline = self.visFr.pipeline
-        if not 'blobsNNdist' in pipeline.dataSources.keys():
-            warn('missing datasource "blobsNNdist" from pipeline, needed for plotting; giving up...')
-            return
-        nnd = pipeline.dataSources['blobsNNdist']
-        if 'NNdist' not in nnd.keys():
-            warn('missing property "NNdist" from datasource, needed for plotting; giving up...')
-            return
-        import pandas as pd
-        if 'ClustClumpSize' in nnd.keys():
-            dfdict = dict(NNdist=nnd['NNdist'],BlobSize=nnd['ClustClumpSize'])
-        else:
-            dfdict = dict(NNdist=nnd['NNdist'])
-        df = pd.DataFrame.from_dict(dfdict)
-        from PYMEcs.misc.matplotlib import violinswarmplot
-        plt.figure(num="RyR blobs %d" % self.ryrblobsTrackFignum)
-        violinswarmplot(df,format="%.1f",width=0.4,annotate_means=True,
-                        annotate_medians=True,showpoints=False)
-        plt.ylim(-20,100)
-        plt.ylabel("Nearest neighbour distance (nm)")
-        plt.title("RyR blobs NN distances")
-        self.ryrblobsTrackFignum += 1
-
     def OnRyRHdbscanRecipe(self, event=None):
         from PYMEcs.recipes.localisations import DBSCANClustering2, ObjectSDs, NNdist
         from PYME.recipes.localisations import MergeClumps
@@ -1540,13 +1574,15 @@ class MINFLUXanalyser():
         recipe = pipeline.recipe
 
         (cfClustered,with_objectSDs,cfClusteredOnly,
-         blockClusters,blockClusters_f,withNNdist) = unique_names(['cfClustered',
-                                                                    'with_objectSDs',
-                                                                    'cfClusteredOnly',
-                                                                    'blockClusters',
-                                                                    'blockClusters_f',
-                                                                    'blobsNNdist'],
-                                                        pipeline.dataSources.keys())
+         blockClusters,blockClusters_f,
+         withNNdist,blobsNNlt50) = unique_names(['cfClustered',
+                                                 'with_objectSDs',
+                                                 'cfClusteredOnly',
+                                                 'blockClusters',
+                                                 'blockClusters_f',
+                                                 'blobsNNdist',
+                                                 'blobsNNlt50'],
+                                                pipeline.dataSources.keys())
 
         curds = pipeline.selectedDataSourceKey
         modules = [
@@ -1568,8 +1604,36 @@ class MINFLUXanalyser():
                         filters={'clustclump_sd'  : [0,25],
                                  }),
             NNdist(recipe,inputName=blockClusters_f,outputName=withNNdist),
+            FilterTable(recipe,inputName=withNNdist,outputName=blobsNNlt50,
+                        filters={'NNdist'  : [0,50],
+                                 }),
             ]
         recipe.add_modules_and_execute(modules)
+
+    def OnRyRPlotBlobNNdist(self, event=None):
+        pipeline = self.visFr.pipeline
+        if not 'blobsNNdist' in pipeline.dataSources.keys():
+            warn('missing datasource "blobsNNdist" from pipeline, needed for plotting; giving up...')
+            return
+        nnd = pipeline.dataSources['blobsNNdist']
+        if 'NNdist' not in nnd.keys():
+            warn('missing property "NNdist" from datasource, needed for plotting; giving up...')
+            return
+        import pandas as pd
+        nndlt50 = nnd['NNdist'].copy()
+        nndlt50[nndlt50 >= 50.0] = np.nan
+        dfdict = dict(NNdist=nnd['NNdist'],NNlt50=nndlt50)
+        if 'ClustClumpSize' in nnd.keys():
+            dfdict.update(dict(BlobSize=nnd['ClustClumpSize']))
+        df = pd.DataFrame.from_dict(dfdict)
+        from PYMEcs.misc.matplotlib import violinswarmplot
+        plt.figure(num="RyR blobs %d" % self.ryrblobsTrackFignum)
+        violinswarmplot(df,format="%.1f",width=0.4,annotate_means=True,
+                        annotate_medians=True,showpoints=False)
+        plt.ylim(-20,100)
+        plt.ylabel("Nearest neighbour distance (nm)")
+        plt.title("RyR blobs NN distances - %s" % pipeline.mdh.get('MINFLUX.TimeStamp','UNKNOWN'))
+        self.ryrblobsTrackFignum += 1
 
     def OnRyRShowBlobs(self, event=None):
         pipeline = self.visFr.pipeline
