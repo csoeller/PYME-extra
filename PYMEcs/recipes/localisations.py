@@ -795,11 +795,12 @@ class DBSCANClustering2(ModuleBase):
 
     columns = ListStr(['x', 'y', 'z'])
     algorithm = Enum(['dbscan','hdbscan','optics'],
-                     desc="algorithm used for clustering; HDBSCAN and OPTICS ignore the searchRadius")
+                     desc="algorithm used for clustering; HDBSCAN and OPTICS ignore the searchRadius (although note subtleties for hdbscan, see below)")
     metric = Enum(['euclidean','manhattan','chebyshev'],
                   desc="a few metrics for testing, generally eucledian should be the right choice")
     maxClumpSize = Int(-1,desc="a limit to the size of clusters returned by the cluster selection algorithm; only used for HDBSCAN, there is no limit when value < 0")
-    searchRadius = Float(10,desc="equivalent of epsilon - used for DBSCAN only")
+    clusterSelectionMethod = Enum(['eom','leaf'],desc="cluster selection method for HDBSCAN, standard approach is to use an Excess of Mass (eom) algorithm to find the most persistent clusters. Alternatively clusters are selected at the leaves of the tree – this provides the most fine grained and homogeneous clusters; parameter only used for HDBSCAN")
+    searchRadius = Float(10,desc="equivalent of epsilon - used for DBSCAN and HDBSCAN only; note that for HDBSCAN it has a different meaning than for DBSCAN, see scikit learn docs on HDBSCAN") # https://scikit-learn.org/stable/modules/generated/sklearn.cluster.HDBSCAN.html
     minClumpSize = Int(1)
     
     #exposes sklearn parallelism. Recipe modules are generally assumed
@@ -812,8 +813,23 @@ class DBSCANClustering2(ModuleBase):
     outputName = Output('dbscanClustered')
 
     def execute(self, namespace):
-        from sklearn.cluster import dbscan, HDBSCAN, OPTICS
+        from sklearn.cluster import dbscan, OPTICS
         from scipy.stats import binned_statistic
+        try:
+            # currently (as of scikit-learn v1.8.0) there is an issue with using
+            # sklearn hdbscan with cluster_selection_epsilon > 0, see also
+            # https://github.com/scikit-learn/scikit-learn/issues/33219
+            # there seems to be already a PR with suitable fix but not yet merged/released,
+            #    see https://github.com/scikit-learn/scikit-learn/pull/33630
+            # the standalone hdbscan package does not suffer from this issue and we use it instead if available
+            #
+            # this should be a temporary fix until scikit learn HDBSCAN has received the proper fix
+            from hdbscan import HDBSCAN
+        except ImportError:
+            from sklearn.cluster import HDBSCAN
+            has_hdbscan_package = False
+        else:
+            has_hdbscan_package = True
 
         def optics(X,min_samples=5,metric='euclidean',n_jobs=None):
             est = OPTICS(
@@ -825,17 +841,23 @@ class DBSCANClustering2(ModuleBase):
             return est.labels_
 
         def hdbscan(X,min_cluster_size=5,metric='euclidean',n_jobs=None,
-                    max_cluster_size=None):
-            est = HDBSCAN(
-                min_cluster_size=min_cluster_size,
-                max_cluster_size=max_cluster_size,
-                cluster_selection_method='eom',
-                metric=metric,
-                n_jobs=n_jobs,
-            )
+                    max_cluster_size=None,
+                    cluster_selection_method='eom',
+                    cluster_selection_epsilon=0.0):
+            kwargs = dict(min_cluster_size=min_cluster_size,
+                          max_cluster_size=max_cluster_size,
+                          cluster_selection_method=cluster_selection_method,
+                          metric=metric
+                )
+            if has_hdbscan_package:
+                kwargs.update(dict(cluster_selection_epsilon=cluster_selection_epsilon))
+            else:
+                warn("hdbscan package not available, falling back to scikit-learn which ignores cluster_selection_epsilon due to currently broken implementation")
+                kwargs.update(dict(cluster_selection_epsilon=0.0,n_jobs=n_jobs))
+            est = HDBSCAN(**kwargs)
             est.fit(X)
             return est.labels_
-            
+
         inp = namespace[self.inputName]
         mapped = tabular.MappingFilter(inp)
 
@@ -857,6 +879,8 @@ class DBSCANClustering2(ModuleBase):
             dbLabels = hdbscan(np.vstack([inp[k] for k in self.columns]).T,
                                min_cluster_size=self.minClumpSize, metric=self.metric,
                                max_cluster_size=max_cluster_size,
+                               cluster_selection_method=self.clusterSelectionMethod,
+                               cluster_selection_epsilon=self.searchRadius,
                                n_jobs=n_jobs)
         elif self.algorithm == 'optics':
             dbLabels = optics(np.vstack([inp[k] for k in self.columns]).T,
@@ -893,6 +917,7 @@ class DBSCANClustering2(ModuleBase):
                     Item('maxClumpSize'),
                     Item('algorithm'),
                     Item('metric'),
+                    Item('clusterSelectionMethod'),
                     Item('multithreaded'),
                     Item('numberOfJobs'),
                     Item('clumpColumnName'),

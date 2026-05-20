@@ -520,6 +520,7 @@ class MINFLUXanalyser():
         self.minfluxRIDs = {}
         self.origamiErrorFignum = 0
         self.origamiTrackFignum = 0
+        self.ryrblobsTrackFignum = 0
         self.analysisSettings = MINFLUXSettings()
         self.dstring = DateString()
         self.mbmAxisSelection = MBMaxisSelection()
@@ -567,6 +568,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>RyRs', "Show cluster alpha shapes", self.OnAlphaShapes)
         visFr.AddMenuItem('MINFLUX>RyRs', "HDBSCAN to detect RyRs", self.OnRyRHdbscanRecipe)
         visFr.AddMenuItem('MINFLUX>RyRs', "Show HDBSCAN RyR Blobs", self.OnRyRShowBlobs)
+        visFr.AddMenuItem('MINFLUX>RyRs', "Plot HDBSCAN RyR Blob NNdist", self.OnRyRPlotBlobNNdist)
 
 
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MBM attributes", self.OnMBMAttributes)
@@ -1505,26 +1507,51 @@ class MINFLUXanalyser():
         recipe.add_modules_and_execute(modules)
         pipeline.selectDataSource(bigCs)
 
+    def OnRyRPlotBlobNNdist(self, event=None):
+        pipeline = self.visFr.pipeline
+        if not 'blobsNNdist' in pipeline.dataSources.keys():
+            warn('missing datasource "blobsNNdist" from pipeline, needed for plotting; giving up...')
+            return
+        nnd = pipeline.dataSources['blobsNNdist']
+        if 'NNdist' not in nnd.keys():
+            warn('missing property "NNdist" from datasource, needed for plotting; giving up...')
+            return
+        import pandas as pd
+        if 'ClustClumpSize' in nnd.keys():
+            dfdict = dict(NNdist=nnd['NNdist'],BlobSize=nnd['ClustClumpSize'])
+        else:
+            dfdict = dict(NNdist=nnd['NNdist'])
+        df = pd.DataFrame.from_dict(dfdict)
+        from PYMEcs.misc.matplotlib import violinswarmplot
+        plt.figure(num="RyR blobs %d" % self.ryrblobsTrackFignum)
+        violinswarmplot(df,format="%.1f",width=0.4,annotate_means=True,
+                        annotate_medians=True,showpoints=False)
+        plt.ylim(-20,100)
+        plt.ylabel("Nearest neighbour distance (nm)")
+        plt.title("RyR blobs NN distances")
+        self.ryrblobsTrackFignum += 1
+
     def OnRyRHdbscanRecipe(self, event=None):
-        from PYMEcs.recipes.localisations import DBSCANClustering2, ObjectSDs
+        from PYMEcs.recipes.localisations import DBSCANClustering2, ObjectSDs, NNdist
         from PYME.recipes.localisations import MergeClumps
         from PYME.recipes.tablefilters import FilterTable, Mapping
         
         pipeline = self.visFr.pipeline
         recipe = pipeline.recipe
 
-        (cfClustered, with_objectSDs, cfClusteredOnly,
-         blockClusters, blockClusters_f) = unique_names(['cfClustered',
-                                                         'with_objectSDs',
-                                                         'cfClusteredOnly',
-                                                         'blockClusters',
-                                                         'blockClusters_f'],
+        (cfClustered,with_objectSDs,cfClusteredOnly,
+         blockClusters,blockClusters_f,withNNdist) = unique_names(['cfClustered',
+                                                                    'with_objectSDs',
+                                                                    'cfClusteredOnly',
+                                                                    'blockClusters',
+                                                                    'blockClusters_f',
+                                                                    'blobsNNdist'],
                                                         pipeline.dataSources.keys())
 
         curds = pipeline.selectedDataSourceKey
         modules = [
             DBSCANClustering2(recipe,inputName=curds,outputName=cfClustered,
-                              searchRadius = 9.0,
+                              searchRadius = 0.0, # default for hdbscan to NOT use any epsilon; set to > 0 for close cluster merging
                               clumpColumnName = 'ClustClumpID',
                               sizeColumnName='ClustClumpSize',
                               maxClumpSize=50,
@@ -1540,6 +1567,7 @@ class MINFLUXanalyser():
             FilterTable(recipe,inputName=blockClusters,outputName=blockClusters_f,
                         filters={'clustclump_sd'  : [0,25],
                                  }),
+            NNdist(recipe,inputName=blockClusters_f,outputName=withNNdist),
             ]
         recipe.add_modules_and_execute(modules)
 
