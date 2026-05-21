@@ -1677,11 +1677,11 @@ def get_bead_dict_from_mbm(mbm):
                 A=A,good=good,objectID=objectID)
 
 # remove this once sessionpath PR is accepted!!
-try:
-    from PYME.LMVis.sessionpaths import register_path_modulechecks
-    register_path_modulechecks('PYMEcs.MBMcorrection','mbmfile','mbmsettings')
-except ImportError:
-    pass
+# try:
+#     from PYME.LMVis.sessionpaths import register_path_modulechecks
+#     register_path_modulechecks('PYMEcs.MBMcorrection','mbmfile','mbmsettings')
+# except ImportError:
+#     pass
 
 # code on suggestion from https://blog.finxter.com/5-best-ways-to-compute-the-hash-of-a-python-tuple/
 import hashlib

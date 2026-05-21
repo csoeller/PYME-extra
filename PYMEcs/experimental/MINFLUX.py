@@ -643,9 +643,9 @@ class MINFLUXanalyser():
                                         }), # additional filtering on BBs; only after clumpsize to avoid 0 values in BB histograms
                    MergeClumps(recipe,inputName=wtp_f,outputName=wtp_f_merged,
                                discardTrivial=True),
-                   MBMcorrection(MBM_lowess_fraction=0.01,Median_window=11,inputLocalizations=wtp_f_merged,
+                   MBMcorrection(recipe,MBM_lowess_fraction=0.01,Median_window=11,inputLocalizations=wtp_f_merged,
                                  output=mbm_corrected,outputTracks=mbm_tracks,outputTracksCorr=mbm_tracks_corrected),
-                   CorrectForeshortening(foreshortening=0.72,inputName=mbm_corrected,outputName=mbm_corrected_f)]
+                   CorrectForeshortening(recipe,foreshortening=0.72,inputName=mbm_corrected,outputName=mbm_corrected_f)]
         
         recipe.add_modules_and_execute(modules)
 
