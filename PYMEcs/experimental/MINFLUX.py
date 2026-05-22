@@ -448,6 +448,11 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True,alpha=0.5):
         axs[1, 1].set_ylabel('orig. corr (nm)')
     plt.tight_layout()
 
+
+#########################################
+#### Main imports and util functions ####
+#########################################
+
 from PYMEcs.Analysis.MINFLUX import analyse_locrate
 from PYMEcs.misc.guiMsgBoxes import Error
 from PYMEcs.IO.MINFLUX import findmbm
@@ -458,6 +463,85 @@ def unique_names(namelist,keys):
     for name in namelist:
         returnlist.append(unique_name(name,keys))
     return tuple(returnlist)
+
+# we try to find an MBM collection attached
+# to an MBMcorrection module generated data source
+# returns None if unsuccesful
+def findmbmMods(pipeline):
+    from PYMEcs.recipes.localisations import MBMcorrection
+    mods = []
+    # search/check for instances
+    for mod in pipeline.recipe.modules:
+        if isinstance(mod,MBMcorrection):
+            mods.append(mod)
+    if len(mods) < 1:
+        return None
+    else:
+        return mods
+
+def checkmbm_mods4alignment(pipeline,dsname): # or maybe use the pipeline as argument?
+    # this tries to find the necessary info for aligning a datasource (id by dsname)
+    # to the reference mbm set
+
+    # algorithm
+    # check this dsname is in pipeline
+    # check exactly one mbm mod marked as reference
+    # check this dsname one is not derived from the mbm reference mod
+    # check that there are no duplicate channel names
+
+    # now find the mbm mod for this dsname
+    # also find the reference mbm mod
+    # derive all entries for the alignMBM module from the dsname and the two mbm mods (source and target)
+
+    mods = findmbmMods(pipeline)
+    if mods is None:
+        warn("we rely on MBM info present in MBMcorrection modules, could not find any, giving up...")
+        return None
+    if dsname not in pipeline.dataSources.keys():
+        warn("name '%s' not in datasources, giving up..." % dsname)
+        return None
+    n_ref_mbms = 0
+    for mod in mods:
+        if mod.is_reference_channel:
+            n_ref_mbms += 1
+    if n_ref_mbms != 1:
+        warn("need exactly one reference channel, %d MBM modules marked as reference, please check; giving up..." % n_ref_mbms)
+        return None
+    
+    ds = pipeline.dataSources[dsname]
+
+    # find the reference mbm module
+    refmodidx = [mod.is_reference_channel for mod in mods].index(True)
+    refmod = mods[refmodidx]
+
+    # find the module belonging to this channel
+    chanName = ds.mdh.get('Processing.MBMcorrection.MbmChannelName')
+    if chanName is None:
+        warn("could not obtain MBMcorrection metadata info on MbmChannelName from datasource '%s', giving up..." % dsname)
+        return None
+    chanNames = [ mod.MBM_channel_name for mod in mods ]
+    if chanName not in chanNames:
+        warn("could not find channel name '%s' in list of MBM channel names, giving up..." % chanName)
+        return None
+    if len(chanNames) != len(set(chanNames)): # check for duplicates
+        warn("duplicate channel names in mbm channel list, please make unique by renaming some mbm channels; current list of names '%s'" % chanNames)
+    dsmodidx = chanNames.index(chanName)
+    if dsmodidx == refmodidx:
+        warn("asked to align ds '%s' to mbm reference but is itself derived from that reference, choose ds derived from other mbm channel" % dsname)
+        return None
+    dsmod = mods[dsmodidx]
+
+    # check that both have valid mbm objects
+    mbm_dsmod = ds.mdh.get('Processing.MBMcorrection.mbm')
+    if mbm_dsmod is None:
+        warn(f"datasource {dsname} has no mbm object loaded, please check if MBM data already loaded")
+        return None
+    mbm_refmod = pipeline.dataSources[refmod.output].mdh.get('Processing.MBMcorrection.mbm')
+    if mbm_refmod is None:
+        warn(f"datasource {refmod.output} has no mbm object loaded, please check if MBM data already loaded")
+        return None
+    # now return the info we need for alignment
+    return dict(sourceLocalizations=dsname,sourceTracks=dsmod.outputTracksCorr,targetTracks=refmod.outputTracksCorr,channel=chanName)
 
 from PYME.recipes.traits import HasTraits, Float, Enum, CStr, Bool, Int, List
 import PYME.config
@@ -561,6 +645,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>MBM', "Save MBM bead trajectories to npz file", self.OnMBMSave)
         visFr.AddMenuItem('MINFLUX>MBM', "Save MBM bead settings to json file", self.OnMBMSettingsSave)
         visFr.AddMenuItem('MINFLUX>MBM', "Save MBM lowess cache", self.OnMBMLowessCacheSave)
+        visFr.AddMenuItem('MINFLUX>MBM', "Align data to reference MBM channel", self.OnMBMAlignDatasource) 
         visFr.AddMenuItem('MINFLUX>MBM', "Plot MBM alignment", self.OnMBMAlignmentPlot)
         
         visFr.AddMenuItem('MINFLUX>RyRs', "Plot corner info", self.OnCornerplot)
@@ -609,6 +694,20 @@ class MINFLUXanalyser():
         if filename == '':
             return
 
+        def ask(parent=None, message='', default_value=''):
+            with wx.TextEntryDialog(parent, message, value=default_value) as dlg:
+                dlg.ShowModal()
+                result = dlg.GetValue()
+            if result == '':
+                return None
+            else:
+                return result
+
+        # ask for new channel name
+        chanName = ask(self.visFr,message='short name for the new channel')
+        if chanName is None:
+            return
+
         pipeline = self.visFr.pipeline
         recipe = pipeline.recipe
         ds_fitresults = unique_name('FitResults',pipeline.dataSources.keys())
@@ -627,6 +726,8 @@ class MINFLUXanalyser():
                                                                           'mbm_corrected_f',
                                                                           ],pipeline.dataSources.keys())
 
+        # NOTE: in making these module lists it is ESSENTIAL to include the recipe as first argument in module instantiations!
+        # otherwise the recipe pipelines do not update properly!!
         modules = [Pipelineify(recipe,inputFitResults=ds_fitresults,outputLocalizations=localizations),
                    FilterTable(recipe,inputName=localizations,outputName=filteredlocs,
                                filters={'cfr'       : [0,0.8],
@@ -644,7 +745,8 @@ class MINFLUXanalyser():
                    MergeClumps(recipe,inputName=wtp_f,outputName=wtp_f_merged,
                                discardTrivial=True),
                    MBMcorrection(recipe,MBM_lowess_fraction=0.01,Median_window=11,inputLocalizations=wtp_f_merged,
-                                 output=mbm_corrected,outputTracks=mbm_tracks,outputTracksCorr=mbm_tracks_corrected),
+                                 output=mbm_corrected,outputTracks=mbm_tracks,outputTracksCorr=mbm_tracks_corrected,
+                                 MBM_channel_name=chanName,is_reference_channel=False),
                    CorrectForeshortening(recipe,foreshortening=0.72,inputName=mbm_corrected,outputName=mbm_corrected_f)]
         
         recipe.add_modules_and_execute(modules)
@@ -837,6 +939,33 @@ class MINFLUXanalyser():
         axs[1].legend(loc="upper right")
         plt.tight_layout()
 
+    def OnMBMAlignDatasource(self,event):
+        pipeline = self.visFr.pipeline
+
+        # obtain dsname
+        dsnames = list(pipeline.dataSources.keys()) # needs conversion to list
+        with wx.SingleChoiceDialog(self.visFr, 'DataSource', 'Select a data source', dsnames) as dlg:
+            if dlg.ShowModal() != wx.ID_OK:
+                return
+            keyidx = dlg.GetSelection()
+        dsname = dsnames[keyidx]
+        
+        alignment_info = checkmbm_mods4alignment(pipeline,dsname)
+        if alignment_info is None:
+            return # give up
+        
+        from PYMEcs.recipes.localisations import AlignFromMBMs
+        amod = AlignFromMBMs(inputlocalizations=alignment_info['sourceLocalizations'],
+                             inputSrcMBM=alignment_info['sourceTracks'],
+                             inputTargetMBM=alignment_info['targetTracks'],
+                             outputlocalizations=alignment_info['sourceLocalizations']+'_a',
+                             outputMBMshifts="mbm_shifts_%s" % alignment_info['channel'],
+                             outputsrcMBM=alignment_info['sourceTracks']+'_a'
+                             )
+        if amod.configure_traits(kind='modal'):
+            pipeline.recipe.add_module(amod)
+            pipeline.recipe.execute()
+        
     def OnMBMAlignmentPlot(self,event):
         from PYMEcs.Analysis.MINFLUX import plot_alignment_shifts
         pipeline = self.visFr.pipeline
@@ -1623,6 +1752,14 @@ class MINFLUXanalyser():
         nndlt50 = nnd['NNdist'].copy()
         nndlt50[nndlt50 >= 50.0] = np.nan
         dfdict = dict(NNdist=nnd['NNdist'],NNlt50=nndlt50)
+        if 'NNdist2' in nnd.keys():
+            nnd2 = nnd['NNdist2'].copy()
+            nnd2[nnd['NNdist']>= 50.0] = np.nan
+            dfdict.update(dict(NNdist2=nnd2))
+        if 'NNdist3' in nnd.keys():
+            nnd3 = nnd['NNdist3'].copy()
+            nnd3[nnd['NNdist']>= 50.0] = np.nan
+            dfdict.update(dict(NNdist3=nnd3))
         if 'ClustClumpSize' in nnd.keys():
             dfdict.update(dict(BlobSize=nnd['ClustClumpSize']))
         df = pd.DataFrame.from_dict(dfdict)

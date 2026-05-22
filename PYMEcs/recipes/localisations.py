@@ -67,9 +67,11 @@ class NNdist(ModuleBase):
         from scipy.spatial import KDTree
         coords = np.vstack([inp[k] for k in ['x','y','z']]).T
         tree = KDTree(coords)
-        dd, ii = tree.query(coords,k=3)
+        dd, ii = tree.query(coords,k=4)
         mapped.addColumn('NNdist', dd[:,1])
         mapped.addColumn('NNdist2', dd[:,2])
+        if dd.shape[1] > 3:
+            mapped.addColumn('NNdist3', dd[:,3])
         
         try:
             mapped.mdh = inp.mdh
@@ -1701,6 +1703,9 @@ class MBMcorrection(ModuleBaseMDHmod):
     mbmsettings = FileOrURI('',filter=['Json (*.json)|*.json'])
     mbmfilename_checks = Bool(True)
     
+    MBM_channel_name = CStr("channel0") # by default the reference channel name
+    is_reference_channel = Bool(True)
+
     Median_window = Int(5)
     MBM_lowess_fraction = Float(0.1,label='lowess fraction for MBM smoothing',
                                 desc='lowess fraction used for smoothing of mean MBM trajectories (default 0.1); 0 = no smoothing')
@@ -1891,6 +1896,8 @@ class MBMcorrection(ModuleBaseMDHmod):
         from PYME.ui.custom_traits_editors import CBEditor
 
         return View(Item('inputLocalizations', editor=CBEditor(choices=self._namespace_keys)),
+                    Item('MBM_channel_name'),
+                    Item('is_reference_channel'),
                     Item('_'),
                     Item('mbmfile'),
                     Item('mbmsettings'),
