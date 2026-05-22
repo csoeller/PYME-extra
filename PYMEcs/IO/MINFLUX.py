@@ -990,6 +990,7 @@ def monkeypatch_npyorzarr_io(visFr):
 
     def _get_session_datasources_whook(self): # with hook for saving lowess cache
         # try to save an mbm lowess cache if present
+        # ultimately this may need extending to several MBM modules!
         mod = findmbm(visFr.pipeline,warnings=False,return_mod=True)
         mbm = findmbm(visFr.pipeline,warnings=False,return_mod=False)
         if mod is not None and mbm is not None:

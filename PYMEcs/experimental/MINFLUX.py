@@ -941,7 +941,8 @@ class MINFLUXanalyser():
 
     def OnMBMAlignDatasource(self,event):
         pipeline = self.visFr.pipeline
-
+        recipe = pipeline.recipe
+        
         # obtain dsname
         dsnames = list(pipeline.dataSources.keys()) # needs conversion to list
         with wx.SingleChoiceDialog(self.visFr, 'DataSource', 'Select a data source', dsnames) as dlg:
@@ -955,7 +956,8 @@ class MINFLUXanalyser():
             return # give up
         
         from PYMEcs.recipes.localisations import AlignFromMBMs
-        amod = AlignFromMBMs(inputlocalizations=alignment_info['sourceLocalizations'],
+        amod = AlignFromMBMs(recipe,
+                             inputlocalizations=alignment_info['sourceLocalizations'],
                              inputSrcMBM=alignment_info['sourceTracks'],
                              inputTargetMBM=alignment_info['targetTracks'],
                              outputlocalizations=alignment_info['sourceLocalizations']+'_a',
@@ -963,8 +965,8 @@ class MINFLUXanalyser():
                              outputsrcMBM=alignment_info['sourceTracks']+'_a'
                              )
         if amod.configure_traits(kind='modal'):
-            pipeline.recipe.add_module(amod)
-            pipeline.recipe.execute()
+            recipe.add_module(amod)
+            recipe.execute()
         
     def OnMBMAlignmentPlot(self,event):
         from PYMEcs.Analysis.MINFLUX import plot_alignment_shifts
