@@ -1,4 +1,4 @@
-from PYME.recipes.base import register_module, ModuleBase, Filter
+from PYME.recipes.base import register_module, register_legacy_module, ModuleBase, Filter
 from PYME.recipes.traits import Input, Output, Float, Enum, CStr, Bool, Int, List, DictStrStr, DictStrList, ListFloat, ListStr, FileOrURI
 
 import numpy as np
@@ -774,8 +774,9 @@ class subClump(ModuleBase):
 
         
 # a version of David's module which we include here so that we can test/hack a few things
-@register_module('DBSCANClustering2')
-class DBSCANClustering2(ModuleBase):
+@register_module('DBSCANTypeClustering')
+@register_legacy_module('DBSCANClustering2') #Deprecated - use DBSCANTypeClustering in new code / recipes
+class DBSCANTypeClustering(ModuleBase):
     """
     Performs DBSCAN clustering on input dictionary
 
@@ -900,6 +901,7 @@ class DBSCANClustering2(ModuleBase):
         maxid = int(dbids.max())
         edges = -0.5+np.arange(maxid+2)
         resstat = binned_statistic(dbids, np.ones_like(dbids), statistic='sum', bins=edges)
+        resstat[0][0] = 1 # set sizes for id 0 explicitly to 1 - hopefully this always works, i.e. that bin 0 covers the labels equal to 0
 
         mapped.addColumn(str(self.clumpColumnName), dbids)
         mapped.addColumn(str(self.sizeColumnName),resstat[0][dbids])

@@ -1663,7 +1663,7 @@ class MINFLUXanalyser():
         pipeline.selectDataSource(finalFiltered)
 
     def OnRyRClusterDensityRecipe(self, event=None):
-        from PYMEcs.recipes.localisations import DBSCANClustering2, SiteDensity
+        from PYMEcs.recipes.localisations import DBSCANTypeClustering, SiteDensity
         from PYME.recipes.localisations import MergeClumps
         from PYME.recipes.tablefilters import FilterTable, Mapping
 
@@ -1683,7 +1683,7 @@ class MINFLUXanalyser():
 
         curds = pipeline.selectedDataSourceKey
          
-        modules = [DBSCANClustering2(recipe,inputName=curds,outputName=clustered,
+        modules = [DBSCANTypeClustering(recipe,inputName=curds,outputName=clustered,
                                      searchRadius = 100.0),
                    FilterTable(recipe,inputName=clustered,outputName=bigCs,
                                filters=filter_bigcs),
@@ -1697,7 +1697,7 @@ class MINFLUXanalyser():
         pipeline.selectDataSource(bigCs)
 
     def OnRyRHdbscanRecipe(self, event=None):
-        from PYMEcs.recipes.localisations import DBSCANClustering2, ObjectSDs, NNdist
+        from PYMEcs.recipes.localisations import DBSCANTypeClustering, ObjectSDs, NNdist
         from PYME.recipes.localisations import MergeClumps
         from PYME.recipes.tablefilters import FilterTable, Mapping
         
@@ -1717,7 +1717,7 @@ class MINFLUXanalyser():
 
         curds = pipeline.selectedDataSourceKey
         modules = [
-            DBSCANClustering2(recipe,inputName=curds,outputName=cfClustered,
+            DBSCANTypeClustering(recipe,inputName=curds,outputName=cfClustered,
                               searchRadius = 0.0, # default for hdbscan to NOT use any epsilon; set to > 0 for close cluster merging
                               clumpColumnName = 'ClustClumpID',
                               sizeColumnName='ClustClumpSize',
@@ -1787,7 +1787,7 @@ class MINFLUXanalyser():
         self.visFr.add_layer(layer)
 
     def OnOrigamiSiteRecipe(self, event=None):
-        from PYMEcs.recipes.localisations import OrigamiSiteTrack, DBSCANClustering2, TrackProps, ObjectSDs
+        from PYMEcs.recipes.localisations import OrigamiSiteTrack, DBSCANTypeClustering, TrackProps, ObjectSDs
         from PYME.recipes.localisations import MergeClumps
         from PYME.recipes.tablefilters import FilterTable, Mapping
         
@@ -1810,7 +1810,7 @@ class MINFLUXanalyser():
         curds = pipeline.selectedDataSourceKey
         modules = [FilterTable(recipe,inputName=curds,outputName=preFiltered,
                                filters=filters),
-                   DBSCANClustering2(recipe,inputName=preFiltered,outputName=dbscanClusteredSites,
+                   DBSCANTypeClustering(recipe,inputName=preFiltered,outputName=dbscanClusteredSites,
                                      searchRadius = 15.0,
                                      clumpColumnName = 'siteID',
                                      sizeColumnName='siteClumpSize'),
@@ -1842,7 +1842,7 @@ class MINFLUXanalyser():
         
             modules = [FilterTable(recipe,inputName=curds,outputName=preFiltered,
                                    filters=filters),
-                       DBSCANClustering2(recipe,inputName=preFiltered,outputName=dbscanClusteredSites,
+                       DBSCANTypeClustering(recipe,inputName=preFiltered,outputName=dbscanClusteredSites,
                                          searchRadius = 15.0,
                                          clumpColumnName = 'siteID',
                                          sizeColumnName='siteClumpSize'),

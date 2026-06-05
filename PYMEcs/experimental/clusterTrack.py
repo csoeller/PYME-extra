@@ -84,7 +84,7 @@ class ClusterTracker:
         """
         from PYMEcs.recipes import localisations
 
-        clumper = localisations.DBSCANClustering2(minClumpSize = 50, searchRadius = 20.0)
+        clumper = localisations.DBSCANTypeClustering(minClumpSize = 50, searchRadius = 20.0)
         if clumper.configure_traits(kind='modal'):
             namespace = {clumper.inputName: self.pipeline}
             clumper.execute(namespace)
@@ -94,7 +94,7 @@ class ClusterTracker:
     def OnTrackClumps(self, event=None):
         pipeline = self.pipeline
         from PYMEcs.recipes import localisations
-        clumper = localisations.DBSCANClustering2()
+        clumper = localisations.DBSCANTypeClustering()
         clusterID = clumper.outputName
 
         if not clusterID in pipeline.keys():

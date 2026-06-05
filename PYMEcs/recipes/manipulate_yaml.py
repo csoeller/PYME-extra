@@ -48,7 +48,7 @@ class modParams(object):
     modified_rec = load_recipe('base_recipe.yaml',
                                recmy.modParams('PYMEcs.NNfilter',
                                                nnMin=10.0, nnMax=30.0),
-                               recmy.modParams('PYMEcs.DBSCANClustering2',
+                               recmy.modParams('PYMEcs.DBSCANTypeClustering',
                                                inputDS='coalesced_nz',searchRadius=7.0)))
     """
     
