@@ -804,6 +804,7 @@ class DBSCANClustering2(ModuleBase):
     clusterSelectionMethod = Enum(['eom','leaf'],desc="cluster selection method for HDBSCAN, standard approach is to use an Excess of Mass (eom) algorithm to find the most persistent clusters. Alternatively clusters are selected at the leaves of the tree – this provides the most fine grained and homogeneous clusters; parameter only used for HDBSCAN")
     searchRadius = Float(10,desc="equivalent of epsilon - used for DBSCAN and HDBSCAN only; note that for HDBSCAN it has a different meaning than for DBSCAN, see scikit learn docs on HDBSCAN") # https://scikit-learn.org/stable/modules/generated/sklearn.cluster.HDBSCAN.html
     minClumpSize = Int(1)
+    useHDBSCANepsilon = Bool(False,desc="use of epsilon - for HDBSCAN ONLY; when used merges closely spaced clusters; False by default")
     
     #exposes sklearn parallelism. Recipe modules are generally assumed
     #to be single-threaded. Enable at your own risk
@@ -845,16 +846,21 @@ class DBSCANClustering2(ModuleBase):
         def hdbscan(X,min_cluster_size=5,metric='euclidean',n_jobs=None,
                     max_cluster_size=None,
                     cluster_selection_method='eom',
-                    cluster_selection_epsilon=0.0):
+                    cluster_selection_epsilon=0.0,
+                    use_hdbscan_epsilon=False):
             kwargs = dict(min_cluster_size=min_cluster_size,
                           max_cluster_size=max_cluster_size,
                           cluster_selection_method=cluster_selection_method,
                           metric=metric
                 )
             if has_hdbscan_package:
-                kwargs.update(dict(cluster_selection_epsilon=cluster_selection_epsilon))
+                if use_hdbscan_epsilon:
+                    kwargs.update(dict(cluster_selection_epsilon=cluster_selection_epsilon))
+                else:
+                    kwargs.update(dict(cluster_selection_epsilon=0.0))
             else:
-                warn("hdbscan package not available, falling back to scikit-learn which ignores cluster_selection_epsilon due to currently broken implementation")
+                if use_hdbscan_epsilon:
+                    warn("hdbscan package not available, falling back to scikit-learn which ignores cluster_selection_epsilon due to currently broken implementation")
                 kwargs.update(dict(cluster_selection_epsilon=0.0,n_jobs=n_jobs))
             est = HDBSCAN(**kwargs)
             est.fit(X)
@@ -883,7 +889,7 @@ class DBSCANClustering2(ModuleBase):
                                max_cluster_size=max_cluster_size,
                                cluster_selection_method=self.clusterSelectionMethod,
                                cluster_selection_epsilon=self.searchRadius,
-                               n_jobs=n_jobs)
+                               n_jobs=n_jobs,use_hdbscan_epsilon=self.useHDBSCANepsilon)
         elif self.algorithm == 'optics':
             dbLabels = optics(np.vstack([inp[k] for k in self.columns]).T,
                                min_samples=self.minClumpSize, metric=self.metric,
@@ -918,6 +924,7 @@ class DBSCANClustering2(ModuleBase):
                     Item('minClumpSize'),
                     Item('maxClumpSize'),
                     Item('algorithm'),
+                    Item('useHDBSCANepsilon'),
                     Item('metric'),
                     Item('clusterSelectionMethod'),
                     Item('multithreaded'),
