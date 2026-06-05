@@ -654,7 +654,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>RyRs', "Show cluster alpha shapes", self.OnAlphaShapes)
         visFr.AddMenuItem('MINFLUX>RyRs', "HDBSCAN to detect RyRs", self.OnRyRHdbscanRecipe)
         visFr.AddMenuItem('MINFLUX>RyRs', "Show HDBSCAN RyR Blobs", self.OnRyRShowBlobs)
-        visFr.AddMenuItem('MINFLUX>RyRs', "Plot HDBSCAN RyR Blob NNdist", self.OnRyRPlotBlobNNdist)
+        visFr.AddMenuItem('MINFLUX>RyRs', "Plot HDBSCAN RyR Blob Properties", self.OnRyRPlotBlobProps)
 
 
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MBM attributes", self.OnMBMAttributes)
@@ -1614,6 +1614,10 @@ class MINFLUXanalyser():
                         ds_coalesced=self.analysisSettings.defaultDatasourceCoalesced,
                         ds_coalesced_bbfilt=self.analysisSettings.defaultDatasourceCoalescedBBfilt,
                         showTimeAverages=True)
+        if mu.autosave_check():
+            fpath = mu.get_ds_path(pipeline)
+            plt.savefig(mu.fname_from_timestamp(fpath,pipeline.mdh,'_locrate',ext='.png'),
+                        dpi=300, bbox_inches='tight')
 
     def OnEfoAnalysis(self, event):
         pipeline = self.visFr.pipeline
@@ -1741,7 +1745,7 @@ class MINFLUXanalyser():
             ]
         recipe.add_modules_and_execute(modules)
 
-    def OnRyRPlotBlobNNdist(self, event=None):
+    def OnRyRPlotBlobProps(self, event=None):
         pipeline = self.visFr.pipeline
         if not 'blobsNNdist' in pipeline.dataSources.keys():
             warn('missing datasource "blobsNNdist" from pipeline, needed for plotting; giving up...')
@@ -1763,7 +1767,7 @@ class MINFLUXanalyser():
             nnd3[nnd['NNdist']>= 50.0] = np.nan
             dfdict.update(dict(NNdist3=nnd3))
         if 'ClustClumpSize' in nnd.keys():
-            dfdict.update(dict(BlobSize=nnd['ClustClumpSize']))
+            dfdict.update(dict(BlobEvents=nnd['ClustClumpSize']))
         df = pd.DataFrame.from_dict(dfdict)
         from PYMEcs.misc.matplotlib import violinswarmplot
         plt.figure(num="RyR blobs %d" % self.ryrblobsTrackFignum)
@@ -1772,6 +1776,10 @@ class MINFLUXanalyser():
         plt.ylim(-20,100)
         plt.ylabel("Nearest neighbour distance (nm)")
         plt.title("RyR blobs NN distances - %s" % pipeline.mdh.get('MINFLUX.TimeStamp','UNKNOWN'))
+        if mu.autosave_check():
+            plt.savefig(mu.fname_from_timestamp(mu.get_ds_path(pipeline),pipeline.mdh,'_RyRblobprops',ext='.png'),
+                        dpi=300, bbox_inches='tight')
+        
         self.ryrblobsTrackFignum += 1
 
     def OnRyRShowBlobs(self, event=None):
