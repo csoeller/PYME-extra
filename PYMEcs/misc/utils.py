@@ -235,7 +235,7 @@ def zarrtozipstore(zarr_root,archive_name,verbose=False):
 
 def get_ds_path(pipeline,ds='FitResults'):
     if 'filename' in dir(pipeline):
-        return pipeline.filename()
+        return pipeline.filename
     try:
         fpath = pipeline.get_session()['datasources'][ds]
     except AttributeError:
