@@ -1775,6 +1775,18 @@ class MINFLUXanalyser():
                         annotate_medians=True,showpoints=False)
         plt.ylim(-20,100)
         plt.ylabel("Nearest neighbour distance (nm)")
+
+        nblobs = nnd['x'].size
+        if 'Localizations' in pipeline.dataSources.keys():
+            dloc = pipeline.dataSources['Localizations']
+        else:
+            dloc = nnd
+        roiwx_um = 1e-3*(dloc['x'].max()-dloc['x'].min())
+        roiwy_um = 1e-3*(dloc['y'].max()-dloc['y'].min())
+        blobdens = nblobs/(roiwx_um*roiwy_um)
+        plt.text(0.9, 0.05, 'ROI %.1f um x %.1f um, %d blobs, %.1f blb/um2' % (roiwx_um,roiwy_um,nblobs,blobdens), horizontalalignment='right',
+                 verticalalignment='bottom', transform=plt.gca().transAxes)
+        
         plt.title("RyR blobs NN distances - %s" % pipeline.mdh.get('MINFLUX.TimeStamp','UNKNOWN'))
         if mu.autosave_check():
             plt.savefig(mu.fname_from_timestamp(mu.get_ds_path(pipeline),pipeline.mdh,'_RyRblobprops',ext='.png'),

@@ -17,6 +17,7 @@ class SelectROIFT:
         self.visFr = visFr
 
         visFr.AddMenuItem('Experimental>View', "Add ROI FilterTable module from selection", self.OnSelROIFT)
+        visFr.AddMenuItem('Experimental>View', "Show geometrical properties of current selection", self.OnInfoROIsel)
         visFr.AddMenuItem('Experimental>View', "Add ROI FilterTable module from image", self.OnImROIFT)
 
     def OnSelROIFT(self, event):
@@ -41,6 +42,25 @@ class SelectROIFT:
 
         recipe.add_module(ftable)
         recipe.execute()
+
+    def OnInfoROIsel(self, event):
+        from PYMEcs.pyme_warnings import warn
+        try:
+            #old glcanvas
+            x0, y0 = self.visFr.glCanvas.selectionStart[0:2]
+            x1, y1 = self.visFr.glCanvas.selectionFinish[0:2]
+        except AttributeError:
+            #new glcanvas
+            x0, y0 = self.visFr.glCanvas.selectionSettings.start[0:2]
+            x1, y1 = self.visFr.glCanvas.selectionSettings.finish[0:2]
+
+        selwidthx_nm = abs(x0-x1)
+        selwidthy_nm = abs(y0-y1)
+        
+        if max(selwidthx_nm,selwidthy_nm) > 1000:
+            warn("ROI area is %.1f um by %.1f um" % (selwidthx_nm*1e-3,selwidthy_nm*1e-3,))
+        else:
+            warn("ROI area is %.0f nm by %.0f nm" % (selwidthx_nm,selwidthy_nm))
 
     def OnImROIFT(self, event):
         from PYME.DSView import dsviewer
