@@ -655,7 +655,7 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>RyRs', "HDBSCAN to detect RyRs", self.OnRyRHdbscanRecipe)
         visFr.AddMenuItem('MINFLUX>RyRs', "Show HDBSCAN RyR Blobs", self.OnRyRShowBlobs)
         visFr.AddMenuItem('MINFLUX>RyRs', "Plot HDBSCAN RyR Blob Properties", self.OnRyRPlotBlobProps)
-
+        visFr.AddMenuItem('MINFLUX>RyRs', "Plot HDBSCAN RyR Blob Cluster Sizes", self.OnRyRPlotBlobClusterSizes)
 
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MBM attributes", self.OnMBMAttributes)
         visFr.AddMenuItem('MINFLUX>Zarr', "Show MFX attributes", self.OnMFXAttributes)
@@ -1710,13 +1710,14 @@ class MINFLUXanalyser():
 
         (cfClustered,with_objectSDs,cfClusteredOnly,
          blockClusters,blockClusters_f,
-         withNNdist,blobsNNlt50) = unique_names(['cfClustered',
+         withNNdist,blobsNNlt50,blobsClustered) = unique_names(['cfClustered',
                                                  'with_objectSDs',
                                                  'cfClusteredOnly',
                                                  'blockClusters',
                                                  'blockClusters_f',
                                                  'blobsNNdist',
-                                                 'blobsNNlt50'],
+                                                 'blobsNNlt50',
+                                                 'blobsClustered'],
                                                 pipeline.dataSources.keys())
 
         curds = pipeline.selectedDataSourceKey
@@ -1742,6 +1743,12 @@ class MINFLUXanalyser():
             FilterTable(recipe,inputName=withNNdist,outputName=blobsNNlt50,
                         filters={'NNdist'  : [0,50],
                                  }),
+            DBSCANTypeClustering(recipe,inputName=blockClusters,outputName=blobsClustered,
+                                 searchRadius = 60.0, # distance for clustering into RyR clusters
+                                 clumpColumnName = 'cobClumpID',
+                                 sizeColumnName='cobClumpSize',
+                                 minClumpSize=2
+                                 ),
             ]
         recipe.add_modules_and_execute(modules)
 
@@ -1793,6 +1800,38 @@ class MINFLUXanalyser():
                         dpi=300, bbox_inches='tight')
         
         self.ryrblobsTrackFignum += 1
+
+    def OnRyRPlotBlobClusterSizes(self, event=None):
+        pipeline = self.visFr.pipeline
+        if not 'blobsClustered' in pipeline.dataSources.keys():
+            warn('missing datasource "blobsClustered" from pipeline, needed for plotting; giving up...')
+            return
+
+        ds = pipeline.dataSources['blobsClustered']
+        uids,idx = np.unique(ds['cobClumpID'],return_index=True)
+        usz = ds['cobClumpSize'][idx]
+        usmall = (usz <= 2)
+        usmid = ds['cobClumpID'][idx][usmall]
+        usmz = ds['z'][idx][usmall]
+        import pandas as pd
+        dfsz=pd.DataFrame.from_dict(dict(ClusterSize=usz))
+        fig, axs = plt.subplots(1,2)
+        from PYMEcs.misc.matplotlib import boxswarmplot
+        boxswarmplot(dfsz,format="%.1f",width=0.4,annotate_means=True,
+                     annotate_medians=True,ax=axs[0],swarmalpha=0.5)
+        axs[1].scatter(usmid,usmz,alpha=0.3)
+        axs[1].set_ylim(ds['z'].min(),ds['z'].max())
+        axs[1].set_ylabel('z (nm)')
+        axs[1].set_xlabel('cluster ID')
+        plt.tight_layout()
+
+        plt.title("RyR blob cluster sizes - %s" % pipeline.mdh.get('MINFLUX.TimeStamp','UNKNOWN'))
+        if mu.autosave_check():
+            plt.savefig(mu.fname_from_timestamp(mu.get_ds_path(pipeline),pipeline.mdh,'_RyRblobClusterSizes',ext='.png'),
+                        dpi=300, bbox_inches='tight')
+            dfsz.to_csv(mu.fname_from_timestamp(mu.get_ds_path(pipeline),pipeline.mdh,'_RyRblobClusterSizes',ext='.csv'),index=False)
+            
+
 
     def OnRyRShowBlobs(self, event=None):
         pipeline = self.visFr.pipeline
