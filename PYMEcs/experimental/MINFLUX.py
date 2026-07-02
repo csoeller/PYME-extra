@@ -1765,6 +1765,7 @@ class MINFLUXanalyser():
         nndlt50 = nnd['NNdist'].copy()
         nndlt50[nndlt50 >= 50.0] = np.nan
         dfdict = dict(NNdist=nnd['NNdist'],NNlt50=nndlt50)
+        dftdict = None
         if 'NNdist2' in nnd.keys():
             nnd2 = nnd['NNdist2'].copy()
             nnd2[nnd['NNdist']>= 50.0] = np.nan
@@ -1775,6 +1776,8 @@ class MINFLUXanalyser():
             dfdict.update(dict(NNdist3=nnd3))
         if 'ClustClumpSize' in nnd.keys():
             dfdict.update(dict(BlobEvents=nnd['ClustClumpSize']))
+            T_duration = nnd['tim'].max() - nnd['tim'].min()
+            dftdict = dict(TBVisits=T_duration/nnd['ClustClumpSize'])
         df = pd.DataFrame.from_dict(dfdict)
         from PYMEcs.misc.matplotlib import violinswarmplot
         plt.figure(num="RyR blobs %d" % self.ryrblobsTrackFignum)
@@ -1798,8 +1801,15 @@ class MINFLUXanalyser():
         if mu.autosave_check():
             plt.savefig(mu.fname_from_timestamp(mu.get_ds_path(pipeline),pipeline.mdh,'_RyRblobprops',ext='.png'),
                         dpi=300, bbox_inches='tight')
-        
+
         self.ryrblobsTrackFignum += 1
+
+        if dftdict is not None:
+            dft = pd.DataFrame.from_dict(dftdict)
+            plt.figure()
+            violinswarmplot(dft,format="%.1f",width=0.4,annotate_means=True,
+                        annotate_medians=True,showpoints=False)
+            plt.ylabel("Time between visits (s)")
 
     def OnRyRPlotBlobClusterSizes(self, event=None):
         pipeline = self.visFr.pipeline
