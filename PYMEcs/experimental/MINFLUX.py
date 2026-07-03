@@ -1810,6 +1810,8 @@ class MINFLUXanalyser():
             violinswarmplot(dft,format="%.1f",width=0.4,annotate_means=True,
                         annotate_medians=True,showpoints=False)
             plt.ylabel("Time between visits (s)")
+            plt.ylim(None,2*dft['TBVisits'].max())
+            plt.tight_layout()
 
     def OnRyRPlotBlobClusterSizes(self, event=None):
         pipeline = self.visFr.pipeline
