@@ -610,6 +610,13 @@ class MINFLUXanalyser():
         self.mbmAxisSelection = MBMaxisSelection()
         self.plottingDefaults = MINFLUXplottingDefaults()
         self.siteSettings = MINFLUXSiteSettings()
+
+        try:
+            import PYMEXnf.IO.msr_minflux as msrmfx
+        except ImportError:
+            has_pymexnf = False
+        else:
+            has_pymexnf = True
         
         visFr.AddMenuItem('MINFLUX', "Localisation Error analysis", self.OnErrorAnalysis)
         visFr.AddMenuItem('MINFLUX', "Cluster sizes - 3D", self.OnCluster3D)
@@ -638,6 +645,8 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Util', "Estimate region size (with output filter)", self.OnEstimateMINFLUXRegionSize)
         visFr.AddMenuItem('MINFLUX>Util', "Add MINFLUX confocal data to 3D scene", self.OnAddConfocalView,
                           helpText='add confocal view; image origin metadata MUST already be set correctly from MSR data; use PYMEImage to make suitable TIFF images from MSR')
+        if has_pymexnf:
+            visFr.AddMenuItem('MINFLUX>Util', "Export zarrzip from .msr", self.OnMINFLUXmsr2zarrzip) # this needs PYMEXnf
         
         visFr.AddMenuItem('MINFLUX>MBM', "Plot mean MBM info (and if present origami info)", self.OnMBMplot)
         visFr.AddMenuItem('MINFLUX>MBM', "Show MBM tracks", self.OnMBMtracks)
@@ -682,6 +691,58 @@ class MINFLUXanalyser():
             for r in minfluxRecipes:
                 ID = visFr.AddMenuItem('MINFLUX>Recipes', r, self.OnLoadCustom).GetId()
                 self.minfluxRIDs[ID] = minfluxRecipes[r]
+
+
+    def OnMINFLUXmsr2zarrzip(self,event):
+        import wx
+        pipeline = self.visFr.pipeline
+        with wx.FileDialog(self.visFr, 'Load MFX data from MSR file...',
+                                wildcard='MSR (*.msr)|*.msr',
+                                style=wx.FD_OPEN) as fdialog:
+            if fdialog.ShowModal() != wx.ID_OK:
+                return
+            msrfile = fdialog.GetPath()
+
+        from PYMEXnf.IO.msr_minflux import mfxdta_listing, read_minflux_from_msr
+
+        # this section needs fixing and matching to mfxdta_listing returns
+        mfxs = mfxdta_listing(msrfile)
+        if len(mfxs) == 0:
+            warn('no minflux data sets in file %s' % msrfile)
+            return
+        
+        def format_stack_info(ind, label):
+            return '%d: %s' % (ind, label)
+                                                  
+        options = [format_stack_info(key, mfxs[key]) for key in mfxs]
+        with wx.SingleChoiceDialog(None, 'MINFLUX Stack', 'Select a stack', options) as dlg:
+            if dlg.ShowModal() != wx.ID_OK:
+                return
+            stack_number = list(mfxs.keys())[dlg.GetSelection()] # needs fixing
+        # end section that needs fixing
+        
+        mfxdta = read_minflux_from_msr(msrfile,stack_index=stack_number,return_mfxdta=True)
+
+        MINFLUXts = mfxdta.get_timestamp()
+        if MINFLUXts is not None:
+            defaultNPZFile = "%s.npz" % MINFLUXts
+        else:
+            defaultNPZFile = "%s.npz" % mfxdta.label
+        defaultFile = "%s.zarr.zip" % mfxdta.label
+        fdialog = wx.FileDialog(self.visFr, 'Save MFX data set as ...',
+                                wildcard='ZarrZipStore (*.zip)|*.zip',
+                                defaultFile=defaultFile,
+                                style=wx.FD_SAVE)
+        if fdialog.ShowModal() != wx.ID_OK:
+            return
+
+        import pathlib
+        pathzarrzip = pathlib.Path(fdialog.GetPath())
+        mfxdta.save_as_zarrzip(pathzarrzip)
+        # here needs adding of reading and writing mbm data
+        mbms = mfxdta.get_mbm_beads()
+        if mbms: # if not (None or no beads in dict)
+            np.savez(pathzarrzip.parent / defaultNPZFile, mbms)
 
     def MINFLUXloadExtraDatasource(self,event):
         from PYMEcs.recipes.localisations import TrackProps, MBMcorrection, CorrectForeshortening
