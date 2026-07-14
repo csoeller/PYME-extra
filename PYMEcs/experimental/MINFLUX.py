@@ -729,20 +729,24 @@ class MINFLUXanalyser():
         else:
             defaultNPZFile = "%s.npz" % mfxdta.label
         defaultFile = "%s.zarr.zip" % mfxdta.label
-        fdialog = wx.FileDialog(self.visFr, 'Save MFX data set as ...',
+        import pathlib
+        with wx.FileDialog(self.visFr, 'Save MFX data set as ...',
                                 wildcard='ZarrZipStore (*.zip)|*.zip',
                                 defaultFile=defaultFile,
-                                style=wx.FD_SAVE)
-        if fdialog.ShowModal() != wx.ID_OK:
-            return
+                                style=wx.FD_SAVE) as fdialog:
+            if fdialog.ShowModal() != wx.ID_OK:
+                return
+            pathzarrzip = pathlib.Path(fdialog.GetPath())
 
-        import pathlib
-        pathzarrzip = pathlib.Path(fdialog.GetPath())
         mfxdta.save_as_zarrzip(pathzarrzip)
-        # here needs adding of reading and writing mbm data
+        msg = "saved zarr zip store as '%s'" % pathzarrzip.name
+        
+        # reading and writing of mbm data
         mbms = mfxdta.get_mbm_beads()
         if mbms: # if not (None or no beads in dict)
             np.savez(pathzarrzip.parent / defaultNPZFile, **mbms)
+            msg += " and mbm beads to npz file '%s'" % defaultNPZFile
+        warn(msg + ";\ndirectory is '%s'" % pathzarrzip.parent)
 
     def MINFLUXloadExtraDatasource(self,event):
         from PYMEcs.recipes.localisations import TrackProps, MBMcorrection, CorrectForeshortening
