@@ -742,7 +742,7 @@ class MINFLUXanalyser():
         # here needs adding of reading and writing mbm data
         mbms = mfxdta.get_mbm_beads()
         if mbms: # if not (None or no beads in dict)
-            np.savez(pathzarrzip.parent / defaultNPZFile, mbms)
+            np.savez(pathzarrzip.parent / defaultNPZFile, **mbms)
 
     def MINFLUXloadExtraDatasource(self,event):
         from PYMEcs.recipes.localisations import TrackProps, MBMcorrection, CorrectForeshortening
