@@ -23,6 +23,13 @@ warning_msg = ""
 import logging
 logger = logging.getLogger(__name__)
 
+try:
+    import PYMEXnf.IO.msr_minflux as msrmfx
+except ImportError:
+    has_pymexnf = False
+else:
+    has_pymexnf = True
+
 #############################
 ### MINFLUX utility funcs ###
 #############################
@@ -37,6 +44,23 @@ def get_stddev_property(ids, prop, statistic='std'):
     propstd[np.isnan(propstd)] = 1000.0 # (mark as huge error)
     std_events = propstd[ids]
     return std_events
+
+def mfxdta_selection(filename):
+    from PYMEXnf.IO.msr_minflux import mfxdta_listing
+    mfxs = mfxdta_listing(filename)
+    if len(mfxs) == 0:
+        return None # this msr does not contain MINFLUX data - we give up
+    def format_stack_info(ind, label):
+        return '%d: %s' % (ind, label)
+                                                  
+    options = [format_stack_info(key, mfxs[key]) for key in mfxs]
+    import wx
+    with wx.SingleChoiceDialog(None, 'MINFLUX Stack', 'Select a stack', options) as dlg:
+        if dlg.ShowModal() != wx.ID_OK:
+            return None
+        stack_number = list(mfxs.keys())[dlg.GetSelection()] # needs fixing
+
+    return stack_number
 
 ###############################
 ### MINFLUX property checks ###
@@ -634,9 +658,8 @@ def _get_mdh(data,filename):
 
     return mdh
 
-def _get_mdh_zarr(filename,arch):
+def _get_mdh_zarrlike(filename,mfx_attrs):
     mdh = _get_basic_MINFLUX_metadata(filename)
-    mfx_attrs = arch['mfx'].attrs.asdict()
     if not '_legacy' in mfx_attrs:
         mdh['MINFLUX.Format'] = 'RevAutumn2024'
         mdh['MINFLUX.AcquisitionDate'] = mfx_attrs['acquisition_date']
@@ -823,9 +846,9 @@ class MinfluxZarrSource(MinfluxNpySource):
         # previous way of opening .zarr.zip
         # archz = zarr.open(filename)
         self.zarr = archz
-        self._own_file = True # is this necessary? Normally only used by HDF to close HFD on destroy, zarr does not need "closing"
+        # self._own_file = True # is this necessary? Normally only used by HDF to close HFD on destroy, zarr does not need "closing"
 
-        self.mdh = _get_mdh_zarr(filename,archz)
+        self.mdh = _get_mdh_zarrlike(filename,archz['mfx'].attrs.asdict())
         # NOTE: no further 'locations valid' check should be necessary - we filter already in the conversion function
         self.res = minflux_zarr2pyme(archz,mdh=self.mdh)
         
@@ -833,7 +856,34 @@ class MinfluxZarrSource(MinfluxNpySource):
 
         # note: aparently, closing an open zarr archive is not required; accordingly no delete and close methods necessary
         self._paraflux_analysis = None
-    
+
+class MinfluxMsrSource(MinfluxNpySource):
+    _name = "MINFLUX MSR File Source"
+    def __init__(self, filename, stack_index=None):
+        """ Input filter for use with MSR MINFLUX data."""
+        from PYMEXnf.IO.msr_minflux import read_minflux_from_msr
+        if stack_index is None: # strict for now; we may relax this in future if the msr file contains exactly one MFX data set
+            # we have an issue
+            raise RuntimeError("need a valid stack index to load MSR MINFLUX data from, none given")
+        mfxdta = read_minflux_from_msr(filename,stack_index=stack_index,return_mfxdta=True)
+        if mfxdta is None:
+            # we have an issue
+            raise RuntimeError("file '%s' with stack number '%i' cannot be read as MINFLUX MSR data set" % (filename,stack_index))
+        # self.zarr = archz
+        self._stack_index = stack_index
+        self.query = "stack=%d" % stack_index # record the stack_index number for a query string used in session datasource loading
+        # self._own_file = True # is this necessary? Normally only used by HDF to close HFD on destroy, zarr does not need "closing"
+
+        self.mdh = _get_mdh_zarrlike(filename,mfxdta.get_mfx_metadata())
+        self.mdh['MINFLUX.MSRStackIndex'] = stack_index
+        # NOTE: no further 'locations valid' check should be necessary - we filter already in the conversion function
+        self.res = minflux_zarr2pyme({'mfx':mfxdta.get_mfx()},mdh=self.mdh)
+        
+        self._keys = list(self.res.dtype.names)
+
+        # note: aparently, closing an open zarr archive is not required; accordingly no delete and close methods necessary
+        self._paraflux_analysis = None
+
 ##############################
 ### Register IO with PYME ####
 ##############################
@@ -856,27 +906,56 @@ def _load_ds_zarrzip(filename):
     logger.info('loaded MINFLUX zarr.zip ...')
     return ds
 
+def _load_ds_mfxmsr(filename,stack_index=None):
+    ds = MinfluxMsrSource(filename,stack_index=stack_index) # we need to decide if the query string gets parsed before calling this datasource or within its constructor
+    ds.filename = filename
+
+    # ds.mdh = _get_mdh_zarr(filename,ds.zarr)
+    logger.info('loaded MINFLUX data source from MSR ...')
+    return ds
+
+
 ### we now also need to monkey_patch the _load_input method of the pipeline recipe
 ### this should allow session loading to succeed
-def _load_input_npyorzarr(self, filename, key='input', metadata_defaults={}, cache={}, default_to_image=True, args={}):
+def _load_input_npyorzarr(self, filename, key='input', metadata_defaults={}, cache={}, default_to_image=True, args={}, haveGUI=False):
     """
     Load input data from a file and inject into namespace
     """
     from PYME.IO import unifiedIO
     import os
 
+    query = ''
     if '?' in filename:
-        self._load_input_original(filename,key=key,metadata_defaults=metadata_defaults,
-                                  cache=cache,default_to_image=default_to_image,args=args)
+        from urllib.parse import parse_qs
+        filename, query = filename.split('?')
+        args.update(parse_qs(query))
+        args = {k: v if len(v)>1 else v[0] for k, v in args.items()}
+
+    call_original = False
     if os.path.splitext(filename)[1] == '.npy': # MINFLUX NPY file
         logger.info('.npy file, trying to load as MINFLUX npy ...')
         self.namespace[key] = _load_ds_npy(filename)
     elif os.path.splitext(filename)[1] == '.zip': # MINFLUX NPY file
         logger.info('.npy file, trying to load as MINFLUX zarr ...')
         self.namespace[key] = _load_ds_zarrzip(filename)
+    elif os.path.splitext(filename)[1] == '.msr' and has_pymexnf: # MINFLUX MSR file
+        from PYMEXnf.IO.msr_minflux import check_stack_is_mfx
+        # do we need to check if this is a MINFLUX dataset rather than an image?
+        # I got a feeling we do
+        if not check_stack_is_mfx(filename,stack_index=int(args.get('stack'))):
+            call_original = True
+        else:
+            logger.info('.msr file, trying to load as MINFLUX dataset from MSR ...')
+            self.namespace[key] = _load_ds_mfxmsr(filename,stack_index=int(args.get('stack')))
     else:
+        call_original = True
+
+    if call_original:
+        if query:
+            filename = filename + '?' + query # reassemble a potential query string if it was nonempty
         self._load_input_original(filename,key=key,metadata_defaults=metadata_defaults,
-                                  cache=cache,default_to_image=default_to_image,args=args)
+                                  cache=cache,default_to_image=default_to_image,args=args,
+                                  haveGUI=haveGUI)
 
 
 # we are monkeypatching pipeline and VisGUIFrame methods to sneak MINFLUX npy IO in;
@@ -914,6 +993,12 @@ def monkeypatch_npyorzarr_io(visFr):
                      % (os.path.basename(filename),warnmsg))
                 return # this is not MINFLUX zarr data - we give up
             return {} # all good, just return empty args
+        elif  os.path.splitext(filename)[1] == '.msr' and has_pymexnf:
+            # check this is a MFXDTA stack
+            stack_number = mfxdta_selection(filename)
+            if stack_number is None:
+                return # no MFX stack selected or available, we give up
+            return {'stackIndex':stack_number} # all good, return the stacknumber as stackIndex keyword
         else:
             return self._populate_open_args_original(filename)
 
@@ -927,6 +1012,9 @@ def monkeypatch_npyorzarr_io(visFr):
         elif os.path.splitext(filename)[1] == '.zip': # MINFLUX ZARR file in zip format
             logger.info('.zip file, trying to load as MINFLUX zarr ...')
             return _load_ds_zarrzip(filename)
+        elif os.path.splitext(filename)[1] == '.msr' and has_pymexnf: # MINFLUX dataset in MSR file, needs a stackIndex keyword
+            logger.info('.msr file, trying to load as MINFLUX dataset from MSR ...')
+            return _load_ds_mfxmsr(filename,stack_index=kwargs.get('stackIndex'))
         else:
             return self._ds_from_file_original(filename, **kwargs)
 
@@ -945,7 +1033,7 @@ def monkeypatch_npyorzarr_io(visFr):
     def OnOpenFileNPYorZARR(self, event):
         filename = wx.FileSelector("Choose a file to open", 
                                    nameUtils.genResultDirectoryPath(), 
-                                   wildcard='|'.join(['All supported formats|*.h5r;*.txt;*.mat;*.csv;*.hdf;*.3d;*.3dlp;*.npy;*.zip;*.pvs',
+                                   wildcard='|'.join(['All supported formats|*.h5r;*.txt;*.mat;*.csv;*.hdf;*.3d;*.3dlp;*.npy;*.zip;*.pvs;*.msr',
                                                       'PYME Results Files (*.h5r)|*.h5r',
                                                       'Tab Formatted Text (*.txt)|*.txt',
                                                       'Matlab data (*.mat)|*.mat',
@@ -953,14 +1041,15 @@ def monkeypatch_npyorzarr_io(visFr):
                                                       'HDF Tabular (*.hdf)|*.hdf',
                                                       'MINFLUX NPY (*.npy)|*.npy',
                                                       'MINFLUX ZARR (*.zip)|*.zip',
-                                                      'Session files (*.pvs)|*.pvs',]))
+                                                      'Session files (*.pvs)|*.pvs',
+                                                      'MINFLUX MSR files (*.msr)|*.msr']))
 
         if not filename == '':
             self.OpenFile(filename)
 
     
     visFr.OnOpenFileNPYorZARR = types.MethodType(OnOpenFileNPYorZARR,visFr)
-    visFr.AddMenuItem('File', "Open MINFLUX NPY, zarr or session", visFr.OnOpenFileNPYorZARR)
+    visFr.AddMenuItem('File', "Open MINFLUX NPY, zarr, MSR or session", visFr.OnOpenFileNPYorZARR)
 
     def OnOpenChannelNPYorZARR(self, event):
         filename = wx.FileSelector("Choose a file to open", 
