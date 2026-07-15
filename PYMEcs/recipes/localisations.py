@@ -1,4 +1,4 @@
-from PYME.recipes.base import register_module, ModuleBase, Filter
+from PYME.recipes.base import register_module, register_legacy_module, ModuleBase, Filter
 from PYME.recipes.traits import Input, Output, Float, Enum, CStr, Bool, Int, List, DictStrStr, DictStrList, ListFloat, ListStr, FileOrURI
 
 import numpy as np
@@ -67,9 +67,11 @@ class NNdist(ModuleBase):
         from scipy.spatial import KDTree
         coords = np.vstack([inp[k] for k in ['x','y','z']]).T
         tree = KDTree(coords)
-        dd, ii = tree.query(coords,k=3)
+        dd, ii = tree.query(coords,k=4)
         mapped.addColumn('NNdist', dd[:,1])
         mapped.addColumn('NNdist2', dd[:,2])
+        if dd.shape[1] > 3:
+            mapped.addColumn('NNdist3', dd[:,3])
         
         try:
             mapped.mdh = inp.mdh
@@ -772,8 +774,9 @@ class subClump(ModuleBase):
 
         
 # a version of David's module which we include here so that we can test/hack a few things
-@register_module('DBSCANClustering2')
-class DBSCANClustering2(ModuleBase):
+@register_module('DBSCANTypeClustering')
+@register_legacy_module('DBSCANClustering2') #Deprecated - use DBSCANTypeClustering in new code / recipes
+class DBSCANTypeClustering(ModuleBase):
     """
     Performs DBSCAN clustering on input dictionary
 
@@ -795,12 +798,14 @@ class DBSCANClustering2(ModuleBase):
 
     columns = ListStr(['x', 'y', 'z'])
     algorithm = Enum(['dbscan','hdbscan','optics'],
-                     desc="algorithm used for clustering; HDBSCAN and OPTICS ignore the searchRadius")
+                     desc="algorithm used for clustering; HDBSCAN and OPTICS ignore the searchRadius (although note subtleties for hdbscan, see below)")
     metric = Enum(['euclidean','manhattan','chebyshev'],
                   desc="a few metrics for testing, generally eucledian should be the right choice")
     maxClumpSize = Int(-1,desc="a limit to the size of clusters returned by the cluster selection algorithm; only used for HDBSCAN, there is no limit when value < 0")
-    searchRadius = Float(10,desc="equivalent of epsilon - used for DBSCAN only")
+    clusterSelectionMethod = Enum(['eom','leaf'],desc="cluster selection method for HDBSCAN, standard approach is to use an Excess of Mass (eom) algorithm to find the most persistent clusters. Alternatively clusters are selected at the leaves of the tree – this provides the most fine grained and homogeneous clusters; parameter only used for HDBSCAN")
+    searchRadius = Float(10,desc="equivalent of epsilon - used for DBSCAN and HDBSCAN only; note that for HDBSCAN it has a different meaning than for DBSCAN, see scikit learn docs on HDBSCAN") # https://scikit-learn.org/stable/modules/generated/sklearn.cluster.HDBSCAN.html
     minClumpSize = Int(1)
+    useHDBSCANepsilon = Bool(False,desc="use of epsilon - for HDBSCAN ONLY; when used merges closely spaced clusters; False by default")
     
     #exposes sklearn parallelism. Recipe modules are generally assumed
     #to be single-threaded. Enable at your own risk
@@ -812,8 +817,23 @@ class DBSCANClustering2(ModuleBase):
     outputName = Output('dbscanClustered')
 
     def execute(self, namespace):
-        from sklearn.cluster import dbscan, HDBSCAN, OPTICS
+        from sklearn.cluster import dbscan, OPTICS
         from scipy.stats import binned_statistic
+        try:
+            # currently (as of scikit-learn v1.8.0) there is an issue with using
+            # sklearn hdbscan with cluster_selection_epsilon > 0, see also
+            # https://github.com/scikit-learn/scikit-learn/issues/33219
+            # there seems to be already a PR with suitable fix but not yet merged/released,
+            #    see https://github.com/scikit-learn/scikit-learn/pull/33630
+            # the standalone hdbscan package does not suffer from this issue and we use it instead if available
+            #
+            # this should be a temporary fix until scikit learn HDBSCAN has received the proper fix
+            from hdbscan import HDBSCAN
+        except ImportError:
+            from sklearn.cluster import HDBSCAN
+            has_hdbscan_package = False
+        else:
+            has_hdbscan_package = True
 
         def optics(X,min_samples=5,metric='euclidean',n_jobs=None):
             est = OPTICS(
@@ -825,17 +845,28 @@ class DBSCANClustering2(ModuleBase):
             return est.labels_
 
         def hdbscan(X,min_cluster_size=5,metric='euclidean',n_jobs=None,
-                    max_cluster_size=None):
-            est = HDBSCAN(
-                min_cluster_size=min_cluster_size,
-                max_cluster_size=max_cluster_size,
-                cluster_selection_method='eom',
-                metric=metric,
-                n_jobs=n_jobs,
-            )
+                    max_cluster_size=None,
+                    cluster_selection_method='eom',
+                    cluster_selection_epsilon=0.0,
+                    use_hdbscan_epsilon=False):
+            kwargs = dict(min_cluster_size=min_cluster_size,
+                          max_cluster_size=max_cluster_size,
+                          cluster_selection_method=cluster_selection_method,
+                          metric=metric
+                )
+            if has_hdbscan_package:
+                if use_hdbscan_epsilon:
+                    kwargs.update(dict(cluster_selection_epsilon=cluster_selection_epsilon))
+                else:
+                    kwargs.update(dict(cluster_selection_epsilon=0.0))
+            else:
+                if use_hdbscan_epsilon:
+                    warn("hdbscan package not available, falling back to scikit-learn which ignores cluster_selection_epsilon due to currently broken implementation")
+                kwargs.update(dict(cluster_selection_epsilon=0.0,n_jobs=n_jobs))
+            est = HDBSCAN(**kwargs)
             est.fit(X)
             return est.labels_
-            
+
         inp = namespace[self.inputName]
         mapped = tabular.MappingFilter(inp)
 
@@ -857,7 +888,9 @@ class DBSCANClustering2(ModuleBase):
             dbLabels = hdbscan(np.vstack([inp[k] for k in self.columns]).T,
                                min_cluster_size=self.minClumpSize, metric=self.metric,
                                max_cluster_size=max_cluster_size,
-                               n_jobs=n_jobs)
+                               cluster_selection_method=self.clusterSelectionMethod,
+                               cluster_selection_epsilon=self.searchRadius,
+                               n_jobs=n_jobs,use_hdbscan_epsilon=self.useHDBSCANepsilon)
         elif self.algorithm == 'optics':
             dbLabels = optics(np.vstack([inp[k] for k in self.columns]).T,
                                min_samples=self.minClumpSize, metric=self.metric,
@@ -868,6 +901,7 @@ class DBSCANClustering2(ModuleBase):
         maxid = int(dbids.max())
         edges = -0.5+np.arange(maxid+2)
         resstat = binned_statistic(dbids, np.ones_like(dbids), statistic='sum', bins=edges)
+        resstat[0][0] = 1 # set sizes for id 0 explicitly to 1 - hopefully this always works, i.e. that bin 0 covers the labels equal to 0
 
         mapped.addColumn(str(self.clumpColumnName), dbids)
         mapped.addColumn(str(self.sizeColumnName),resstat[0][dbids])
@@ -892,7 +926,9 @@ class DBSCANClustering2(ModuleBase):
                     Item('minClumpSize'),
                     Item('maxClumpSize'),
                     Item('algorithm'),
+                    Item('useHDBSCANepsilon'),
                     Item('metric'),
+                    Item('clusterSelectionMethod'),
                     Item('multithreaded'),
                     Item('numberOfJobs'),
                     Item('clumpColumnName'),
@@ -1652,11 +1688,11 @@ def get_bead_dict_from_mbm(mbm):
                 A=A,good=good,objectID=objectID)
 
 # remove this once sessionpath PR is accepted!!
-try:
-    from PYME.LMVis.sessionpaths import register_path_modulechecks
-    register_path_modulechecks('PYMEcs.MBMcorrection','mbmfile','mbmsettings')
-except ImportError:
-    pass
+# try:
+#     from PYME.LMVis.sessionpaths import register_path_modulechecks
+#     register_path_modulechecks('PYMEcs.MBMcorrection','mbmfile','mbmsettings')
+# except ImportError:
+#     pass
 
 # code on suggestion from https://blog.finxter.com/5-best-ways-to-compute-the-hash-of-a-python-tuple/
 import hashlib
@@ -1676,6 +1712,9 @@ class MBMcorrection(ModuleBaseMDHmod):
     mbmsettings = FileOrURI('',filter=['Json (*.json)|*.json'])
     mbmfilename_checks = Bool(True)
     
+    MBM_channel_name = CStr("channel0") # by default the reference channel name
+    is_reference_channel = Bool(True)
+
     Median_window = Int(5)
     MBM_lowess_fraction = Float(0.1,label='lowess fraction for MBM smoothing',
                                 desc='lowess fraction used for smoothing of mean MBM trajectories (default 0.1); 0 = no smoothing')
@@ -1866,6 +1905,8 @@ class MBMcorrection(ModuleBaseMDHmod):
         from PYME.ui.custom_traits_editors import CBEditor
 
         return View(Item('inputLocalizations', editor=CBEditor(choices=self._namespace_keys)),
+                    Item('MBM_channel_name'),
+                    Item('is_reference_channel'),
                     Item('_'),
                     Item('mbmfile'),
                     Item('mbmsettings'),
@@ -2483,3 +2524,150 @@ class TrackingConsensusTimes(ModuleBase):
         mapped.addColumn('track_dtcms',tt_dtms)
 
         return mapped
+
+
+def calcmean_bead_props(beads):
+    meanbeads = {}
+    ids = beads['beadID'].astype('i')
+    idsunique = np.unique(ids)
+    bdict = {}
+    has_z = True
+
+    for j,id in enumerate(idsunique):
+        idkey = "R%d" % id
+        bprops = {}
+        idx = ids == id
+        bprops['beadID'] = id
+        bprops['x'] = np.mean(beads['x'][idx])
+        bprops['y'] = np.mean(beads['y'][idx])
+        bprops['error_x'] = np.std(beads['x'][idx])
+        bprops['error_y'] = np.std(beads['y'][idx])
+        if has_z:
+            bprops['z'] = np.mean(beads['z'][idx])
+            bprops['error_z'] = np.std(beads['z'][idx])
+        bprops['good'] = np.mean(beads['good'][idx]) # this SHOULD be a constant value for all elements
+        bprops['A'] = np.mean(beads['A'][idx])
+        
+        meanbeads[idkey] = bprops
+        
+    return meanbeads
+
+# match up good beads and calculate mean shifts
+# if not enough good intersecting beads: shift = 0
+def calcshifts(srcbeads,targetbeads):
+    shifts_dict = {}
+    usable_shifts = dict(x=[],y=[],z=[])
+    for key in ['x','y','z',
+                'error_x','error_y','error_z',
+                'error_target_x','error_target_y','error_target_z',
+                'beadID', 'good', 'target_good', 'A', 'target_A',
+                'shift_x', 'shift_y', 'shift_z', 'shift_used']:
+        shifts_dict[key] = []
+    for bead in srcbeads:
+        bdict = srcbeads[bead]
+        for key in ['x','y','z',
+                    'error_x','error_y','error_z',
+                    'beadID', 'good','A']:
+            shifts_dict[key].append(bdict[key])
+        if bead in targetbeads:
+            tbdict = targetbeads[bead]
+            shifts_dict['error_target_x'].append(tbdict['error_x'])
+            shifts_dict['error_target_y'].append(tbdict['error_y'])
+            shifts_dict['error_target_z'].append(tbdict['error_z'])
+            shifts_dict['target_A'].append(tbdict['A'])
+            shifts_dict['target_good'].append(tbdict['good'])
+            # now check if both beads are good
+            shift_x = bdict['x']-tbdict['x']
+            shift_y = bdict['y']-tbdict['y']
+            shift_z = bdict['z']-tbdict['z']
+            shifts_dict['shift_x'].append(shift_x)
+            shifts_dict['shift_y'].append(shift_y)
+            shifts_dict['shift_z'].append(shift_z)
+            if tbdict['good'] and bdict['good']:
+                usable_shifts['x'].append(shift_x)
+                usable_shifts['y'].append(shift_y)
+                usable_shifts['z'].append(shift_z)
+                shifts_dict['shift_used'].append(1)
+            else:
+                shifts_dict['shift_used'].append(0)
+        else:
+            for key in ['error_target_x','error_target_y','error_target_z','target_A',
+                        'shift_x', 'shift_y', 'shift_z','target_good']:
+                shifts_dict[key].append(0)
+
+    shifts_dict_np = {}
+    for key in shifts_dict:
+        shifts_dict_np[key] = np.array(shifts_dict[key])
+
+    if len(usable_shifts['x']) > 0:
+        shifts = [np.mean(usable_shifts['x']),np.mean(usable_shifts['y']),np.mean(usable_shifts['z'])]
+    else:
+        shifts = [0,0,0]
+
+    return shifts, shifts_dict_np
+
+@register_module('AlignFromMBMs')
+class AlignFromMBMs(ModuleBase):
+    inputlocalizations = Input('localizations')
+    inputSrcMBM = Input('source_mbmtracks')
+    inputTargetMBM = Input('target_mbmtracks')
+
+    outputlocalizations = Output('localizations_aligned')
+    outputMBMshifts = Output('mbm_shifts') # this will be a small set of shifts, one per src mbm bead
+    outputsrcMBM = Output('source_mbmtracks_aligned')
+
+    tolerance = Float(50.0) # biggest allowed shifts without warning - checking not yet implemented
+
+    def run(self, inputlocalizations, inputSrcMBM, inputTargetMBM):
+        
+        locs = inputlocalizations
+        srcmbm = inputSrcMBM
+        tmbm = inputTargetMBM
+
+        # check srcmbm and tmbm have the required fields: beadID, good
+        for field in ['beadID', 'good']:
+            if field not in srcmbm.keys():
+                raise RuntimeError("inputSrcMBM lacks required property '%s'" % field)
+            if field not in tmbm.keys():
+                raise RuntimeError("inputTargetMBM lacks required property '%s'" % field)
+        
+        # calculate mean positions and stddevs
+        srcbeads = calcmean_bead_props(srcmbm)
+        targetbeads = calcmean_bead_props(tmbm)
+
+        # match up good beads and calculate mean shifts
+        # if not enough good intersecting beads: shift = 0
+        shifts, shifts_dict = calcshifts(srcbeads,targetbeads)
+
+        has_z = 'z' in locs.keys() and np.std(locs['z']) > 1.0
+        # apply shifts to locs to make locs_aligned
+        mapped = tabular.MappingFilter(locs)
+        mapped.addColumn('x',locs['x']-shifts[0])
+        mapped.addColumn('y',locs['y']-shifts[1])
+        if has_z:
+            mapped.addColumn('z',locs['z']-shifts[2])
+
+        # apply shifts to srcmbm to make srcmbm_aligned
+        mappedmbm = tabular.MappingFilter(srcmbm)
+        mappedmbm.addColumn('x',srcmbm['x']-shifts[0])
+        mappedmbm.addColumn('y',srcmbm['y']-shifts[1])
+        if has_z:
+            mappedmbm.addColumn('z',srcmbm['z']-shifts[2])
+
+        from PYME.IO.tabular import DictSource
+        shifts_ds = DictSource(shifts_dict)
+        
+        # store shift in metadata
+        from PYME.IO import MetaDataHandler
+        mdh = MetaDataHandler.DictMDHandler(locs.mdh)
+        mdh['MINFLUX.MBMAlignmentShift'] = shifts
+        mapped.mdh = mdh
+        mdh = MetaDataHandler.DictMDHandler(mapped.mdh)
+        mappedmbm.mdh = mdh
+        
+        mdh = MetaDataHandler.DictMDHandler()
+        mdh['MINFLUX.MBMAlignmentShift'] = shifts
+        shifts_ds.mdh = mdh
+        
+        return dict(outputlocalizations=mapped, outputsrcMBM=mappedmbm, outputMBMshifts=shifts_ds)
+

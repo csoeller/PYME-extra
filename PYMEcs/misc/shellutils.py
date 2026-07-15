@@ -76,10 +76,10 @@ def plotserpipeline(t,val,base=0):
     tos = to[tidx].astype('I')
     vs = val[tidx]
 
-    tvalid = np.zeros((tlen))
+    tvalid = np.zeros((tlen+1))
     tvalid[tos] = 1
     
-    vals = np.zeros((tlen))
+    vals = np.zeros((tlen+1))
     vals[tos] = vs
     
     tup = tos[1:][(tos[1:]-tos[:-1] > 1)]

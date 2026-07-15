@@ -243,7 +243,7 @@ class Split1FRC(ModuleBase):
         im0_1 = rng.binomial(im0,self.splitProb)
         im0_2 = im0 - im0_1
         im_1frc = np.stack([im0_1,im0_2],axis=2).astype(inputImage.data_xyztc.dtype)
-        mdh = mdh=MetaDataHandler.NestedClassMDHandler(inputImage.mdh)
+        mdh = MetaDataHandler.NestedClassMDHandler(inputImage.mdh)
         if inputImage.mdh.get('ChannelNames') is not None:
             chname = inputImage.mdh['ChannelNames'][0]
         else:
@@ -253,3 +253,23 @@ class Split1FRC(ModuleBase):
 
         return imstack1frc
 
+
+# shift image offset to in metadata
+@register_module('ShiftImageOffset')
+class ShiftImageOffset(ModuleBase):
+    inputImage = Input('input')
+    outputImage = Output('shifted')
+
+    xshift = Float(0.0)
+    yshift = Float(0.0)
+    zshift = Float(0.0)
+    
+    def run(self, inputImage):
+        mdh = MetaDataHandler.NestedClassMDHandler(inputImage.mdh)
+        mdh['Origin.x'] = mdh.get('Origin.x',0) + self.xshift
+        mdh['Origin.y'] = mdh.get('Origin.y',0) + self.yshift
+        mdh['Origin.z'] = mdh.get('Origin.z',0) + self.zshift
+
+        from PYME.IO.DataSources.BaseDataSource import XYZTCWrapper
+        d = XYZTCWrapper(inputImage.data_xyztc)
+        return ImageStack(d,mdh,titleStub = self.outputImage)

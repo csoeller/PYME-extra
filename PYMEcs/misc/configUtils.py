@@ -15,6 +15,7 @@ PYMEcs.experimental.combine_maps
 PYMEcs.experimental.Sofi
 PYMEcs.experimental.CalcZfactor
 PYMEcs.experimental.ImageJROItools
+PYMEcs.experimental.OBFtools
 '''
 
 VISGUI_PLUGINS = \
