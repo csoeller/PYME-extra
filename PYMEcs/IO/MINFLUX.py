@@ -905,11 +905,27 @@ class MinfluxMsrSource(MinfluxNpySource):
         # note: aparently, closing an open zarr archive is not required; accordingly no delete and close methods necessary
         self._paraflux_analysis = None
 
-##############################
-### Register IO with PYME ####
-##############################
+##################################################################
+### Functions for method monkeypatching of PYME datasource IO ####
+##################################################################
+
+# Calling sequences of main IO methods
+#
+# Below we put ** around the methods that are overriden by our monkeypatching code
+#
+# VisGUICore.OpenFile -> VisGUICore.**_populate_open_args**->Pipeline.OpenFile->Pipeline.**_ds_from_file**
+#
+# VisGUICore.load_session->Pipeline.load_session->Pipeline.load_extra_datasources->recipe.load_inputs->recipe.**_load_input**
+#
+# VisGUICore.save_session->VisGUICore.get_session_yaml->Pipeline.get_session->Pipeline.**_get_session_datasources**
+#
+# NOTE:
+#   1. Pipeline._get_session_datasources is only overriden to enable adding a hook for lowess file caching upon session writing
+#   2. Pipeline._get_session_datasources puts query tags on end of filenames using the query attribute of datasources that have it
+#   3. The query attribute is therefore set in the MinfluxMsrSource above to specify the stack index of the data
 
 # the top-level functions below are reused in the visFr method patching and the derived Pipeline object further below
+
 def _load_ds_npy(filename):
     ds = MinfluxNpySource(filename)
     ds.filename = filename
@@ -928,13 +944,12 @@ def _load_ds_zarrzip(filename):
     return ds
 
 def _load_ds_mfxmsr(filename,stack_index=None):
-    ds = MinfluxMsrSource(filename,stack_index=stack_index) # we need to decide if the query string gets parsed before calling this datasource or within its constructor
+    ds = MinfluxMsrSource(filename,stack_index=stack_index) # the query string gets parsed before calling this datasource constructor
     ds.filename = filename
 
     # ds.mdh = _get_mdh_zarr(filename,ds.zarr)
     logger.info('loaded MINFLUX data source from MSR ...')
     return ds
-
 
 ### we now also need to monkey_patch the _load_input method of the pipeline recipe
 ### this should allow session loading to succeed
@@ -994,13 +1009,12 @@ def _load_input_npyorzarr(self, filename, key='input', metadata_defaults={}, cac
                                   cache=cache,default_to_image=default_to_image,args=args,
                                   haveGUI=haveGUI)
 
-
-# we are monkeypatching pipeline and VisGUIFrame methods to sneak MINFLUX npy IO in;
+# we are monkeypatching pipeline and VisGUIFrame methods to sneak MINFLUX IO in;
 # this gets called from the MINFLUX plugin in the Plug routine;
 # this way it can patch the relevant VisGUIFrame and Pipeline methods in the instances
 # of these classes in the visGUI app
 #
-# in future we will ask for a way to get this considered by David B for a proper hook
+# in future we may ask for a way to get this considered by David B for a proper hook
 # in the file loading code and possibly allow registering file load hooks for new formats
 def monkeypatch_npyorzarr_io(visFr):
     import types
