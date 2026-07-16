@@ -1051,7 +1051,7 @@ def monkeypatch_npyorzarr_io(visFr):
             return _load_ds_zarrzip(filename)
         elif os.path.splitext(filename)[1] == '.msr' and has_pymexnf: # MINFLUX dataset in MSR file, needs a stackIndex keyword
             logger.info('.msr file, trying to load as MINFLUX dataset from MSR ...')
-            return _load_ds_mfxmsr(filename,stack_index=kwargs.get('stackIndex'))
+            return _load_ds_mfxmsr(filename,stack_index=kwargs.get('stackIndex')) # the prior _populate_open_args should have populated the stackIndex argument
         else:
             return self._ds_from_file_original(filename, **kwargs)
 
