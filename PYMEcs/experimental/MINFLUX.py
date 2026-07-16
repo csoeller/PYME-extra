@@ -647,6 +647,7 @@ class MINFLUXanalyser():
                           helpText='add confocal view; image origin metadata MUST already be set correctly from MSR data; use PYMEImage to make suitable TIFF images from MSR')
         if has_pymexnf:
             visFr.AddMenuItem('MINFLUX>Util', "Export zarrzip from .msr", self.OnMINFLUXmsr2zarrzip) # this needs PYMEXnf
+            visFr.AddMenuItem('MINFLUX>Util', "Export MBM npz from .msr", self.OnMINFLUXmsr2mbmnpz)
         
         visFr.AddMenuItem('MINFLUX>MBM', "Plot mean MBM info (and if present origami info)", self.OnMBMplot)
         visFr.AddMenuItem('MINFLUX>MBM', "Show MBM tracks", self.OnMBMtracks)
@@ -738,6 +739,48 @@ class MINFLUXanalyser():
             np.savez(pathzarrzip.parent / defaultNPZFile, **mbms)
             msg += " and mbm beads to npz file '%s'" % defaultNPZFile
         warn(msg + ";\ndirectory is '%s'" % pathzarrzip.parent)
+
+    def OnMINFLUXmsr2mbmnpz(self,event):
+        import wx
+        pipeline = self.visFr.pipeline
+        with wx.FileDialog(self.visFr, 'Load MFX data from MSR file...',
+                                wildcard='MSR (*.msr)|*.msr',
+                                style=wx.FD_OPEN) as fdialog:
+            if fdialog.ShowModal() != wx.ID_OK:
+                return
+            msrfile = fdialog.GetPath()
+
+        from PYMEXnf.IO.msr_minflux import mfxdta_listing, read_minflux_from_msr
+        from PYMEcs.IO.MINFLUX import mfxdta_selection
+
+        # this section needs fixing and matching to mfxdta_listing returns
+        stack_number = mfxdta_selection(msrfile)
+        if stack_number is None:
+            warn('no minflux data sets in file %s or none selected' % msrfile)
+            return
+    
+        mfxdta = read_minflux_from_msr(msrfile,stack_index=stack_number,return_mfxdta=True)
+
+        MINFLUXts = mfxdta.get_timestamp()
+        if MINFLUXts is not None:
+            defaultNPZFile = "%s.npz" % MINFLUXts
+        else:
+            defaultNPZFile = "%s.npz" % mfxdta.label
+        import pathlib
+        with wx.FileDialog(self.visFr, 'Save MBM NPZ data set as ...',
+                                wildcard='NPZ (*.npz)|*.npz',
+                                defaultFile=defaultNPZFile,
+                                style=wx.FD_SAVE) as fdialog:
+            if fdialog.ShowModal() != wx.ID_OK:
+                return
+            pathnpz = pathlib.Path(fdialog.GetPath())
+        
+        # reading and writing of mbm data
+        mbms = mfxdta.get_mbm_beads()
+        if mbms: # if not (None or no beads in dict)
+            np.savez(pathnpz, **mbms)
+            msg = " mbm beads saved to npz file '%s'" % pathnpz.name
+            warn(msg + ";\ndirectory is '%s'" % pathnpz.parent)
 
     def MINFLUXloadExtraDatasource(self,event):
         from PYMEcs.recipes.localisations import TrackProps, MBMcorrection, CorrectForeshortening
