@@ -45,9 +45,9 @@ def get_stddev_property(ids, prop, statistic='std'):
     std_events = propstd[ids]
     return std_events
 
-def mfxdta_selection(filename):
+def mfxdta_selection(filename,mfx_only=True):
     from PYMEXnf.IO.msr_minflux import mfxdta_listing
-    mfxs = mfxdta_listing(filename)
+    mfxs = mfxdta_listing(filename,mfx_only=mfx_only)
     if len(mfxs) == 0:
         return None # this msr does not contain MINFLUX data - we give up
     def format_stack_info(ind, label):
@@ -58,8 +58,29 @@ def mfxdta_selection(filename):
     with wx.SingleChoiceDialog(None, 'MINFLUX Stack', 'Select a stack', options) as dlg:
         if dlg.ShowModal() != wx.ID_OK:
             return None
-        stack_number = list(mfxs.keys())[dlg.GetSelection()] # needs fixing
+        stack_number = list(mfxs.keys())[dlg.GetSelection()]
 
+    return stack_number
+
+# we use the obf_support since it supplies the shape more easily
+# - can probably be figured out from the _msr_reader module as well but took this shortcut
+def msr_selection(filename):
+    from PYME.IO.FileUtils import obf_support
+    obf = obf_support.File(filename)
+    logger.debug('file: {}'.format(filename))
+    if len(obf.stacks) > 1:
+        import wx
+        def format_stack_info(ind, stack):
+            return '%d: %s (shape %s)' % (ind, stack.name, stack.shape)
+                                                  
+        options = [format_stack_info(ind, stack) for (ind, stack) in enumerate(obf.stacks)]                
+        with wx.SingleChoiceDialog(None, 'Stack', 'Select a stack', options) as dlg:
+            if dlg.ShowModal() == wx.ID_OK:
+                stack_number = dlg.GetSelection()
+            else:
+               stack_number = None
+    else:
+        stack_number = None
     return stack_number
 
 ###############################
@@ -924,13 +945,20 @@ def _load_input_npyorzarr(self, filename, key='input', metadata_defaults={}, cac
     from PYME.IO import unifiedIO
     import os
 
+    logger.debug("args: %s" % args)
     query = ''
     if '?' in filename:
-        from urllib.parse import parse_qs
+        #we have a query string to pick the stack number
+        from six.moves import urllib
         filename, query = filename.split('?')
-        args.update(parse_qs(query))
-        args = {k: v if len(v)>1 else v[0] for k, v in args.items()}
-
+        
+        try:
+            stack_index = int(urllib.parse.parse_qs(query)['stack'][0])
+        except KeyError:
+            stack_index = None
+    else:
+        stack_index = None
+        
     call_original = False
     if os.path.splitext(filename)[1] == '.npy': # MINFLUX NPY file
         logger.info('.npy file, trying to load as MINFLUX npy ...')
@@ -942,17 +970,26 @@ def _load_input_npyorzarr(self, filename, key='input', metadata_defaults={}, cac
         from PYMEXnf.IO.msr_minflux import check_stack_is_mfx
         # do we need to check if this is a MINFLUX dataset rather than an image?
         # I got a feeling we do
-        if not check_stack_is_mfx(filename,stack_index=int(args.get('stack'))):
+        if stack_index is None:
+            if haveGUI:
+                stack_index = msr_selection(filename)
+                # args['stack'] = stack_index
+            else:
+                raise RuntimeError("no stack index for MSR file while haveGUI is False, need stack index")
+        if stack_index is None or not check_stack_is_mfx(filename,stack_index=stack_index):
             call_original = True
         else:
             logger.info('.msr file, trying to load as MINFLUX dataset from MSR ...')
-            self.namespace[key] = _load_ds_mfxmsr(filename,stack_index=int(args.get('stack')))
+            self.namespace[key] = _load_ds_mfxmsr(filename,stack_index=stack_index)
     else:
         call_original = True
 
     if call_original:
         if query:
             filename = filename + '?' + query # reassemble a potential query string if it was nonempty
+        elif stack_index:
+            filename = filename + '?' + ("stack=%d" %  stack_index) # reassemble a potential query string if it was nonempty
+            
         self._load_input_original(filename,key=key,metadata_defaults=metadata_defaults,
                                   cache=cache,default_to_image=default_to_image,args=args,
                                   haveGUI=haveGUI)

@@ -704,23 +704,14 @@ class MINFLUXanalyser():
             msrfile = fdialog.GetPath()
 
         from PYMEXnf.IO.msr_minflux import mfxdta_listing, read_minflux_from_msr
+        from PYMEcs.IO.MINFLUX import mfxdta_selection
 
         # this section needs fixing and matching to mfxdta_listing returns
-        mfxs = mfxdta_listing(msrfile)
-        if len(mfxs) == 0:
-            warn('no minflux data sets in file %s' % msrfile)
+        stack_number = mfxdta_selection(msrfile)
+        if stack_number is None:
+            warn('no minflux data sets in file %s or none selected' % msrfile)
             return
-        
-        def format_stack_info(ind, label):
-            return '%d: %s' % (ind, label)
-                                                  
-        options = [format_stack_info(key, mfxs[key]) for key in mfxs]
-        with wx.SingleChoiceDialog(None, 'MINFLUX Stack', 'Select a stack', options) as dlg:
-            if dlg.ShowModal() != wx.ID_OK:
-                return
-            stack_number = list(mfxs.keys())[dlg.GetSelection()] # needs fixing
-        # end section that needs fixing
-        
+    
         mfxdta = read_minflux_from_msr(msrfile,stack_index=stack_number,return_mfxdta=True)
 
         MINFLUXts = mfxdta.get_timestamp()
