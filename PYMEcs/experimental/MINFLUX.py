@@ -826,12 +826,16 @@ class MINFLUXanalyser():
 
         filename = wx.FileSelector("Choose a file to open",
                                    nameUtils.genResultDirectoryPath(),
-                                   wildcard='|'.join(['TIFF image (*.tif)|*.tif']) # need to check if constraining to tiff is ok
+                                   wildcard='|'.join(['All supported formats|*.tif;*.msr;*.obf',
+                                                      'TIFF image (*.tif)|*.tif',
+                                                      'MSR files (*.msr)|*.msr',
+                                                      'OBF files (*.obf)|*.obf']
+                                                     ) # any other formats?
                                    )
         if filename == '':
             return
 
-        pipeline.load_extra_datasources(**{imagename:filename})
+        pipeline.load_extra_datasources(haveGUI=True,**{imagename:filename})
         zsz = pipeline.dataSources[imagename].data_xyztc.shape[2]
         if zsz > 1:
             zpos = zsz // 2
