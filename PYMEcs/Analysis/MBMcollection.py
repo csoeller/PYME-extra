@@ -298,7 +298,7 @@ def hashdf(df):
     return hashlib.sha1(pd.util.hash_pandas_object(df).values).hexdigest()
 
 class MBMCollectionDF(object): # collection based on dataframe objects
-    def __init__(self,name=None,filename=None,variance_window = 9,foreshortening=1.0):
+    def __init__(self,name=None,filename=None,rawbeads=None,variance_window = 9,foreshortening=1.0):
         self.mbms = {}
         self.beadisgood = {}
         self.t = None
@@ -308,6 +308,8 @@ class MBMCollectionDF(object): # collection based on dataframe objects
         self.median_window = 0 # 0 means not active
         self.foreshortening = foreshortening
         self.plotbad = False
+        if name is not None:
+            self.name = name
         
         if filename is not None:
             self.filename = filename
@@ -315,8 +317,9 @@ class MBMCollectionDF(object): # collection based on dataframe objects
             if name is None:
                 from pathlib import Path
                 name = Path(filename).stem # should really be just the basename; also may want to protect against filename being a file IO object
-
             self.name = name
+        elif rawbeads is not None:
+            self.populate_df_from_rawbeads(rawbeads)
 
     def to_JSON(self): # this is a dummy mostly to get the object to convert without error in metadata output
         return "Dummy for MBMCollectionDF object"
@@ -326,24 +329,20 @@ class MBMCollectionDF(object): # collection based on dataframe objects
         # this is a MBM bead file with raw bead tracks
         self.name=filename
         if os.path.splitext(filename)[1] == '.npz':
-            self._raw_beads = np.load(filename)
+            rawbeads = np.load(filename)
         elif os.path.splitext(filename)[1] == '.zip':
             import zarr
             arch = zarr.open(filename)
-            mbm_data = arch['grd']['mbm']['points'][:] # the indexing imports this as an np.array
-            mbm_attrs = arch['grd']['mbm'].points.attrs['points_by_gri']
-            rawbeads = {}
-            for gri_id in np.unique(mbm_data['gri']):
-                gri_str = str(gri_id)
-                bead = mbm_attrs[gri_str]['name']
-                print("%d - name %s" % (gri_id,bead))
-                dbead = mbm_data[mbm_data['gri'] == gri_id]
-                dbead.dtype.names = ('gri', 'pos', 'tim', 'str')
-                rawbeads[bead] = dbead
-            self._raw_beads = rawbeads
+            from PYMEcs.IO.MINFLUX import get_mbm_raw_from_zarr
+            rawbeads = get_mbm_raw_from_zarr(arch)
         else:
             raise RuntimeError('unknown MBM file format, file name is "%s"' % filename)
-        
+
+        self.populate_df_from_rawbeads(rawbeads)
+
+    def populate_df_from_rawbeads(self,rawbeads):
+        self._raw_beads = rawbeads
+
         for bead in self._raw_beads:
             self._raw_beads[bead]['pos'][:,2] *= self.foreshortening
         self.beads = df_from_interp_beads(self._raw_beads)
@@ -351,7 +350,7 @@ class MBMCollectionDF(object): # collection based on dataframe objects
         
         for bead in self.beads['x']:
             self.beadisgood[bead] = True
-
+        
     def markasbad(self,*beads): # mark a bead as bad
         for bead in beads:
             if bead in self.beads['x']:

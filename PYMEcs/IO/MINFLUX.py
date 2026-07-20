@@ -816,6 +816,54 @@ def get_metadata_from_mfx_attrs_legacy(mfx_attrs):
 
     return (md_by_itrs,mfx_global_pars)
 
+
+###########################
+### MBM helper routines ###
+###########################
+
+def get_mbm_raw_from_zarr(arch):
+    try:
+        mbm_data = arch['grd']['mbm']['points'][:] # the indexing imports this as an np.array
+    except AttributeError:
+        return None
+    # if we get to here we should have the mbm attributes as well
+    mbm_attrs = arch['grd']['mbm'].points.attrs['points_by_gri']
+    rawbeads = {}
+    for gri_id in np.unique(mbm_data['gri']):
+        gri_str = str(gri_id)
+        bead = mbm_attrs[gri_str]['name']
+        # print("%d - name %s" % (gri_id,bead))
+        dbead = mbm_data[mbm_data['gri'] == gri_id]
+        dbead.dtype.names = ('gri', 'pos', 'tim', 'str')
+        rawbeads[bead] = dbead
+    return rawbeads
+
+class MBMRawBeads(object):
+    def __init__(self,rawbeads):
+        self._raw_beads = rawbeads
+
+    def __repr__(self):
+        return str(list(self._raw_beads.keys()))
+
+    def get_rawbeads(self):
+        if '_unpickled' in dir(self):
+            warn(self._unpickled)
+            return None
+        return self._raw_beads
+
+    # we add custom pickling/unpickling methods so that an MBMRawBeads instance in the
+    # PYME metadata won't greatly inflate the image saving footprint
+    # the MBMRawBeads data should have come from a .zarr.zip or .msr file already, no need to "properly" pickle/unpickle the raw beads container
+    # i.e. the MBMRawBeads object needs to only persist during the lifetime of the pymevis viewer
+    # TODO: check if proper pickling and unpickling is still desirable for rendered data
+    def __getstate__(self):
+        warn("MBMRawBeads are being pickled - just a dummy mostly for PYME metadata - won't be usable after unpickling")
+        return 'not a valid MBMRawBeads object after pickling/unpickling'
+    
+    def __setstate__(self, d):
+        warn("MBMRawBeads is being unpickled - this is just a dummy unpickle, won't be usable after unpickling")
+        self._unpickled = d
+    
 ##############################
 ### tabular classes  #########
 ##############################
@@ -855,7 +903,7 @@ class MinfluxNpySource(TabularBase):
     
     def getInfo(self):
         return 'MINFLUX NPY Data Source\n\n %d points' % len(self.res['x'])
-
+    
 class MinfluxZarrSource(MinfluxNpySource):
     _name = "MINFLUX zarr File Source"
     def __init__(self, filename):
@@ -870,6 +918,9 @@ class MinfluxZarrSource(MinfluxNpySource):
         # self._own_file = True # is this necessary? Normally only used by HDF to close HFD on destroy, zarr does not need "closing"
 
         self.mdh = _get_mdh_zarrlike(filename,archz['mfx'].attrs.asdict())
+        mbm_raw = get_mbm_raw_from_zarr(archz)
+        if mbm_raw is not None:
+            self.mdh['MINFLUX.MBMRawBeads'] = MBMRawBeads(mbm_raw)
         # NOTE: no further 'locations valid' check should be necessary - we filter already in the conversion function
         self.res = minflux_zarr2pyme(archz,mdh=self.mdh)
         
@@ -877,6 +928,7 @@ class MinfluxZarrSource(MinfluxNpySource):
 
         # note: aparently, closing an open zarr archive is not required; accordingly no delete and close methods necessary
         self._paraflux_analysis = None
+
 
 class MinfluxMsrSource(MinfluxNpySource):
     _name = "MINFLUX MSR File Source"
@@ -897,6 +949,9 @@ class MinfluxMsrSource(MinfluxNpySource):
 
         self.mdh = _get_mdh_zarrlike(filename,mfxdta.get_mfx_metadata())
         self.mdh['MINFLUX.MSRStackIndex'] = stack_index
+        mbm_raw = mfxdta.get_mbm_beads()
+        if mbm_raw is not None:
+            self.mdh['MINFLUX.MBMRawBeads'] = MBMRawBeads(mbm_raw)
         # NOTE: no further 'locations valid' check should be necessary - we filter already in the conversion function
         self.res = minflux_zarr2pyme({'mfx':mfxdta.get_mfx()},mdh=self.mdh)
         

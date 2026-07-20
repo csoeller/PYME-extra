@@ -1724,11 +1724,24 @@ class MBMcorrection(ModuleBaseMDHmod):
     _MBM_beads = List() # this one does the real work and with the leading "_" is NOT treated as a parameter that "fires" the module! 
     _mbm_allbeads = List()
     _initialized = Bool(False)
+
+    _mbmmdh_key = CStr('') # to cache the rawbead info from metadata 'MINFLUX.MBMRawBeads'
+    _mbmmdh_cache = {}
     
-    _mbm_cache = {}
+    _mbm_cache = {} # cache for file based mbm loading
     _lowess_cache = {}
     
+    # attempt at caching the raw beads to avoid reloading the mbm and overriding manual bead selections etc
+    def mbmmdh_cachetuple(self,rb):
+        import hashlib
+        rb_ks = sorted(rb.keys())
+        tb0=rb[rb_ks[0]]['tim'].copy()
+        tb0_hash = hashlib.sha1(tb0).hexdigest()
+        return (str(rb_ks),tb0_hash)
 
+    def mbmmdh_cachekey(self,rb):
+        return tuple_hash(self.mbmmdh_cachetuple(rb))
+    
     def lowess_cachetuple(self):
         mbm = self.getmbm()
         return (Path(self.mbmfile).name,self.MBM_lowess_fraction,self.Median_window,str(mbm.beadisgood),self.MBM_lowess_delta)
@@ -1741,7 +1754,7 @@ class MBMcorrection(ModuleBaseMDHmod):
         if cachekey in self._lowess_cache:
             logger.debug("CACHEHIT from in-memory-cache; cache tuple: %s" % str(self.lowess_cachetuple()))
             return self._lowess_cache[cachekey]
-        elif self.lowess_chacheread():
+        elif self.lowess_cacheread():
             logger.debug("CACHEHIT from file-cache; cache tuple: %s" % str(self.lowess_cachetuple()))
             return self._lowess_cache[cachekey]
         else:
@@ -1760,7 +1773,7 @@ class MBMcorrection(ModuleBaseMDHmod):
             fpath = self.lowess_cachefilepath()
             np.savez(str(fpath),**cachehit)
 
-    def lowess_chacheread(self):
+    def lowess_cacheread(self):
         cachekey = self.lowess_cachekey()
         fpath = self.lowess_cachefilepath()
         if fpath.exists():
@@ -1780,6 +1793,8 @@ class MBMcorrection(ModuleBaseMDHmod):
         mbmkey = self.mbmfile
         if mbmkey in self._mbm_cache:
             return self._mbm_cache[mbmkey]
+        elif self._mbmmdh_key in self._mbmmdh_cache:
+            return self._mbmmdh_cache[self._mbmmdh_key]
         else:
             return None
 
@@ -1810,21 +1825,39 @@ class MBMcorrection(ModuleBaseMDHmod):
 
         mapped_ds = tabular.MappingFilter(inputLocalizations)
 
-        if self.mbmfile != '':
-            mbmkey = self.mbmfile
-            if mbmkey not in self._mbm_cache.keys():
-                from PYMEcs.IO.MINFLUX import foreshortening
-                mbm = MBMCollectionDF(name=Path(self.mbmfile).stem,filename=self.mbmfile,
-                                      foreshortening=foreshortening)
-                logger.debug("reading in mbm data from file and made new mbm object")
-                logger.debug("mbm beadisgood: %s" % mbm.beadisgood)
-                self._mbm_cache[mbmkey] = mbm
-                self._initialized = False # new file, mark as uninitialized
-            else:
-                mbm = self._mbm_cache[mbmkey]
+        if self.mbmfile != '' or inputLocalizations.mdh.get('MINFLUX.MBMRawBeads') is not None:
+            if self.mbmfile:
+                mbmkey = self.mbmfile
+                if mbmkey not in self._mbm_cache.keys():
+                    from PYMEcs.IO.MINFLUX import foreshortening
+                    mbm = MBMCollectionDF(name=Path(self.mbmfile).stem,filename=self.mbmfile,
+                                          foreshortening=foreshortening)
+                    logger.debug("reading in mbm data from file and made new mbm object")
+                    logger.debug("mbm beadisgood: %s" % mbm.beadisgood)
+                    self._mbm_cache[mbmkey] = mbm
+                    self._initialized = False # new file, mark as uninitialized
+                else:
+                    mbm = self._mbm_cache[mbmkey]
+            else: # we now also allow picking up raw bead info from metadata generated upon loading .zarr.zip or .msr data
+                rb = inputLocalizations.mdh.get('MINFLUX.MBMRawBeads').get_rawbeads()
+                mbmkey = self.mbmmdh_cachekey(rb)
+                self._mbmmdh_key = mbmkey # store for retrieval with getmbm method
+                if mbmkey not in self._mbmmdh_cache.keys(): # we cache to avoid overriding manual bead selections
+                    from PYMEcs.IO.MINFLUX import foreshortening
+                    # we probably need to cache this to avoid overwriting bead selections when changing some parameters but we'll see
+                    mbm = MBMCollectionDF(name='MBMfromMDH',rawbeads=rb,
+                                          foreshortening=foreshortening)
+                    logger.debug("mbm data from MINFLUX metadata and made new mbm object")
+                    logger.debug("mbm beadisgood: %s" % mbm.beadisgood)
+                    self._initialized = False
+                    self._mbmmdh_cache[mbmkey] = mbm
+                else:
+                    mbm = self._mbmmdh_cache[mbmkey]
 
-            if len(self._MBM_beads) == 0 or not self._initialized: # make sure we have a reasonable _MBM_beads list, i.e. re-initialiaise if not already done
-                self._mbm_allbeads = [bead for bead in mbm.beadisgood if np.sum(np.logical_not(np.isnan(mbm.beads['x'][bead]))) > 1] # exclude "empty" trajectories
+            # make sure we have a reasonable _MBM_beads list, i.e. re-initialiaise if not already done
+            if len(self._MBM_beads) == 0 or not self._initialized:
+                self._mbm_allbeads = [bead for bead in mbm.beadisgood if
+                                      np.sum(np.logical_not(np.isnan(mbm.beads['x'][bead]))) > 1] # exclude "empty" trajectories
                 self._MBM_beads = self._mbm_allbeads
 
             mbmsettingskey = self.mbmsettings
@@ -1874,7 +1907,8 @@ class MBMcorrection(ModuleBaseMDHmod):
                     mapped_ds.addColumn(axis,inputLocalizations[axis_nc] - mbmcorr[axis])
 
             if self.mbmfilename_checks:
-                if not check_mbm_name(self.mbmfile,inputLocalizations.mdh.get('MINFLUX.TimeStamp')):
+                # only check this if we have a non-empty string in self.mbmfile
+                if self.mbmfile and not check_mbm_name(self.mbmfile,inputLocalizations.mdh.get('MINFLUX.TimeStamp')):
                     warn("check MBM filename (%s) vs Series timestamp (%s)" %
                          (Path(self.mbmfile).name,inputLocalizations.mdh.get('MINFLUX.TimeStamp')))
                 if mbmsettingskey != '' and not check_mbm_name(self.mbmsettings,inputLocalizations.mdh.get('MINFLUX.TimeStamp'),
