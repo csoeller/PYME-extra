@@ -271,5 +271,6 @@ class ShiftImageOffset(ModuleBase):
         mdh['Origin.z'] = mdh.get('Origin.z',0) + self.zshift
 
         from PYME.IO.DataSources.BaseDataSource import XYZTCWrapper
-        d = XYZTCWrapper(inputImage.data_xyztc)
+        inputshape = inputImage.data_xyztc.shape
+        d = XYZTCWrapper(inputImage.data_xyztc,size_z=inputshape[2], size_t=inputshape[3], size_c=inputshape[4])
         return ImageStack(d,mdh,titleStub = self.outputImage)
