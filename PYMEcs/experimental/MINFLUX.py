@@ -1964,10 +1964,20 @@ class MINFLUXanalyser():
         from PYMEcs.recipes.localisations import OrigamiSiteTrack, DBSCANTypeClustering, TrackProps, ObjectSDs
         from PYME.recipes.localisations import MergeClumps
         from PYME.recipes.tablefilters import FilterTable, Mapping
+
+        class ClusteringSelection(HasTraits):
+            clusteringAlgorithm = Enum(['dbscan','hdbscan'],desc="which algorithm is selected to group sites")
+            searchRadius = Float(8.0,desc="selects search radius, only used for DBSCAN algorithm")
+            minClumpSize=Int(5,desc="minimum number of points in cluster, only used for HDBSCAN algorithm")
+            maxClumpSize=Int(50,desc="maximum number of points in cluster, only used for HDBSCAN algorithm")
         
         pipeline = self.visFr.pipeline
         recipe = pipeline.recipe
 
+        csel = ClusteringSelection()
+        if not csel.configure_traits(kind='modal'):
+            return
+                
         filters={'error_x' : [0,3.5],
                  'error_y' : [0,3.5]}
         if 'error_z' in pipeline.keys():
@@ -1981,13 +1991,18 @@ class MINFLUXanalyser():
                                                          'sitesWithSDs','sitesWithTracks',
                                                          'sites','sites_c'],pipeline.dataSources.keys())
 
+        dbscanTypeClusteringMod = DBSCANTypeClustering(recipe,inputName=preFiltered,outputName=dbscanClusteredSites,
+                                                       searchRadius = csel.searchRadius, # we go for the smaller distance to avoid clusters becoming too large
+                                                       maxClumpSize=csel.maxClumpSize,
+                                                       minClumpSize=csel.minClumpSize,
+                                                       algorithm=csel.clusteringAlgorithm,
+                                                       clumpColumnName = 'siteID',
+                                                       sizeColumnName='siteClumpSize')
+
         curds = pipeline.selectedDataSourceKey
         modules = [FilterTable(recipe,inputName=curds,outputName=preFiltered,
                                filters=filters),
-                   DBSCANTypeClustering(recipe,inputName=preFiltered,outputName=dbscanClusteredSites,
-                                     searchRadius = 15.0,
-                                     clumpColumnName = 'siteID',
-                                     sizeColumnName='siteClumpSize'),
+                   dbscanTypeClusteringMod,
                    ObjectSDs(IDkey='siteID',IDout='site',input=dbscanClusteredSites,output=sitesWithSDs),
                    TrackProps(recipe,input=sitesWithSDs,output=sitesWithTracks,IDkey='siteID'),
                    FilterTable(recipe,inputName=sitesWithTracks,outputName=preSiteClumps,
