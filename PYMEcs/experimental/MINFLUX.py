@@ -1967,10 +1967,15 @@ class MINFLUXanalyser():
 
         class ClusteringSelection(HasTraits):
             clusteringAlgorithm = Enum(['dbscan','hdbscan'],desc="which algorithm is selected to group sites")
+            # if this is too big we get huge clusters (not sites)
+            # if it is too small we get hardly any sites
             searchRadius = Float(8.0,desc="selects search radius, only used for DBSCAN algorithm")
-            minClumpSize=Int(5,desc="minimum number of points in cluster, only used for HDBSCAN algorithm")
-            maxClumpSize=Int(50,desc="maximum number of points in cluster, only used for HDBSCAN algorithm")
-        
+            minClumpSize = Int(5,desc="minimum number of points in cluster, only used for HDBSCAN algorithm")
+            maxClumpSize = Int(60,desc="maximum number of points in cluster, used for HDBSCAN algorithm and for filtering of sites")
+            # if the boundarx box limits are too tight we will not be able to correct more sizable drift
+            traceBBdiagLimit = Float(60,desc="max extent of site boundary box diagonal in nm")
+            traceBBzLimit = Float(60,desc="max extent of site z BB in nm")
+            
         pipeline = self.visFr.pipeline
         recipe = pipeline.recipe
 
@@ -2006,11 +2011,11 @@ class MINFLUXanalyser():
                    ObjectSDs(IDkey='siteID',IDout='site',input=dbscanClusteredSites,output=sitesWithSDs),
                    TrackProps(recipe,input=sitesWithSDs,output=sitesWithTracks,IDkey='siteID'),
                    FilterTable(recipe,inputName=sitesWithTracks,outputName=preSiteClumps,
-                               filters={'siteClumpSize' : [3,50],
+                               filters={'siteClumpSize' : [3,csel.maxClumpSize+0.5],
                                         }), # need a minimum clumpsize and also maximal to avoid "fused" sites
                    FilterTable(recipe,inputName=preSiteClumps,outputName=siteClumps,
-                               filters={'trace_bbdiag'  : [0,38],
-                                        'trace_bbz'     : [0,20],
+                               filters={'trace_bbdiag'  : [0,csel.traceBBdiagLimit],
+                                        'trace_bbz'     : [0,csel.traceBBzLimit],
                                         }), # additional filtering on BBs; only after clumpsize to avoid 0 values in BB histograms
                    MergeClumps(recipe,inputName=siteClumps,outputName=sites,
                                labelKey='siteID',discardTrivial=True),
