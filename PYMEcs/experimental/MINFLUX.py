@@ -1973,8 +1973,8 @@ class MINFLUXanalyser():
             minClumpSize = Int(5,desc="minimum number of points in cluster, only used for HDBSCAN algorithm")
             maxClumpSize = Int(60,desc="maximum number of points in cluster, used for HDBSCAN algorithm and for filtering of sites")
             # if the boundarx box limits are too tight we will not be able to correct more sizable drift
-            traceBBdiagLimit = Float(60,desc="max extent of site boundary box diagonal in nm")
-            traceBBzLimit = Float(60,desc="max extent of site z BB in nm")
+            traceBBdiagLimit = Float(80,desc="max extent of site boundary box diagonal in nm, keep large initially to capture most sites")
+            traceBBzLimit = Float(80,desc="max extent of site z BB in nm, keep large initially to capture most sites")
             
         pipeline = self.visFr.pipeline
         recipe = pipeline.recipe
