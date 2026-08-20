@@ -650,10 +650,11 @@ def _get_basic_MINFLUX_metadata(filename):
     from pathlib import Path
     mdh = MetaDataHandler.NestedClassMDHandler()
 
-    mdh['MINFLUX.Filename'] = Path(filename).name # the MINFLUX filename often holds some metadata
+    fname = Path(filename).name
+    mdh['MINFLUX.Filename'] = fname # the MINFLUX filename often holds some metadata
     mdh['MINFLUX.Foreshortening'] = foreshortening
     from PYMEcs.misc.utils import get_timestamp_from_filename, parse_timestamp_from_filename
-    ts = get_timestamp_from_filename(filename)
+    ts = get_timestamp_from_filename(filename,dowarn=fname.endswith('.npy')) # we only warn by default for npy data, .zarr.zip and .msr should have metadata for this
     if ts is not None:
         mdh['MINFLUX.TimeStamp'] = ts
         # we add the zero to defeat the regexp that checks for names ending with 'time$'

@@ -139,7 +139,7 @@ def set_diff(trec,t0):
     trec['tdiff_s'] = trec['tdiff'].dt.total_seconds().astype('f')
 
 from PYMEcs.pyme_warnings import warn
-def get_timestamp_from_filename(fname):
+def get_timestamp_from_filename(fname,dowarn=True):
     from pathlib import Path
     import re
     
@@ -149,7 +149,8 @@ def get_timestamp_from_filename(fname):
         timestamp = match.group()
         return timestamp
     else:
-        warn("no timestamp match found in %s" % basename)
+        if dowarn:
+            warn("no timestamp match found in %s" % basename)
         return None
 
 def get_timestamp_from_mdh_acqdate(mdh):
