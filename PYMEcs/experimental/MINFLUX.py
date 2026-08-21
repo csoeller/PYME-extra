@@ -16,17 +16,25 @@ def plot_errors(pipeline,ds='coalesced_nz',dsclumps='with_clumps'):
     pipeline.selectDataSource(ds)
     p = pipeline
     clumpSize = p['clumpSize']
+
+    def myboxplot(data,labels=None):
+        try:
+            ret = plt.boxplot(data,labels=labels)
+        except TypeError:
+            ret = plt.boxplot(data,tick_labels=labels) # from matplotlib 3.9 labels has been renamed to tick_labels, removed in 3.11
+        return ret
+    
     plt.figure()
     plt.subplot(221)
     if 'error_z' in pipeline.keys():
-        plt.boxplot([p['error_x'],p['error_y'],p['error_z']],labels=['error_x','error_y','error_z'])
+        myboxplot([p['error_x'],p['error_y'],p['error_z']],labels=['error_x','error_y','error_z'])
     else:
-        plt.boxplot([p['error_x'],p['error_y']],labels=['error_x','error_y'])
+        myboxplot([p['error_x'],p['error_y']],labels=['error_x','error_y'])
     plt.ylabel('loc error - coalesced (nm)')
     pipeline.selectDataSource(dsclumps)
     plt.subplot(222)
     if 'nPhotons' in p.keys() and 'fbg' in p.keys():
-        bp_dict = plt.boxplot([p['nPhotons'],p['fbg']],labels=['photons','background rate'])
+        bp_dict = myboxplot([p['nPhotons'],p['fbg']],labels=['photons','background rate'])
         for line in bp_dict['medians']:
             # get position data for median line
             x, y = line.get_xydata()[0] # top of median line
@@ -37,13 +45,13 @@ def plot_errors(pipeline,ds='coalesced_nz',dsclumps='with_clumps'):
     uids, idx = np.unique(p['clumpIndex'],return_index=True)
     plt.subplot(223)
     if 'error_z' in pipeline.keys():
-        plt.boxplot([p['error_x'][idx],p['error_y'][idx],p['error_z'][idx]],
+        myboxplot([p['error_x'][idx],p['error_y'][idx],p['error_z'][idx]],
                     labels=['error_x','error_y','error_z'])
     else:
-        plt.boxplot([p['error_x'][idx],p['error_y'][idx]],labels=['error_x','error_y'])
+        myboxplot([p['error_x'][idx],p['error_y'][idx]],labels=['error_x','error_y'])
     plt.ylabel('loc error - raw (nm)')
     plt.subplot(224)
-    bp_dict = plt.boxplot([clumpSize],labels=['clump size'])
+    bp_dict = myboxplot([clumpSize],labels=['clump size'])
     for line in bp_dict['medians']:
         # get position data for median line
         x, y = line.get_xydata()[0] # top of median line
