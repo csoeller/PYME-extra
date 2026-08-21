@@ -329,8 +329,8 @@ def minflux_npy2pyme_legacy(data,make_clump_index=True,with_cfr_std=False):
     if with_cfr_std: # we also compute on request a cfr std dev across a trace ID (=clump in PYME)
         pymedct.update({'cfr_std':get_stddev_property(ids,data['itr']['cfr'][:,props['CFRIter']])})
         
-    if props['Tracking']: # NOTE: for now 2D only, must fix in future for 3D!
-
+    if props['Tracking']: # NOTE: added checking for props['Is3D'] but not tested yet
+        
         # estimating the experimental localization precision σ for each track by calculating the
         # standard deviation (SD) of coordinate difference between consecutive localizations
         # from supplement in Deguchi, T. et al. Direct observation of motor protein stepping in
@@ -347,19 +347,26 @@ def minflux_npy2pyme_legacy(data,make_clump_index=True,with_cfr_std=False):
         #stdy = np.clip(stdy,None,LOCERR_MAX) # current workaround, need better loc err estimation
         stdx = get_stddev_property(ids,posnm[:,0],statistic=diffstd)
         stdy = get_stddev_property(ids,posnm[:,1],statistic=diffstd)
-        track_tmin = get_stddev_property(ids,data['tim'],'min')
-        track_tms = 1e3*(data['tim']-track_tmin)
-        track_lims = np.zeros_like(ids)
-        track_lims[np.diff(ids,prepend=0) > 0] = 1 # mark beginning of tracks with 1
-        track_lims[np.diff(ids,append=ids.max()+1) > 0] = 2 # mark end of tracks with 2
-        pymedct.update({'track_stdx':track_stdx, 'track_stdy':track_stdy, 'track_tms':track_tms,
+        if props['Is3D']:
+            track_stdz = stdz
+            stdz = get_stddev_property(ids,posnm[:,2],statistic=diffstd)
+        pymedct.update({'track_stdx':track_stdx, 'track_stdy':track_stdy,
                         # we return track_err[xy] in addition to error_x, error_y since it avoids
                         # special treatment on coalescing and therefore allows comparison between
                         # track_stdx and track_errx etc on a per track basis
                         'track_errx':stdx.copy(), 'track_erry':stdy.copy(),
-                        'track_lims':track_lims,
                         })
+        if props['Is3D']:
+            pymedct.update({'track_stdz':track_stdz, 'track_errz':stdz.copy()})
 
+    # we make these now generally available also for non-tracking imaging data
+    track_tmin = get_stddev_property(ids,data['tim'],'min')
+    track_tms = 1e3*(data['tim']-track_tmin)
+    track_lims = np.zeros_like(ids)
+    track_lims[np.diff(ids,prepend=0) > 0] = 1 # mark beginning of tracks with 1
+    track_lims[np.diff(ids,append=ids.max()+1) > 0] = 2 # mark end of tracks with 2
+    pymedct.update({'track_tms':track_tms,'track_lims':track_lims})
+    
     pymedct.update({'x' : posnm[:,0],
                     'y': posnm[:,1],
                     # for t we use time to ms precision (without rounding); this is a reasonably close
@@ -558,7 +565,7 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False,mdh=None)
         stdz = get_stddev_property(ids,posnm[:,2])
         stdz[stdz < 1e-3] = 100.0
 
-    if props['Tracking']: # NOTE: for now 2D only, must fix in future for 3D!
+    if props['Tracking']: # NOTE: added checking for props['Is3D'] but not tested yet
 
         # estimating the experimental localization precision σ for each track by calculating the
         # standard deviation (SD) of coordinate difference between consecutive localizations
@@ -576,18 +583,25 @@ def minflux_npy2pyme_new(data,make_clump_index=True,with_cfr_std=False,mdh=None)
         #stdy = np.clip(stdy,None,LOCERR_MAX) # current workaround, need better loc err estimation
         stdx = get_stddev_property(ids,posnm[:,0],statistic=diffstd)
         stdy = get_stddev_property(ids,posnm[:,1],statistic=diffstd)
-        track_tmin = get_stddev_property(ids,dfin['tim'],'min')
-        track_tms = 1e3*(dfin['tim']-track_tmin)
-        track_lims = np.zeros_like(ids)
-        track_lims[np.diff(ids,prepend=0) > 0] = 1 # mark beginning of tracks with 1
-        track_lims[np.diff(ids,append=ids.max()+1) > 0] = 2 # mark end of tracks with 2
-        pymedct.update({'track_stdx':track_stdx, 'track_stdy':track_stdy, 'track_tms':track_tms,
+        if props['Is3D']:
+            track_stdz = stdz
+            stdz = get_stddev_property(ids,posnm[:,2],statistic=diffstd)
+        pymedct.update({'track_stdx':track_stdx, 'track_stdy':track_stdy,
                         # we return track_err[xy] in addition to error_x, error_y since it avoids
                         # special treatment on coalescing and therefore allows comparison between
                         # track_stdx and track_errx etc on a per track basis
                         'track_errx':stdx.copy(), 'track_erry':stdy.copy(),
-                        'track_lims':track_lims,
                         })
+        if props['Is3D']:
+            pymedct.update({'track_stdz':track_stdz, 'track_errz':stdz.copy()})
+
+    track_tmin = get_stddev_property(ids,dfin['tim'],'min')
+    track_tms = 1e3*(dfin['tim']-track_tmin)
+    track_lims = np.zeros_like(ids)
+    track_lims[np.diff(ids,prepend=0) > 0] = 1 # mark beginning of tracks with 1
+    track_lims[np.diff(ids,append=ids.max()+1) > 0] = 2 # mark end of tracks with 2
+    pymedct.update({'track_tms':track_tms,'track_lims':track_lims})
+
     pymedct.update({'error_x' : stdx,'error_y' : stdy})
     if props['DwellTime_ms_final'] is not None:
         # eta is capturing the number of TCP cycles per localization as detailed in
