@@ -9,6 +9,57 @@ from PYMEcs.pyme_warnings import warn
 import logging
 logger = logging.getLogger(__file__)
 
+@register_module('DriftCorrComet')
+class DriftCorrComet(ModuleBase):
+    inputName = Input('localisations')
+    outputName = Output('drift_corrected')
+
+    segmentation_mode = Enum(["frames_per_window","time_window","locs_per_window"])
+    segmentation_var = Int(60)
+    max_locs_per_segment = Int(200)
+    target_sigma_nm = Float(2.0)
+    max_drift_nm = Float(50.0)
+
+    def run(self, inputName):
+        locs = inputName
+        from comet.core.drift_optimizer import comet_run_kd
+
+        mode_coder = {"time_window" : 0, "locs_per_window": 1, "frames_per_window": 2}
+
+        if 'tim' in locs.keys():
+            tvar = 'tim'
+        else:
+            tvar = 't'
+
+        has_z = 'z' in locs.keys()
+            
+        if has_z:
+            coords = np.stack([locs['x'],locs['y'],locs['z'],locs[tvar]],axis=-1)
+        else:
+            coords = np.stack([locs['x'],locs['y'],locs[tvar]],axis=-1)
+
+        drift = comet_run_kd(dataset=coords, 
+                             segmentation_mode=mode_coder[self.segmentation_mode],
+                             segmentation_var=self.segmentation_var,
+                             max_locs_per_segment=self.max_locs_per_segment,
+                             target_sigma_nm=self.target_sigma_nm,
+                             max_drift_nm=self.max_drift_nm)
+
+        out = tabular.MappingFilter(locs)
+        out.addColumn('x',coords[:,0])
+        out.addColumn('y',coords[:,1])
+        if has_z:
+            out.addColumn('z',coords[:,2])
+
+        from PYME.IO import MetaDataHandler
+        mdh = MetaDataHandler.DictMDHandler(locs.mdh)
+
+        tmin = locs[tvar].min() # drift time apparently is always returned starting at 0, we abbreviate 
+        mdh['Processing.DriftCorrComet.Drift'] = drift[drift[:,-1]>tmin,:]
+        out.mdh = mdh
+
+        return out
+
 @register_module('CorrectForeshortening')
 class CorrectForeshortening(ModuleBase):
     from PYMEcs.IO.MINFLUX import foreshortening

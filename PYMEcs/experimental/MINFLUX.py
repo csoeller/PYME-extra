@@ -625,7 +625,14 @@ class MINFLUXanalyser():
             has_pymexnf = False
         else:
             has_pymexnf = True
-        
+
+        try:
+            import comet.core.drift_optimizer
+        except ImportError:
+            has_comet = False
+        else:
+            has_comet = True
+
         visFr.AddMenuItem('MINFLUX', "Localisation Error analysis", self.OnErrorAnalysis)
         visFr.AddMenuItem('MINFLUX', "Cluster sizes - 3D", self.OnCluster3D)
         visFr.AddMenuItem('MINFLUX', "Cluster sizes - 2D", self.OnCluster2D)
@@ -688,6 +695,10 @@ class MINFLUXanalyser():
         visFr.AddMenuItem('MINFLUX>Tracking', "Tracks MSD overview", self.OnTrackMSDOverview)
         
         visFr.AddMenuItem('MINFLUX>Colour', "Plot colour stats", self.OnPlotColourStats)
+
+        if has_comet:
+            visFr.AddMenuItem('MINFLUX>Corrections', "Comet drift correction", self.OnCometDriftCorrection)
+            visFr.AddMenuItem('MINFLUX>Corrections', "Plot comet drift correction", self.OnPlotCometDrift)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -701,7 +712,38 @@ class MINFLUXanalyser():
                 ID = visFr.AddMenuItem('MINFLUX>Recipes', r, self.OnLoadCustom).GetId()
                 self.minfluxRIDs[ID] = minfluxRecipes[r]
 
+    def OnCometDriftCorrection(self,event):
+        from PYMEcs.recipes.localisations import DriftCorrComet
 
+        pipeline = self.visFr.pipeline
+        recipe = pipeline.recipe
+        driftcorr = unique_name('drift_corrected',pipeline.dataSources.keys())
+        curds = pipeline.selectedDataSourceKey
+        dc = DriftCorrComet(recipe,inputName=curds,outputName=driftcorr)
+        
+        recipe.add_module(dc)
+        recipe.execute()
+
+        pipeline.selectDataSource(driftcorr)
+
+    def OnPlotCometDrift(self,event):
+        pipeline = self.visFr.pipeline
+        if pipeline.mdh.get('Processing.DriftCorrComet.Drift') is None:
+            warn("cannot find metadata info 'Processing.DriftCorrComet.Drift', giving up...")
+            return
+        drift = pipeline.mdh.get('Processing.DriftCorrComet.Drift')
+        t = drift[:,-1]
+        
+        plt.figure()
+        plt.plot(t,drift[:,0],label='drift x')
+        plt.plot(t,drift[:,1],label='drift y')
+        if drift.shape[1] > 3:
+            plt.plot(t,drift[:,2],label='drift z')
+        plt.legend(loc="upper right")
+        plt.xlabel("time/ (s or frame)")
+        plt.ylabel("drift (nm)")
+        plt.tight_layout()
+        
     def OnMINFLUXmsr2zarrzip(self,event):
         import wx
         pipeline = self.visFr.pipeline
