@@ -790,72 +790,47 @@ class MINFLUXanalyser():
         driftO = findDriftOrigami(pipeline,warnings=True)
         if drift is None:
             return
-        if driftO is None:
-            t = drift['tim']
-            dx = drift['x']
-            dy = drift['y']
-            plt.figure()
-            plt.plot(t,dx,label='drift x')
-            plt.plot(t,dy,label='drift y')
-            if 'z' in drift.keys():
-                dz = drift['z']
-                plt.plot(t,dz,label='drift z')
-                dmax = max(dx.max(),dy.max(),dz.max())
-                dmin = max(dx.min(),dy.min(),dz.min())
-            else:
-                dmax = max(dx.max(),dy.max())
-                dmin = max(dx.min(),dy.min())
-            if dmax < 15.0:
+        def pdrift(ax,drift,driftO,axis):
+            ax.plot(drift['tim'],drift[axis])
+            if driftO is not None:
+                ax.plot(driftO['tim'],driftO[axis],'--')
+            if drift[axis].max() < 15.0:
                 ytop = 15.0
             else:
                 ytop = None
-            if dmin > -15.0:
+            if drift[axis].min() > -15.0:
                 ybot = -15.0
             else:
                 ybot = None
-            plt.legend(loc="upper right")
-            plt.xlabel("time/ (s or frame)")
-            plt.ylabel("drift (nm)")
-            plt.ylim(ybot,ytop)
-            plt.tight_layout()
-        else:
-            def pdrift(ax,drift,driftO,axis):
-                ax.plot(drift['tim'],drift[axis])
-                ax.plot(driftO['tim'],driftO[axis],'--')
-                if drift[axis].max() < 15.0:
-                    ytop = 15.0
-                else:
-                    ytop = None
-                if drift[axis].min() > -15.0:
-                    ybot = -15.0
-                else:
-                    ybot = None
-                ax.set_ylim(ybot,ytop)
-                ax.set_xlabel('t (s)')
-                ax.set_ylabel('$\\Delta %s$ (nm)' % axis)
+            ax.set_ylim(ybot,ytop)
+            ax.set_xlabel('t (s)')
+            ax.set_ylabel('$\\Delta %s$ (nm)' % axis)
                 
-            fig, axs = plt.subplots(2, 2)      
+        fig, axs = plt.subplots(2, 2)
+        if driftO is not None:
             fig.suptitle("comet drift estimate vs origami est (--, sum of %d passes)" % len(driftO['dsnames']))
-            pdrift(axs[0, 0],drift,driftO,'x')
-            pdrift(axs[0, 1],drift,driftO,'y')
-            if 'z' in drift.keys():
-                pdrift(axs[1, 0],drift,driftO,'z')
+        else:
+            fig.suptitle("comet drift estimate")
+        pdrift(axs[0, 0],drift,driftO,'x')
+        pdrift(axs[0, 1],drift,driftO,'y')
+        if 'z' in drift.keys():
+            pdrift(axs[1, 0],drift,driftO,'z')
 
-            # plot MBM correction in final subplot
-            mod = findmbm(pipeline,warnings=False,return_mod=True)
-            if mod is not None:
-                ax = axs[1, 1]
-                MBM_lowess_fraction = mod.MBM_lowess_fraction
-                axes = ['x','y']
-                if 'z' in drift.keys():
-                    axes.append('z')
-                for caxis in axes:
-                    t_sm,mbm_meansm = mod.lowess_calc(caxis) # this is now a cached version of the lowess calc!
-                    ax.plot(t_sm,mbm_meansm,label='%s MBM (lf=%.2f)' % (caxis,MBM_lowess_fraction))
-                ax.set_title("MBM curves")
-                ax.set_xlabel('t (s)')
-                ax.legend(loc="upper right")
-            plt.tight_layout()
+        # plot MBM correction in final subplot
+        mod = findmbm(pipeline,warnings=False,return_mod=True)
+        if mod is not None:
+            ax = axs[1, 1]
+            MBM_lowess_fraction = mod.MBM_lowess_fraction
+            axes = ['x','y']
+            if 'z' in drift.keys():
+                axes.append('z')
+            for caxis in axes:
+                t_sm,mbm_meansm = mod.lowess_calc(caxis) # this is now a cached version of the lowess calc!
+                ax.plot(t_sm,mbm_meansm,label='%s MBM (lf=%.2f)' % (caxis,MBM_lowess_fraction))
+            ax.set_title("MBM curves")
+            ax.set_xlabel('t (s)')
+            ax.legend(loc="upper right")
+        plt.tight_layout()
             
     def OnMINFLUXmsr2zarrzip(self,event):
         import wx
