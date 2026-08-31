@@ -793,11 +793,11 @@ class MINFLUXanalyser():
         driftcorr = unique_name('drift_corrected',pipeline.dataSources.keys())
         curds = pipeline.selectedDataSourceKey
         dc = DriftCorrComet(recipe,inputName=curds,outputName=driftcorr)
-        
-        recipe.add_module(dc)
-        recipe.execute()
 
-        pipeline.selectDataSource(driftcorr)
+        if dc.configure_traits(kind='modal'):
+            recipe.add_module(dc)
+            recipe.execute()
+            pipeline.selectDataSource(driftcorr)
 
     def OnPlotCometDrift(self,event):
         pipeline = self.visFr.pipeline
