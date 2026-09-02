@@ -790,14 +790,14 @@ class MINFLUXanalyser():
 
         pipeline = self.visFr.pipeline
         recipe = pipeline.recipe
-        driftcorr = unique_name('drift_corrected',pipeline.dataSources.keys())
+        # driftcorr = unique_name('drift_corrected',pipeline.dataSources.keys()) # should not be needed since automatic for single module insertion
         curds = pipeline.selectedDataSourceKey
-        dc = DriftCorrComet(recipe,inputName=curds,outputName=driftcorr)
+        dc = DriftCorrComet(recipe,inputName=curds) # crucial to supply the recipe so that namespace choices can be unique
 
-        if dc.configure_traits(kind='modal'):
+        if dc.configure_traits(kind='modal'): # give a chance to tweak parameters
             recipe.add_module(dc)
             recipe.execute()
-            pipeline.selectDataSource(driftcorr)
+            pipeline.selectDataSource(dc.outputName) # since we cannot predict the outputName (should be unique) we get it from the module
 
     def OnPlotCometDrift(self,event):
         pipeline = self.visFr.pipeline

@@ -44,7 +44,54 @@ Repository = "https://github.com/csoeller/PYME-extra"
 
 [project.scripts]
 PYMEconfigutils = "PYMEcs.misc.configUtils:main"
-pymex_install_plugins = "PYMEcs.misc.configUtils:install_plugins"
+pymex_install_plugins = "PYMEcs.misc.configUtils:install_plugins" # this one should become deprecated at some stage, see below
+
+# plugins are now registered via importlib metadata for latest PYME
+# Group names must match PYME's entry-point discovery implementation (see issue #1699)
+[project.entry-points."pyme.plugins.recipes"]
+pymex_recipes_processing = "PYMEcs.recipes.processing"
+pymex_recipes_output = "PYMEcs.recipes.output"
+pymex_recipes_base = "PYMEcs.recipes.base"
+pymex_recipes_localisations = "PYMEcs.recipes.localisations"
+pymex_recipes_simpler = "PYMEcs.recipes.simpler"
+
+[project.entry-points."pyme.plugins.visgui"]
+pymex_vg_clusterTrack = "PYMEcs.experimental.clusterTrack"
+pymex_vg_fiducials = "PYMEcs.experimental.fiducials"
+pymex_vg_fiducialsNew = "PYMEcs.experimental.fiducialsNew"
+pymex_vg_qPAINT = "PYMEcs.experimental.qPAINT"
+pymex_vg_showErrs = "PYMEcs.experimental.showErrs"
+pymex_vg_showErrs = "PYMEcs.experimental.showShiftMap"
+pymex_vg_binEventProperty = "PYMEcs.experimental.binEventProperty"
+pymex_vg_onTimes = "PYMEcs.experimental.onTimes"
+pymex_vg_snrEvents = "PYMEcs.experimental.snrEvents"
+pymex_vg_randMap = "PYMEcs.experimental.randMap"
+pymex_vg_mortensen = "PYMEcs.experimental.mortensen"
+pymex_vg_splitRender = "PYMEcs.experimental.splitRender"
+pymex_vg_timedSpecies = "PYMEcs.experimental.timedSpecies"
+pymex_vg_chaining = "PYMEcs.experimental.chaining"
+pymex_vg_specLabeling = "PYMEcs.experimental.specLabeling"
+pymex_vg_selectROIfilterTable = "PYMEcs.experimental.selectROIfilterTable"
+pymex_vg_regExtraCmaps = "PYMEcs.experimental.regExtraCmaps"
+pymex_vg_pyme2caml = "PYMEcs.experimental.pyme2caml"
+pymex_vg_Simpler = "PYMEcs.experimental.Simpler"
+pymex_vg_MINFLUX = "PYMEcs.experimental.MINFLUX"
+pymex_vg_eventProcessing = "PYMEcs.experimental.eventProcessing"
+pymex_vg_NPCcalcLM = "PYMEcs.experimental.NPCcalcLM"
+
+[project.entry-points."pyme.plugins.dsviewer"]
+pymex_dv_showErrsDh5view = "PYMEcs.experimental.showErrsDh5view"
+pymex_dv_mapTools = "PYMEcs.experimental.mapTools"
+pymex_dv_meas2DplotDh5view = "PYMEcs.experimental.meas2DplotDh5view"
+pymex_dv_testChannelByName = "PYMEcs.experimental.testChannelByName"
+pymex_dv_FRC = "PYMEcs.experimental.FRC"
+pymex_dv_regExtraCmaps = "PYMEcs.experimental.regExtraCmaps"
+pymex_dv_procPoints = "PYMEcs.experimental.procPoints"
+pymex_dv_combine_maps = "PYMEcs.experimental.combine_maps"
+pymex_dv_Sofi = "PYMEcs.experimental.Sofi"
+pymex_dv_CalcZfactor = "PYMEcs.experimental.CalcZfactor"
+pymex_dv_ImageJROItools = "PYMEcs.experimental.ImageJROItools"
+pymex_dv_OBFtools = "PYMEcs.experimental.OBFtools"
 
 [tool.setuptools.dynamic]
 version = {attr = "PYMEcs.__version__"}
