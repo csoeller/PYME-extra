@@ -813,14 +813,18 @@ class MINFLUXanalyser():
             ybot = 0
             for dsname in drift:
                 drtrack = drift[dsname]
-                ax.plot(drtrack['tim'],drtrack[axis],label=dsname)
+                if 'tim' in drtrack.keys():
+                    tvar = 'tim'
+                else:
+                    tvar = 't'
+                ax.plot(drtrack[tvar],drtrack[axis],label=dsname)
                 ytop = max([15.0,1.2*drtrack[axis].max(),ytop])
                 ybot = min([-15.0,1.2*drtrack[axis].min(),ybot])
             if driftO is not None:
-                ax.plot(driftO['tim'],driftO[axis],'--')
+                ax.plot(driftO[tvar],driftO[axis],'--')
             ax.set_ylim(ybot,ytop)
             ax.legend()
-            ax.set_xlabel('t (s)')
+            ax.set_xlabel('t (s or frame)')
             ax.set_ylabel('$\\Delta %s$ (nm)' % axis)
                 
         fig, axs = plt.subplots(2, 2)

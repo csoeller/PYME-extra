@@ -57,7 +57,12 @@ class DriftCorrComet(ModuleBase):
         from PYME.IO.tabular import DictSource
         tmin = locs[tvar].min() # drift time apparently is always returned starting at 0, we abbreviate
         drifta = drift[drift[:,-1]>tmin,:]
-        drift_dict = dict(x=drifta[:,0],y=drifta[:,1],tim=drifta[:,-1],t=1e3*drifta[:,-1])
+        drift_dict = dict(x=drifta[:,0],y=drifta[:,1])
+        if tvar == 'tim':
+            drift_dict['tim'] = drifta[:,-1]
+            drift_dict['t'] = 1e3*drifta[:,-1]
+        else:
+            drift_dict['t'] = 1e3*drifta[:,-1]
         if has_z:
             drift_dict['z'] = drifta[:,2]
         driftds = DictSource(drift_dict)
