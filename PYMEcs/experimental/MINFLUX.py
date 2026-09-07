@@ -583,8 +583,12 @@ class MINFLUXSettings(HasTraits):
                           desc="if a full second module set is inserted to also analyse the origami data without any MBM corrections")
     origamiErrorLimit = Float(10.0,label='xLimit when plotting origami errors',
                               desc="sets the upper limit in x (in nm) when plotting origami site errors")
+    driftDifferenceLowessFraction = Float(0.2,
+                                          desc="lowess fraction used when smoothing difference of drift tracks")
+    driftDifferenceLowessDelta = Float(100.0, # let's see if this is reasonable; the larger this number the bigger the speedup
+                                          desc="lowess delta used when smoothing difference of drift tracks")
 
-def findDriftComet(pipeline,warnings=True,return_mod=False,hasGUI=False):
+def findDriftComet(pipeline,warnings=True,return_mod=False,hasGUI=False,selectSingle=False):
     from PYMEcs.recipes.localisations import DriftCorrComet
     dsnames = []
     cmod = None
@@ -602,7 +606,10 @@ def findDriftComet(pipeline,warnings=True,return_mod=False,hasGUI=False):
     cdsname = dsnames[0] # default
     if len(dsnames) > 1:
         if hasGUI:
-            options = [*dsnames,'all curves']
+            if selectSingle:
+                options = dsnames
+            else:
+                options = [*dsnames,'all curves']
             import wx
             with wx.SingleChoiceDialog(None, 'Comet drift', 'Select a datasource', options) as dlg:
                 if dlg.ShowModal() != wx.ID_OK:
@@ -772,6 +779,7 @@ class MINFLUXanalyser():
         if has_comet:
             visFr.AddMenuItem('MINFLUX>Corrections', "Comet drift correction", self.OnCometDriftCorrection)
             visFr.AddMenuItem('MINFLUX>Corrections', "Plot comet drift correction", self.OnPlotCometDrift)
+            visFr.AddMenuItem('MINFLUX>Corrections', "Compare drift curves", self.OnCompareDriftCurves)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -828,10 +836,11 @@ class MINFLUXanalyser():
             ax.set_ylabel('$\\Delta %s$ (nm)' % axis)
                 
         fig, axs = plt.subplots(2, 2)
+        ts = pipeline.mdh.get('MINFLUX.TimeStamp','TS unknown')
         if driftO is not None:
-            fig.suptitle("comet drift estimate vs origami est (--, sum of %d passes)" % len(driftO['dsnames']))
+            fig.suptitle("%s - comet drift estimate vs origami est (--, sum of %d passes)" % (ts,len(driftO['dsnames'])))
         else:
-            fig.suptitle("comet drift estimate")
+            fig.suptitle("%s - comet drift estimate" % (ts))
         pdrift(axs[0, 0],drift,driftO,'x')
         pdrift(axs[0, 1],drift,driftO,'y')
         if has_z:
@@ -852,7 +861,91 @@ class MINFLUXanalyser():
             ax.set_xlabel('t (s)')
             ax.legend() # let matplotlib decide on placement
         plt.tight_layout()
-            
+
+    def OnCompareDriftCurves(self,event):
+        pipeline = self.visFr.pipeline
+        drift = findDriftComet(pipeline,warnings=True,hasGUI=True,selectSingle=True)
+        driftO = findDriftOrigami(pipeline,warnings=True,warn_no_origami=True)
+        if drift is None or driftO is None: # in this case the findDriftFuncs will have warned, just return
+            return
+
+        if len(drift) > 1:
+            raise RuntimeError("drift dict has more than one value, not allowed")
+        dsname = next(iter(drift.keys()))
+        drtrack = drift[dsname]
+        if 'tim' in drtrack.keys():
+            tvar = 'tim'
+        else:
+            tvar = 't'
+        
+        def calc_difference(dr_t,dr_ax, do_t, do_ax, tres=1.0, edge = 100):
+            # get interpolation range
+            t_min = max(dr_t.min(),do_t.min()) + edge
+            t_max = min(dr_t.max(),do_t.max()) - edge
+            if t_min >= t_max-tres:
+                raise RuntimeError('overlap range is too small, only covering %.1f to %.1f' % (t_min,t_max))
+            t_vals = np.arange(t_min,t_max,tres)
+            # interpolate dr_ax and do_ax on common range of time coordinates
+            dri = np.interp(t_vals, dr_t, dr_ax)
+            doi = np.interp(t_vals, do_t, do_ax)
+            dr_diff = dri - doi
+
+            return (t_vals,dr_diff)
+        
+        def diff_stats(drift_diff):
+            return { 'meanabs' : np.mean(np.abs(drift_diff)),
+                     'rms' : np.sqrt(np.mean(drift_diff*drift_diff)) }
+
+        def rolling_average(x,y,N):
+            kernel = np.ones((N)) / N
+
+            # 1. Perform valid convolution
+            y_valid = np.convolve(y, kernel, mode='valid')
+
+            # 2. Get the valid indices for the x-axis
+            start_idx = (N - 1) // 2             # for odd length, this is 1
+
+            x_valid = x[start_idx:-start_idx]
+
+            return x_valid, y_valid
+
+        def smooth_driftcurve(x, y,frac=0.1):
+            from statsmodels.nonparametric.smoothers_lowess import lowess
+            return lowess(y,x,frac=self.analysisSettings.driftDifferenceLowessFraction,
+                          delta=self.analysisSettings.driftDifferenceLowessDelta,return_sorted=False)
+        
+        dr_t = drtrack[tvar]
+        do_t = driftO[tvar]
+
+        fig, axs = plt.subplots(2, 2)
+
+        if 'z' in drtrack.keys():
+            axes = {'x':axs[0][0],'y':axs[0][1],'z':axs[1][0]}
+        else:
+            axes = {'x':axs[0][0],'y':axs[0][1]}
+        plotrange = 10.0
+        navg = 1001
+        for axis in axes.keys():
+            track_t, track_diff = calc_difference(dr_t,drtrack[axis],do_t,driftO[axis],edge=300)
+            dstats = diff_stats(track_diff)
+            # plot diff for axis
+            ax = axes[axis]
+            ax.plot(track_t, track_diff, label=axis)
+            #ax.plot(*rolling_average(track_t, track_diff, navg), label='moving average')
+            ax.plot(track_t, smooth_driftcurve(track_t, track_diff), '--', label='smoothed')
+            ax.legend()
+            ax.set_ylim(min(-plotrange,track_diff.min()),max(plotrange,track_diff.max()))
+            # print stats for difference
+            ax.text(0.75, 0.15, 'rms %.1f nm' % dstats['rms'], horizontalalignment='right',
+                 verticalalignment='bottom', transform=ax.transAxes)
+            ax.text(0.75, 0.05, 'abs %.1f nm' % dstats['meanabs'], horizontalalignment='right',
+                 verticalalignment='bottom', transform=ax.transAxes)
+            ax.set_xlabel('t (s)')
+            ax.set_ylabel('difference (nm)')
+        ts = pipeline.mdh.get('MINFLUX.TimeStamp','TS unknown')
+        fig.suptitle("%s - comet drift difference to origami est" % (ts))
+        plt.tight_layout()
+        
     def OnMINFLUXmsr2zarrzip(self,event):
         import wx
         pipeline = self.visFr.pipeline
