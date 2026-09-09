@@ -40,17 +40,8 @@ jobs:
         with:
           name: python-package-distributions
           path: dist/
-      # If TEST_PYPI_API_TOKEN is not set, this uses Trusted Publishing (OIDC).
-      # Otherwise it uses the API token secret with __token__ user.
+      # this uses Trusted Publishing (OIDC).
       - name: Publish to TestPyPI (Trusted Publishing)
-        if: ${{ secrets.TEST_PYPI_API_TOKEN == '' }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
-      - name: Publish to TestPyPI (API token)
-        if: ${{ secrets.TEST_PYPI_API_TOKEN != '' }}
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
-          user: __token__
-          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
