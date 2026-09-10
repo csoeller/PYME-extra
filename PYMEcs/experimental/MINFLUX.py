@@ -1153,7 +1153,7 @@ class MINFLUXanalyser():
         from pathlib import Path
 
         # ======================================================================================
-        # --- Select, load Zarr.zip file, convert into DataFrame, Run the analysis functions ---
+        # --- Select, load Zarr.zip or msr file, convert into DataFrame, Run the analysis functions ---
         # ======================================================================================
         pipeline = self.visFr.pipeline # Get the pipeline from the GUI
 
@@ -1163,17 +1163,21 @@ class MINFLUXanalyser():
         if not pipeline.mdh['MINFLUX.Is3D']: # TODO: make paraflux analysis code 2D aware
             warn('paraflux analysis currently only implemented for 3D data, this is apparently 2D data; giving up...')
             return
-        try:
-            # if this is a zarr archive we should have a zarr attribute in the FitResults datasource 
-            zarr_archive = pipeline.dataSources['FitResults'].zarr
-        except:
-            warn("data is not from a zarr archive, giving up...")
+        mfx_source = pipeline.dataSources['FitResults']
+        zarr_archive = getattr(mfx_source, 'zarr', None)
+        if zarr_archive is not None:
+            mfxdata = zarr_archive['mfx'][:]
+            try:
+                mfx_path = zarr_archive.store.path
+            except AttributeError:
+                warn("cannot get zarr store path from zarr object, not saving analysis data...")
+                mfx_path = None
+        elif hasattr(mfx_source, 'mfxdata'):
+            mfxdata = mfx_source.mfxdata
+            mfx_path = getattr(mfx_source, 'filename', None)
+        else:
+            warn("data is neither a Zarr archive nor an MSR MINFLUX source, giving up...")
             return
-        try:
-            zarr_path = zarr_archive.store.path
-        except AttributeError:
-            warn("cannot get zarr store path from zarr object, not saving analysis data...")
-            zarr_path = None
         
         # possible storage code, not yet used/implemented
         # datasources = pipeline._get_session_datasources()
@@ -1182,10 +1186,10 @@ class MINFLUXanalyser():
 
         # paraflux analysis with progress dialog follows
         import PYMEcs.Analysis.Paraflux as pf
-        mfx_zarrsource = pipeline.dataSources['FitResults'] # this should be a MinfluxZarrSource instance
+        mfx_source = pipeline.dataSources['FitResults'] # this should be a MinfluxZarrSource instance
 
         # check if we have a cached result
-        if mfx_zarrsource._paraflux_analysis is None:
+        if mfx_source._paraflux_analysis is None:
             # for example use of ProgressDialog see also
             # https://github.com/Metallicow/wxPython-Sample-Apps-and-Demos/blob/master/101_Common_Dialogs/ProgressDialog/ProgressDialog_extended.py
             progress = wx.ProgressDialog("Paraflux analysis in progress", "please wait", maximum=4,
@@ -1196,8 +1200,7 @@ class MINFLUXanalyser():
                 progress.Update(n)
                 wx.Yield()
 
-            # read all data from the zarr archive
-            mfxdata = zarr_archive['mfx'][:]; upd(1)
+            upd(1)
             # processing 1st step, move data into pandas dataframe
             df_mfx, failure_map = pf.paraflux_mk_df_fm(mfxdata); upd(2)
             # Run the analysis steps
@@ -1206,16 +1209,16 @@ class MINFLUXanalyser():
             vld_itr = pf.analyze_failures(vld_itr, df_mfx, failure_map)
             initial_count = vld_itr['vld loc count'].iloc[0]
             vld_itr = pf.add_failure_metrics(vld_itr, initial_count); upd(4)
-            mfx_zarrsource._paraflux_analysis = vld_itr
+            mfx_source._paraflux_analysis = vld_itr
         else:
-            vld_itr = mfx_zarrsource._paraflux_analysis
+            vld_itr = mfx_source._paraflux_analysis
         
         vld_paraflux = pf.paraflux_itr_plot(vld_itr[['itr', 'passed itr %', 'CFR failure %', 'No signal % per itr pairs']])
 
         # here possible storage command, only if autosaving is enabled in config
-        if mu.autosave_check() and zarr_path is not None:
+        if mu.autosave_check() and mfx_path is not None:
             mu.autosave_csv(vld_itr.drop(columns='tid', errors='ignore'),
-                            zarr_path,pipeline.mdh,'_iteration_stats_full')
+                            mfx_path,pipeline.mdh,'_iteration_stats_full')
         ### --- End of Alex B added functionality ---
 
     def OnClumpScatterPosPlot(self,event):

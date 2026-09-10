@@ -957,7 +957,7 @@ class MinfluxMsrSource(MinfluxNpySource):
         if mfxdta is None:
             # we have an issue
             raise RuntimeError("file '%s' with stack number '%i' cannot be read as MINFLUX MSR data set" % (filename,stack_index))
-        # self.zarr = archz
+        self.mfxdata = mfxdta.get_mfx() # we hope keeping around the whole data is not a memory issue (done similar to zarr archive)
         self._stack_index = stack_index
         self.query = "stack=%d" % stack_index # record the stack_index number for a query string used in session datasource loading
         # self._own_file = True # is this necessary? Normally only used by HDF to close HFD on destroy, zarr does not need "closing"
@@ -968,7 +968,7 @@ class MinfluxMsrSource(MinfluxNpySource):
         if mbm_raw is not None:
             self.mdh['MINFLUX.MBMRawBeads'] = MBMRawBeads(mbm_raw)
         # NOTE: no further 'locations valid' check should be necessary - we filter already in the conversion function
-        self.res = minflux_zarr2pyme({'mfx':mfxdta.get_mfx()},mdh=self.mdh)
+        self.res = minflux_zarr2pyme({'mfx':self.mfxdata},mdh=self.mdh)
         
         self._keys = list(self.res.dtype.names)
 
