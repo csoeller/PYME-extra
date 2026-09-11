@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=80", "setuptools-scm>=8.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -32,6 +32,9 @@ dependencies = [
 ]
 
 dynamic = ["version"]
+
+[tool.setuptools_scm]
+version_file = "PYMEcs/_version.py"
 
 [project.optional-dependencies]
 opt = [
@@ -93,5 +96,5 @@ pymex_dv_CalcZfactor = "PYMEcs.experimental.CalcZfactor"
 pymex_dv_ImageJROItools = "PYMEcs.experimental.ImageJROItools"
 pymex_dv_OBFtools = "PYMEcs.experimental.OBFtools"
 
-[tool.setuptools.dynamic]
-version = {attr = "PYMEcs.__version__"}
+#[tool.setuptools.dynamic]
+#version = {attr = "PYMEcs.__version__"}
