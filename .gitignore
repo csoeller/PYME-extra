@@ -143,3 +143,5 @@ PYMEcs/misc/adhoc.py
 PYMEcs/Acquire/Hardware/Piezos/joystick_c867_digital2.py
 
 PYMEcs/experimental/MINFLUXpara.py
+
+PYMEcs/_version.py
