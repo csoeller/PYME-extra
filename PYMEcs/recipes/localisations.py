@@ -1,5 +1,5 @@
 from PYME.recipes.base import register_module, register_legacy_module, ModuleBase, Filter
-from PYME.recipes.traits import Input, Output, Float, Enum, CStr, Bool, Int, List, DictStrStr, DictStrList, ListFloat, ListStr, FileOrURI
+from PYME.recipes.traits import Input, Output, Float, Enum, CStr, Bool, Int, List, DictStrStr, DictStrList, ListFloat, ListStr, FileOrURI, Dict
 
 import numpy as np
 import pandas as pd
@@ -1794,10 +1794,15 @@ class MBMcorrection(ModuleBaseMDHmod):
     _initialized = Bool(False)
 
     _mbmmdh_key = CStr('') # to cache the rawbead info from metadata 'MINFLUX.MBMRawBeads'
-    _mbmmdh_cache = {}
+    _mbmmdh_cache = Dict() # making this dict, not {} - reason being that way cache is instance local, not class scope!
     
-    _mbm_cache = {} # cache for file based mbm loading
-    _lowess_cache = {}
+    _mbm_cache = Dict() # cache for file based mbm loading; again specify as Dict, not plain python dict to be instance specific
+    _lowess_cache = Dict() # same as above
+
+    # def __init__(self, *args, **kwargs):
+    #     super().__init__(*args, **kwargs)
+
+    #     self._mbmmdh_cache = {}
     
     # attempt at caching the raw beads to avoid reloading the mbm and overriding manual bead selections etc
     def mbmmdh_cachetuple(self,rb):
@@ -2061,7 +2066,7 @@ class NPCAnalysisInput(ModuleBaseMDHmod):
     zclip = Float(55.0,label='Z-clip value from center of NPC',
                   desc='the used zrange from the (estimated) center of the NPC, from (-zclip..+zclip) in 3D fitting')
     
-    _npc_cache = {}
+    _npc_cache = Dict()
 
     def run(self,inputLocalizations):
         from PYME.IO import unifiedIO

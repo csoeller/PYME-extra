@@ -457,9 +457,9 @@ def plot_site_tracking(pipeline,fignum=None,plotSmoothingCurve=True,alpha=0.5):
     plt.tight_layout()
 
 
-#########################################
-#### Main imports and util functions ####
-#########################################
+############################################
+#### Main imports and utility functions ####
+############################################
 
 from PYMEcs.Analysis.MINFLUX import analyse_locrate
 from PYMEcs.misc.guiMsgBoxes import Error
@@ -551,43 +551,6 @@ def checkmbm_mods4alignment(pipeline,dsname): # or maybe use the pipeline as arg
     # now return the info we need for alignment
     return dict(sourceLocalizations=dsname,sourceTracks=dsmod.outputTracksCorr,targetTracks=refmod.outputTracksCorr,channel=chanName)
 
-from PYME.recipes.traits import HasTraits, Float, Enum, CStr, Bool, Int, List
-import PYME.config
-
-class MINFLUXSettings(HasTraits):
-    withOrigamiSmoothingCurves = Bool(True,label='Plot smoothing curves',desc="if overplotting smoothing curves " +
-                                      "in origami site correction analysis")
-    defaultDatasourceForAnalysis = CStr('Localizations',label='default datasource for analysis',
-                                        desc="the datasource key that will be used by default in the MINFLUX " +
-                                        "properties functions (EFO, localisation rate, etc)") # default datasource for acquisition analysis
-    defaultDatasourceCoalesced = CStr('coalesced_nz',label='default datasource for coalesced analysis',
-                                        desc="the datasource key that will be used by default when a " +
-                                        "coalesced data source is required")
-    defaultDatasourceCoalescedBBfilt = CStr('wtp_f_merged',label='default datasource for coalesced analysis post BB filtering',
-                                        desc="the datasource key that will be used by default when a " +
-                                        "coalesced data source with bounding box filtering is required")
-    defaultDatasourceWithClumps = CStr('with_clumps',label='default datasource for clump analysis',
-                                        desc="the datasource key that will be used by default when a " +
-                                        "data source with clump info is required")
-    defaultDatasourceForMBM = CStr('coalesced_nz',label='default datasource for MBM analysis and plotting',
-                                        desc="the datasource key that will be used by default in the MINFLUX " +
-                                        "MBM analysis") # default datasource for MBM analysis
-    datasourceForClusterAnalysis = CStr(PYME.config.get('MINFLUX-clusterDS','dbscan_clustered'),label='datasource for 3D cluster analysis',
-                                        desc="the datasource key that will be used to generate the 3D cluster size analysis")
-    
-    largeClusterThreshold = Float(50,label='Threshold for large clusters',
-                                  desc='minimum number of events to classify as large cluster')
-    clustercountsPlotWithInts = Bool(False,label='Include "integer" plots in cluster stats',
-                                  desc='plot integer quantized cluster stats that avoid counting fractional RyR numbers')
-    origamiWith_nc = Bool(False,label='add 2nd moduleset (no MBM corr)',
-                          desc="if a full second module set is inserted to also analyse the origami data without any MBM corrections")
-    origamiErrorLimit = Float(10.0,label='xLimit when plotting origami errors',
-                              desc="sets the upper limit in x (in nm) when plotting origami site errors")
-    driftDifferenceLowessFraction = Float(0.2,
-                                          desc="lowess fraction used when smoothing difference of drift tracks")
-    driftDifferenceLowessDelta = Float(100.0, # let's see if this is reasonable; the larger this number the bigger the speedup
-                                          desc="lowess delta used when smoothing difference of drift tracks")
-
 def findDriftComet(pipeline,warnings=True,return_mod=False,hasGUI=False,selectSingle=False):
     from PYMEcs.recipes.localisations import DriftCorrComet
     dsnames = []
@@ -665,6 +628,113 @@ def findDriftOrigami(pipeline,warnings=True,return_mod=False,warn_no_origami=Fal
             drift['z'] += d['z']
     return drift
 
+def calc_composite(dr_t,dr_ax, do_t, do_ax, tres=1.0, edge = 100, operation='subtract'):
+    # get interpolation range
+    t_min = max(dr_t.min(),do_t.min()) + edge
+    t_max = min(dr_t.max(),do_t.max()) - edge
+    if t_min >= t_max-tres:
+        raise RuntimeError('overlap range is too small, only covering %.1f to %.1f' % (t_min,t_max))
+    t_vals = np.arange(t_min,t_max,tres)
+    # interpolate dr_ax and do_ax on common range of time coordinates
+    dri = np.interp(t_vals, dr_t, dr_ax)
+    doi = np.interp(t_vals, do_t, do_ax)
+    if operation == 'subtract':
+        dr_comp = dri - doi
+    elif operation == 'add':
+        dr_comp = dri + doi
+    else:
+        raise RuntimeError('unknown operation "%s" requested' % operation)
+
+    return (t_vals,dr_comp)
+        
+def diff_stats(drift_diff,remove_mean=False):
+    if remove_mean:
+        dd = drift_diff - drift_diff.mean()
+    else:
+        dd = drift_diff
+    return { 'meanabs' : np.mean(np.abs(dd)),
+             'rms' : np.sqrt(np.mean(dd*dd)),
+             'absmax': np.max(np.abs(dd)),
+            }
+
+def rolling_average(x,y,N):
+    kernel = np.ones((N)) / N
+
+    # 1. Perform valid convolution
+    y_valid = np.convolve(y, kernel, mode='valid')
+
+    # 2. Get the valid indices for the x-axis
+    start_idx = (N - 1) // 2             # for odd length, this is 1
+    
+    x_valid = x[start_idx:-start_idx]
+    
+    return x_valid, y_valid
+
+def smooth_driftcurve(x, y,frac=0.1,delta=1):
+    from statsmodels.nonparametric.smoothers_lowess import lowess
+    return lowess(y,x,frac=frac,
+                  delta=delta,return_sorted=False)
+
+def pdrift(ax,drift,driftO,axis):
+    ytop = 0
+    ybot = 0
+    for dsname in drift:
+        drtrack = drift[dsname]
+        if 'tim' in drtrack.keys():
+            tvar = 'tim'
+        else:
+            tvar = 't'
+        ax.plot(drtrack[tvar],drtrack[axis],label=dsname)
+        ytop = max([15.0,1.2*drtrack[axis].max(),ytop])
+        ybot = min([-15.0,1.2*drtrack[axis].min(),ybot])
+    if driftO is not None:
+        ax.plot(driftO[tvar],driftO[axis],'--')
+    ax.set_ylim(ybot,ytop)
+    ax.legend()
+    ax.set_xlabel('t (s or frame)')
+    ax.set_ylabel('$\\Delta %s$ (nm)' % axis)
+
+###############################
+#### Traits based settings ####
+###############################
+
+from PYME.recipes.traits import HasTraits, Float, Enum, CStr, Bool, Int, List
+import PYME.config
+
+class MINFLUXSettings(HasTraits):
+    withOrigamiSmoothingCurves = Bool(True,label='Plot smoothing curves',desc="if overplotting smoothing curves " +
+                                      "in origami site correction analysis")
+    defaultDatasourceForAnalysis = CStr('Localizations',label='default datasource for analysis',
+                                        desc="the datasource key that will be used by default in the MINFLUX " +
+                                        "properties functions (EFO, localisation rate, etc)") # default datasource for acquisition analysis
+    defaultDatasourceCoalesced = CStr('coalesced_nz',label='default datasource for coalesced analysis',
+                                        desc="the datasource key that will be used by default when a " +
+                                        "coalesced data source is required")
+    defaultDatasourceCoalescedBBfilt = CStr('wtp_f_merged',label='default datasource for coalesced analysis post BB filtering',
+                                        desc="the datasource key that will be used by default when a " +
+                                        "coalesced data source with bounding box filtering is required")
+    defaultDatasourceWithClumps = CStr('with_clumps',label='default datasource for clump analysis',
+                                        desc="the datasource key that will be used by default when a " +
+                                        "data source with clump info is required")
+    defaultDatasourceForMBM = CStr('coalesced_nz',label='default datasource for MBM analysis and plotting',
+                                        desc="the datasource key that will be used by default in the MINFLUX " +
+                                        "MBM analysis") # default datasource for MBM analysis
+    datasourceForClusterAnalysis = CStr(PYME.config.get('MINFLUX-clusterDS','dbscan_clustered'),label='datasource for 3D cluster analysis',
+                                        desc="the datasource key that will be used to generate the 3D cluster size analysis")
+    
+    largeClusterThreshold = Float(50,label='Threshold for large clusters',
+                                  desc='minimum number of events to classify as large cluster')
+    clustercountsPlotWithInts = Bool(False,label='Include "integer" plots in cluster stats',
+                                  desc='plot integer quantized cluster stats that avoid counting fractional RyR numbers')
+    origamiWith_nc = Bool(False,label='add 2nd moduleset (no MBM corr)',
+                          desc="if a full second module set is inserted to also analyse the origami data without any MBM corrections")
+    origamiErrorLimit = Float(10.0,label='xLimit when plotting origami errors',
+                              desc="sets the upper limit in x (in nm) when plotting origami site errors")
+    driftDifferenceLowessFraction = Float(0.2,
+                                          desc="lowess fraction used when smoothing difference of drift tracks")
+    driftDifferenceLowessDelta = Float(100.0, # let's see if this is reasonable; the larger this number the bigger the speedup
+                                          desc="lowess delta used when smoothing difference of drift tracks")
+
 class MINFLUXSiteSettings(HasTraits):
     showPoints = Bool(True)
     forcePoints = Bool(False)
@@ -686,6 +756,10 @@ class MINFLUXplottingDefaults(HasTraits):
     FontSize = Float(12)
     LineWidth = Float(1.5)
 
+#########################################################
+#### main class that defines plugin with its methods ####
+#########################################################
+    
 class MINFLUXanalyser():
     def __init__(self, visFr):
         self.visFr = visFr
@@ -779,7 +853,8 @@ class MINFLUXanalyser():
         if has_comet:
             visFr.AddMenuItem('MINFLUX>Corrections', "Comet drift correction", self.OnCometDriftCorrection)
             visFr.AddMenuItem('MINFLUX>Corrections', "Plot comet drift correction", self.OnPlotCometDrift)
-            visFr.AddMenuItem('MINFLUX>Corrections', "Compare drift curves", self.OnCompareDriftCurves)
+            visFr.AddMenuItem('MINFLUX>Corrections', "Compare origami and comet drift curves", self.OnCompareDriftCurves)
+            visFr.AddMenuItem('MINFLUX>Corrections', "Compare total drift curves", self.OnCompareDriftCurvesTotal)
         
         # this section establishes Menu entries for loading MINFLUX recipes in one click
         # these recipes should be MINFLUX processing recipes of general interest
@@ -812,28 +887,9 @@ class MINFLUXanalyser():
         drift = findDriftComet(pipeline,warnings=True,hasGUI=True)
         driftO = findDriftOrigami(pipeline,warnings=True)
         # note that drift is a dict of drift curves
-        has_z = 'z' in next(iter(drift.values())).keys() # this reads poorly
         if drift is None:
             return
-
-        def pdrift(ax,drift,driftO,axis):
-            ytop = 0
-            ybot = 0
-            for dsname in drift:
-                drtrack = drift[dsname]
-                if 'tim' in drtrack.keys():
-                    tvar = 'tim'
-                else:
-                    tvar = 't'
-                ax.plot(drtrack[tvar],drtrack[axis],label=dsname)
-                ytop = max([15.0,1.2*drtrack[axis].max(),ytop])
-                ybot = min([-15.0,1.2*drtrack[axis].min(),ybot])
-            if driftO is not None:
-                ax.plot(driftO[tvar],driftO[axis],'--')
-            ax.set_ylim(ybot,ytop)
-            ax.legend()
-            ax.set_xlabel('t (s or frame)')
-            ax.set_ylabel('$\\Delta %s$ (nm)' % axis)
+        has_z = 'z' in next(iter(drift.values())).keys() # this reads poorly
                 
         fig, axs = plt.subplots(2, 2)
         ts = pipeline.mdh.get('MINFLUX.TimeStamp','TS unknown')
@@ -878,42 +934,6 @@ class MINFLUXanalyser():
         else:
             tvar = 't'
         
-        def calc_difference(dr_t,dr_ax, do_t, do_ax, tres=1.0, edge = 100):
-            # get interpolation range
-            t_min = max(dr_t.min(),do_t.min()) + edge
-            t_max = min(dr_t.max(),do_t.max()) - edge
-            if t_min >= t_max-tres:
-                raise RuntimeError('overlap range is too small, only covering %.1f to %.1f' % (t_min,t_max))
-            t_vals = np.arange(t_min,t_max,tres)
-            # interpolate dr_ax and do_ax on common range of time coordinates
-            dri = np.interp(t_vals, dr_t, dr_ax)
-            doi = np.interp(t_vals, do_t, do_ax)
-            dr_diff = dri - doi
-
-            return (t_vals,dr_diff)
-        
-        def diff_stats(drift_diff):
-            return { 'meanabs' : np.mean(np.abs(drift_diff)),
-                     'rms' : np.sqrt(np.mean(drift_diff*drift_diff)) }
-
-        def rolling_average(x,y,N):
-            kernel = np.ones((N)) / N
-
-            # 1. Perform valid convolution
-            y_valid = np.convolve(y, kernel, mode='valid')
-
-            # 2. Get the valid indices for the x-axis
-            start_idx = (N - 1) // 2             # for odd length, this is 1
-
-            x_valid = x[start_idx:-start_idx]
-
-            return x_valid, y_valid
-
-        def smooth_driftcurve(x, y,frac=0.1):
-            from statsmodels.nonparametric.smoothers_lowess import lowess
-            return lowess(y,x,frac=self.analysisSettings.driftDifferenceLowessFraction,
-                          delta=self.analysisSettings.driftDifferenceLowessDelta,return_sorted=False)
-        
         dr_t = drtrack[tvar]
         do_t = driftO[tvar]
 
@@ -925,14 +945,18 @@ class MINFLUXanalyser():
             axes = {'x':axs[0][0],'y':axs[0][1]}
         plotrange = 10.0
         navg = 1001
-        for axis in axes.keys():
-            track_t, track_diff = calc_difference(dr_t,drtrack[axis],do_t,driftO[axis],edge=300)
+        for axis in axes:
+            track_t, track_diff = calc_composite(dr_t,drtrack[axis],do_t,driftO[axis],edge=300)
             dstats = diff_stats(track_diff)
             # plot diff for axis
             ax = axes[axis]
             ax.plot(track_t, track_diff, label=axis)
             #ax.plot(*rolling_average(track_t, track_diff, navg), label='moving average')
-            ax.plot(track_t, smooth_driftcurve(track_t, track_diff), '--', label='smoothed')
+            ax.plot(track_t,
+                    smooth_driftcurve(track_t, track_diff,
+                                      frac=self.analysisSettings.driftDifferenceLowessFraction,
+                                      delta=self.analysisSettings.driftDifferenceLowessDelta),
+                    '--', label='smoothed')
             ax.legend()
             ax.set_ylim(min(-plotrange,track_diff.min()),max(plotrange,track_diff.max()))
             # print stats for difference
@@ -946,6 +970,85 @@ class MINFLUXanalyser():
         fig.suptitle("%s - comet drift difference to origami est" % (ts))
         plt.tight_layout()
         
+    def OnCompareDriftCurvesTotal(self,event):
+        pipeline = self.visFr.pipeline
+        drifts = findDriftComet(pipeline,warnings=True,hasGUI=True,selectSingle=False)
+        if drifts is None: # in this case the findDriftFuncs will have warned, just return
+            return
+        if len(drifts) < 2:
+            warn('need at least two comet trajectories for comparison, got %d; giving up...' % (len(drifts)))
+            return
+        # TODO: for now we choose two comet drift tracks randomly, later we may want to have a dialog to choose, possibly implemented via findDriftComet func
+        dr_iter = iter(drifts.keys())
+        drift0 = next(dr_iter)
+        drift1 = next(dr_iter)
+        ds_drift0 = pipeline.dataSources[drift0]
+        ds_drift1 = pipeline.dataSources[drift1]
+
+        chan0 = ds_drift0.mdh.get('Processing.MBMcorrection.MbmChannelName')
+        chan1 = ds_drift1.mdh.get('Processing.MBMcorrection.MbmChannelName')
+
+        mbm0 = findmbm(pipeline,return_mod=True,channel=chan0)
+        mbm1 = findmbm(pipeline,return_mod=True,channel=chan1)
+
+        logger.debug("channel 0: %s, channel 1: %s, mbm 0: %s, mbm 1: %s" % (chan0,chan1,mbm0,mbm1)) 
+        # prelim sanity checks
+        # TODO: possibly make checks more stringent/useful?
+        if chan0 is None or chan1 is None:
+            warn("at least one channel is None")
+            return
+        if mbm0 is None or mbm1 is None:
+            warn("at least one mbm source is None")
+            return
+        
+        if 'tim' in ds_drift0.keys():
+            tvar = 'tim'
+        else:
+            tvar = 't'
+        axes = ['x','y']
+        if 'z' in ds_drift0.keys():
+            has_z = True
+            axes.append('z')
+        else:
+            has_z = False
+
+        # TODO: check if saving intermediate results into hashes really makes sense
+        #       it is not really needed and makes code a little more ugly
+        track_sum0 = {}
+        track_sum1 = {}
+        track_diff = {}
+        mbm_diff = {}
+        fig, axs = plt.subplots(2, 2)
+        pax = {'x':axs[0, 0],'y':axs[0, 1]}
+        if has_z:
+            pax['z'] = axs[1, 0]
+        for axis in axes:
+            t_sm0,mbm_meansm0 = mbm0.lowess_calc(axis)
+            track_sum0[tvar], track_sum0[axis] = calc_composite(ds_drift0[tvar],ds_drift0[axis],
+                                                          t_sm0,mbm_meansm0,
+                                                          operation='add',edge=100)
+            t_sm1,mbm_meansm1 = mbm1.lowess_calc(axis)
+            track_sum1[tvar], track_sum1[axis] = calc_composite(ds_drift1[tvar],ds_drift1[axis],
+                                                          t_sm1,mbm_meansm1,
+                                                          operation='add',edge=100)
+            track_diff[tvar], track_diff[axis] = calc_composite(track_sum0[tvar],track_sum0[axis],
+                                                track_sum1[tvar],track_sum1[axis],
+                                                operation='subtract',edge=0)
+            mbm_diff[tvar], mbm_diff[axis] = calc_composite(t_sm0,mbm_meansm0,t_sm1,mbm_meansm1,
+                                                            operation='subtract',edge=0)
+            dstats = diff_stats(track_diff[axis],remove_mean=True)
+            dstatsm = diff_stats(mbm_diff[axis])
+            ax = pax[axis]
+            drift = dict(drift0=track_sum0,drift1=track_sum1,diff=track_diff,diffMBM=mbm_diff)
+            pdrift(ax,drift,None,axis)
+            # print stats for difference
+            ax.text(0.85, 0.25, 'final/mbm rms %.1f/%.1f nm' % (dstats['rms'],dstatsm['rms']), horizontalalignment='right',
+                 verticalalignment='bottom', transform=ax.transAxes)
+            ax.text(0.85, 0.15, 'final/mbm abs %.1f/%.1f nm' % (dstats['meanabs'],dstatsm['meanabs']), horizontalalignment='right',
+                 verticalalignment='bottom', transform=ax.transAxes)
+            ax.text(0.85, 0.05, 'final/mbm absmax %.1f/%.1f nm' % (dstats['absmax'],dstatsm['absmax']), horizontalalignment='right',
+                 verticalalignment='bottom', transform=ax.transAxes)
+
     def OnMINFLUXmsr2zarrzip(self,event):
         import wx
         pipeline = self.visFr.pipeline
