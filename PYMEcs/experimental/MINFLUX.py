@@ -2238,11 +2238,13 @@ class MINFLUXanalyser():
         if 'ClustClumpSize' in nnd.keys():
             dfdict.update(dict(BlobEvents=nnd['ClustClumpSize']))
             T_duration = nnd['tim'].max() - nnd['tim'].min()
-            dftdict = dict(TBVisits=T_duration/nnd['ClustClumpSize'])
+            dfdict.update(dict(TBVisits1Hs=T_duration/nnd['ClustClumpSize']/100.0)) # in multiples of 100 s
         df = pd.DataFrame.from_dict(dfdict)
+        
+        
         from PYMEcs.misc.matplotlib import violinswarmplot
         plt.figure(num="RyR blobs %d" % self.ryrblobsTrackFignum)
-        violinswarmplot(df,format="%.1f",width=0.4,annotate_means=True,
+        violinswarmplot(df,format="%.1f",width=0.6,annotate_means=True,
                         annotate_medians=True,showpoints=False)
         plt.ylim(-20,100)
         plt.ylabel("Nearest neighbour distance (nm)")
@@ -2264,15 +2266,6 @@ class MINFLUXanalyser():
                         dpi=300, bbox_inches='tight')
 
         self.ryrblobsTrackFignum += 1
-
-        if dftdict is not None:
-            dft = pd.DataFrame.from_dict(dftdict)
-            plt.figure()
-            violinswarmplot(dft,format="%.1f",width=0.4,annotate_means=True,
-                        annotate_medians=True,showpoints=False)
-            plt.ylabel("Time between visits (s)")
-            plt.ylim(None,2*dft['TBVisits'].max())
-            plt.tight_layout()
 
     def OnRyRPlotBlobClusterSizes(self, event=None):
         pipeline = self.visFr.pipeline
@@ -2296,9 +2289,9 @@ class MINFLUXanalyser():
         axs[1].set_ylim(ds['z'].min(),ds['z'].max())
         axs[1].set_ylabel('z (nm)')
         axs[1].set_xlabel('cluster ID')
+        fig.suptitle("RyR blob cluster sizes - %s" % pipeline.mdh.get('MINFLUX.TimeStamp','UNKNOWN'))
         plt.tight_layout()
-
-        plt.title("RyR blob cluster sizes - %s" % pipeline.mdh.get('MINFLUX.TimeStamp','UNKNOWN'))
+        
         if mu.autosave_check():
             plt.savefig(mu.fname_from_timestamp(mu.get_ds_path(pipeline),pipeline.mdh,'_RyRblobClusterSizes',ext='.png'),
                         dpi=300, bbox_inches='tight')
