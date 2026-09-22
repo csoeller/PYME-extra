@@ -721,6 +721,8 @@ class MINFLUXSettings(HasTraits):
                                         "MBM analysis") # default datasource for MBM analysis
     datasourceForClusterAnalysis = CStr(PYME.config.get('MINFLUX-clusterDS','dbscan_clustered'),label='datasource for 3D cluster analysis',
                                         desc="the datasource key that will be used to generate the 3D cluster size analysis")
+    datasourceForRyRBlobAnalysis = CStr('blobsNNdist',label='datasource for RyR blob analysis',
+                                        desc="the datasource key that will be used to generate the RyR blob analysis")
     
     largeClusterThreshold = Float(50,label='Threshold for large clusters',
                                   desc='minimum number of events to classify as large cluster')
@@ -2215,10 +2217,11 @@ class MINFLUXanalyser():
 
     def OnRyRPlotBlobProps(self, event=None):
         pipeline = self.visFr.pipeline
-        if not 'blobsNNdist' in pipeline.dataSources.keys():
-            warn('missing datasource "blobsNNdist" from pipeline, needed for plotting; giving up...')
+        blobds = self.analysisSettings.datasourceForRyRBlobAnalysis
+        if not blobds in pipeline.dataSources.keys():
+            warn('missing datasource "%s" from pipeline, needed for plotting; giving up...' % blobds)
             return
-        nnd = pipeline.dataSources['blobsNNdist']
+        nnd = pipeline.dataSources[blobds]
         if 'NNdist' not in nnd.keys():
             warn('missing property "NNdist" from datasource, needed for plotting; giving up...')
             return
@@ -2260,7 +2263,7 @@ class MINFLUXanalyser():
         plt.text(0.9, 0.05, 'ROI %.1f um x %.1f um, %d blobs, %.1f blb/um2' % (roiwx_um,roiwy_um,nblobs,blobdens), horizontalalignment='right',
                  verticalalignment='bottom', transform=plt.gca().transAxes)
         
-        plt.title("RyR blobs NN distances - %s" % pipeline.mdh.get('MINFLUX.TimeStamp','UNKNOWN'))
+        plt.title("RyR blobs NN distances - %s\nsource DS %s" % (pipeline.mdh.get('MINFLUX.TimeStamp','UNKNOWN'),blobds))
         if mu.autosave_check():
             plt.savefig(mu.fname_from_timestamp(mu.get_ds_path(pipeline),pipeline.mdh,'_RyRblobprops',ext='.png'),
                         dpi=300, bbox_inches='tight')
