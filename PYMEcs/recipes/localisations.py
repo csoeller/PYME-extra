@@ -1798,6 +1798,7 @@ class MBMcorrection(ModuleBaseMDHmod):
     
     _mbm_cache = Dict() # cache for file based mbm loading; again specify as Dict, not plain python dict to be instance specific
     _lowess_cache = Dict() # same as above
+    _input_fileID = CStr('') # for lowess caching book keeping
 
     # def __init__(self, *args, **kwargs):
     #     super().__init__(*args, **kwargs)
@@ -1817,8 +1818,28 @@ class MBMcorrection(ModuleBaseMDHmod):
     
     def lowess_cachetuple(self):
         mbm = self.getmbm()
-        return (Path(self.mbmfile).name,self.MBM_lowess_fraction,self.Median_window,str(mbm.beadisgood),self.MBM_lowess_delta)
+        return (self.file_source_id(),self.MBM_lowess_fraction,self.Median_window,str(mbm.beadisgood),self.MBM_lowess_delta)
+
+    def input_fileid(self):
+        return self._input_fileID
     
+    # id for lowess caching book keeping
+    def set_input_fileid(self,mdh):
+        if mdh.get('MINFLUX.MSRStackIndex'):
+            self._input_fileID = "%s?stack=%s" % (mdh.get('MINFLUX.Filename'),mdh.get('MINFLUX.MSRStackIndex'))
+        elif mdh.get('MINFLUX.Filename'):
+            self._input_fileID = mdh.get('MINFLUX.Filename')
+        else:
+            self._input_fileID = ''
+            
+    # id for lowess caching book keeping 
+    def file_source_id(self):
+        if self.mbmfile:
+            return Path(self.mbmfile).name
+        if self.input_fileid():
+            return self.input_fileid()
+        return repr(self.getmbm())
+
     def lowess_cachekey(self):
         return tuple_hash(self.lowess_cachetuple())
 
@@ -1844,23 +1865,39 @@ class MBMcorrection(ModuleBaseMDHmod):
         cachehit = self.lowess_cachehit()
         if cachehit is not None:
             fpath = self.lowess_cachefilepath()
-            np.savez(str(fpath),**cachehit)
+            if fpath is not None:
+                np.savez(str(fpath),**cachehit)
 
     def lowess_cacheread(self):
         cachekey = self.lowess_cachekey()
         fpath = self.lowess_cachefilepath()
-        if fpath.exists():
+        if fpath is not None and fpath.exists():
             self._lowess_cache[cachekey] = np.load(str(fpath))
             return True
         else:
             return False
 
+    # now that we use possibly mbm from metadata
+    # we possible have no filename for the directory
+    # accordingly we test for that
+    # save in that case in the user config dir in lowess_cache subfolder
     def lowess_cachefilepath(self):
         cachekey = self.lowess_cachekey()
         from pathlib import Path
-        fdir = Path(self.mbmfile).parent
-        fpath = fdir / (".mbm_lowess_%s.npz" % cachekey)
-        return fpath
+        if self.mbmfile:
+            lwdir = Path(self.mbmfile).parent
+        else:
+            from PYME.config import user_config_dir
+            lwdir = Path(user_config_dir) / 'lowess_cache'
+            if not lwdir.is_dir():
+                try:
+                    lwdir.mkdir(exist_ok=True)
+                except (FileExistsError, FileNotFoundError):
+                    lwdir = None
+        if lwdir is not None:
+            return lwdir / (".mbm_lowess_%s.npz" % cachekey)
+        else:
+            return None
     
     def getmbm(self):
         mbmkey = self.mbmfile
@@ -1897,7 +1934,7 @@ class MBMcorrection(ModuleBaseMDHmod):
         from PYMEcs.Analysis.MBMcollection import MBMCollectionDF
 
         mapped_ds = tabular.MappingFilter(inputLocalizations)
-
+        self.set_input_fileid(inputLocalizations.mdh)
         if self.mbmfile != '' or inputLocalizations.mdh.get('MINFLUX.MBMRawBeads') is not None:
             if self.mbmfile:
                 mbmkey = self.mbmfile
