@@ -2217,58 +2217,61 @@ class MINFLUXanalyser():
 
     def OnRyRPlotBlobProps(self, event=None):
         pipeline = self.visFr.pipeline
-        blobds = self.analysisSettings.datasourceForRyRBlobAnalysis
-        if not blobds in pipeline.dataSources.keys():
-            warn('missing datasource "%s" from pipeline, needed for plotting; giving up...' % blobds)
+        blobdstemplate = self.analysisSettings.datasourceForRyRBlobAnalysis
+        ds_list = [key for key in pipeline.dataSources.keys() if key.startswith(blobdstemplate)]
+        
+        if len(ds_list) < 1:
+            warn('missing datasource "%s" from pipeline, needed for plotting; giving up...' % blobdstemplate)
             return
-        nnd = pipeline.dataSources[blobds]
-        if 'NNdist' not in nnd.keys():
-            warn('missing property "NNdist" from datasource, needed for plotting; giving up...')
-            return
-        import pandas as pd
-        nndlt50 = nnd['NNdist'].copy()
-        nndlt50[nndlt50 >= 50.0] = np.nan
-        dfdict = dict(NNdist=nnd['NNdist'],NNlt50=nndlt50)
-        dftdict = None
-        if 'NNdist2' in nnd.keys():
-            nnd2 = nnd['NNdist2'].copy()
-            nnd2[nnd['NNdist']>= 50.0] = np.nan
-            dfdict.update(dict(NNdist2=nnd2))
-        if 'NNdist3' in nnd.keys():
-            nnd3 = nnd['NNdist3'].copy()
-            nnd3[nnd['NNdist']>= 50.0] = np.nan
-            dfdict.update(dict(NNdist3=nnd3))
-        if 'ClustClumpSize' in nnd.keys():
-            dfdict.update(dict(BlobEvents=nnd['ClustClumpSize']))
-            T_duration = nnd['tim'].max() - nnd['tim'].min()
-            dfdict.update(dict(TBVisits1Hs=T_duration/nnd['ClustClumpSize']/100.0)) # in multiples of 100 s
-        df = pd.DataFrame.from_dict(dfdict)
-        
-        
-        from PYMEcs.misc.matplotlib import violinswarmplot
-        plt.figure(num="RyR blobs %d" % self.ryrblobsTrackFignum)
-        violinswarmplot(df,format="%.1f",width=0.6,annotate_means=True,
-                        annotate_medians=True,showpoints=False)
-        plt.ylim(-20,100)
-        plt.ylabel("Nearest neighbour distance (nm)")
+        for blobds in ds_list:
+            nnd = pipeline.dataSources[blobds]
+            if 'NNdist' not in nnd.keys():
+                warn('missing property "NNdist" from datasource, needed for plotting; giving up...')
+                return
+            import pandas as pd
+            nndlt50 = nnd['NNdist'].copy()
+            nndlt50[nndlt50 >= 50.0] = np.nan
+            dfdict = dict(NNdist=nnd['NNdist'],NNlt50=nndlt50)
+            dftdict = None
+            if 'NNdist2' in nnd.keys():
+                nnd2 = nnd['NNdist2'].copy()
+                nnd2[nnd['NNdist']>= 50.0] = np.nan
+                dfdict.update(dict(NNdist2=nnd2))
+            if 'NNdist3' in nnd.keys():
+                nnd3 = nnd['NNdist3'].copy()
+                nnd3[nnd['NNdist']>= 50.0] = np.nan
+                dfdict.update(dict(NNdist3=nnd3))
+            if 'ClustClumpSize' in nnd.keys():
+                dfdict.update(dict(BlobEvents=nnd['ClustClumpSize']))
+                T_duration = nnd['tim'].max() - nnd['tim'].min()
+                dfdict.update(dict(TBVisits1Hs=T_duration/nnd['ClustClumpSize']/100.0)) # in multiples of 100 s
+            df = pd.DataFrame.from_dict(dfdict)
 
-        nblobs = nnd['x'].size
-        if 'Localizations' in pipeline.dataSources.keys():
-            dloc = pipeline.dataSources['Localizations']
-        else:
-            dloc = nnd
-        roiwx_um = 1e-3*(dloc['x'].max()-dloc['x'].min())
-        roiwy_um = 1e-3*(dloc['y'].max()-dloc['y'].min())
-        blobdens = nblobs/(roiwx_um*roiwy_um)
-        plt.text(0.9, 0.05, 'ROI %.1f um x %.1f um, %d blobs, %.1f blb/um2' % (roiwx_um,roiwy_um,nblobs,blobdens), horizontalalignment='right',
-                 verticalalignment='bottom', transform=plt.gca().transAxes)
-        
-        plt.title("RyR blobs NN distances - %s\nsource DS %s" % (pipeline.mdh.get('MINFLUX.TimeStamp','UNKNOWN'),blobds))
-        if mu.autosave_check():
-            plt.savefig(mu.fname_from_timestamp(mu.get_ds_path(pipeline),pipeline.mdh,'_RyRblobprops',ext='.png'),
-                        dpi=300, bbox_inches='tight')
 
-        self.ryrblobsTrackFignum += 1
+            from PYMEcs.misc.matplotlib import violinswarmplot
+            plt.figure(num="RyR blobs %d" % self.ryrblobsTrackFignum)
+            violinswarmplot(df,format="%.1f",width=0.6,annotate_means=True,
+                            annotate_medians=True,showpoints=False)
+            plt.ylim(-20,100)
+            plt.ylabel("Nearest neighbour distance (nm)")
+
+            nblobs = nnd['x'].size
+            if 'Localizations' in pipeline.dataSources.keys():
+                dloc = pipeline.dataSources['Localizations']
+            else:
+                dloc = nnd
+            roiwx_um = 1e-3*(dloc['x'].max()-dloc['x'].min())
+            roiwy_um = 1e-3*(dloc['y'].max()-dloc['y'].min())
+            blobdens = nblobs/(roiwx_um*roiwy_um)
+            plt.text(0.9, 0.05, 'ROI %.1f um x %.1f um, %d blobs, %.1f blb/um2' % (roiwx_um,roiwy_um,nblobs,blobdens), horizontalalignment='right',
+                     verticalalignment='bottom', transform=plt.gca().transAxes)
+
+            plt.title("RyR blobs NN distances - %s\nsource DS %s" % (pipeline.mdh.get('MINFLUX.TimeStamp','UNKNOWN'),blobds))
+            if mu.autosave_check():
+                plt.savefig(mu.fname_from_timestamp(mu.get_ds_path(pipeline),pipeline.mdh,'_RyRblobprops',ext='.png'),
+                            dpi=300, bbox_inches='tight')
+
+            self.ryrblobsTrackFignum += 1
 
     def OnRyRPlotBlobClusterSizes(self, event=None):
         pipeline = self.visFr.pipeline
