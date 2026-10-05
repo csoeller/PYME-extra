@@ -969,6 +969,7 @@ class MinfluxMsrSource(MinfluxNpySource):
 
         self.mdh = _get_mdh_zarrlike(filename,mfxdta.get_mfx_metadata())
         self.mdh['MINFLUX.MSRStackIndex'] = stack_index
+        self.mdh['MINFLUX.MSRStackLabel'] = mfxdta.label
         mbm_raw = mfxdta.get_mbm_beads()
         if mbm_raw is not None:
             self.mdh['MINFLUX.MBMRawBeads'] = MBMRawBeads(mbm_raw)

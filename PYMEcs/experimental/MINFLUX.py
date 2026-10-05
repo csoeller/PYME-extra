@@ -2189,7 +2189,7 @@ class MINFLUXanalyser():
                               searchRadius = 0.0, # default for hdbscan to NOT use any epsilon; set to > 0 for close cluster merging
                               clumpColumnName = 'ClustClumpID',
                               sizeColumnName='ClustClumpSize',
-                              maxClumpSize=50,
+                              maxClumpSize=80, # increasing to 80
                               minClumpSize=5,
                               algorithm='hdbscan'
                               ),
