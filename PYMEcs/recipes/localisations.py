@@ -981,18 +981,34 @@ class DBSCANTypeClustering(ModuleBase):
 
     def _view_items(self, params=None):
         from traitsui.api import Item, TextEditor
-        return [Item('columns', editor=TextEditor(auto_set=False, enter_set=True, evaluate=ListStr)),
-                    Item('searchRadius'),
-                    Item('minClumpSize'),
-                    Item('maxClumpSize'),
-                    Item('algorithm'),
-                    Item('useHDBSCANepsilon'),
-                    Item('metric'),
-                    Item('clusterSelectionMethod'),
-                    Item('multithreaded'),
-                    Item('numberOfJobs'),
-                    Item('clumpColumnName'),
-                    Item('sizeColumnName'),]
+        import json
+        MAX_LEN = 100
+
+        def parse_list(s: str) -> list:
+            if len(s) > MAX_LEN:
+                raise ValueError("input too long, must not be > %d chars" % MAX_LEN)
+            try:
+                value = json.loads(s.replace("'",'"')) # be sure to replace single quotes with double quotes
+            except (ValueError, SyntaxError, MemoryError, RecursionError) as e:
+                raise ValueError("invalid list expression") from e
+            if not isinstance(value, list):
+                raise ValueError("expected a list")
+            if not all(isinstance(x, str) for x in value):
+                raise ValueError("unexpected element type, must be string")
+            return value
+        
+        return [Item('columns', editor=TextEditor(auto_set=False, enter_set=True, evaluate=parse_list)),
+                Item('searchRadius'),
+                Item('minClumpSize'),
+                Item('maxClumpSize'),
+                Item('algorithm'),
+                Item('useHDBSCANepsilon'),
+                Item('metric'),
+                Item('clusterSelectionMethod'),
+                Item('multithreaded'),
+                Item('numberOfJobs'),
+                Item('clumpColumnName'),
+                Item('sizeColumnName'),]
 
 
 @register_module('SnrCalculation')

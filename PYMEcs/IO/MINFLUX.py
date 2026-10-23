@@ -1219,6 +1219,27 @@ def monkeypatch_npyorzarr_io(visFr):
     visFr.pipeline._get_session_datasources_original = visFr.pipeline._get_session_datasources
     visFr.pipeline._get_session_datasources = types.MethodType(_get_session_datasources_whook,visFr.pipeline)
 
+    def OnSaveSessionMINFLUX(self, event):
+        '''GUI callback to save session to a file, shows a file dialog'''
+        MINFLUX_TS = self.pipeline.mdh.get('MINFLUX.TimeStamp')
+        if MINFLUX_TS is not None:
+            default_name = "%s-VX.pvs" % MINFLUX_TS
+        else:
+            default_name = ""
+
+        # warn("using monkeypatched method with default_name equal to '%s'" % default_name)
+        filename = wx.SaveFileSelector("Choose a file to save the session to", 
+                                   #nameUtils.genResultDirectoryPath(), 
+                                   extension='.pvs',
+                                   default_name=default_name)
+        if not filename == '':
+            from pathlib import Path
+            self.save_session(Path(filename).with_suffix('.pvs'))
+        
+    #visFr.OnSaveSession_original = visFr.OnSaveSession
+    visFr.OnSaveSessionMINFLUX = types.MethodType(OnSaveSessionMINFLUX,visFr)
+    visFr.AddMenuItem('File', 'Save MINFLUX Session', visFr.OnSaveSessionMINFLUX)
+
 # below we make a class Pipeline that inherits from PYME.LMVis.pipeline.Pipeline
 # and changes the relevant method in the subclass
 #
