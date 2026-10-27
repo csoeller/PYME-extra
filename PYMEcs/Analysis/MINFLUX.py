@@ -133,8 +133,10 @@ def plot_density_stats_sns(ds,objectID='dbscanClumpID'):
     return dens
 
 def plot_stats_minflux(deltas, durations, tdintrace, efo_or_dtovertime, times,
+                       rateovertime,rate_times,
                        showTimeAverages=False, dsKey=None, areaString=None,
                        statStrings=None, timeStamp=None):
+    
     from scipy.stats import iqr
     
     fig, (ax1, ax2) = plt.subplots(2, 2)
@@ -194,9 +196,11 @@ def plot_stats_minflux(deltas, durations, tdintrace, efo_or_dtovertime, times,
     # ax2[0].set_xlim(0,tdmean + 2*tdiqr) # superfluous since we are using the range keyword in hist
 
     if showTimeAverages:
-        ax2[1].plot(times,efo_or_dtovertime)
-        ax2[1].set_xlabel('TBT running time average [s]')
-        ax2[1].set_ylim([0, None])
+        axl = ax2[1]
+        axl.plot(times,efo_or_dtovertime)
+        axl.set_ylabel('TBT average (s)')
+        axl.set_xlabel('time (s)')
+        axl.set_ylim([0, None])
         if statStrings is not None:
             if len(statStrings)>2:
                 topy=0.23
@@ -205,13 +209,18 @@ def plot_stats_minflux(deltas, durations, tdintrace, efo_or_dtovertime, times,
             else:
                 topy=0.17
                 midy=0.07
-            ax2[1].text(0.95, topy, statStrings[0], horizontalalignment='right',
-                        verticalalignment='bottom', transform=ax2[1].transAxes)
-            ax2[1].text(0.95, midy, statStrings[1], horizontalalignment='right',
-                        verticalalignment='bottom', transform=ax2[1].transAxes)
+            axl.text(0.95, topy, statStrings[0], horizontalalignment='right',
+                        verticalalignment='bottom', transform=axl.transAxes)
+            axl.text(0.95, midy, statStrings[1], horizontalalignment='right',
+                        verticalalignment='bottom', transform=axl.transAxes)
             if len(statStrings)>2:
-                ax2[1].text(0.95, boty, statStrings[2], horizontalalignment='right',
-                            verticalalignment='bottom', transform=ax2[1].transAxes)
+                axl.text(0.95, boty, statStrings[2], horizontalalignment='right',
+                            verticalalignment='bottom', transform=axl.transAxes)
+
+        axr = axl.twinx()
+        axr.set_ylabel('rate (traces/min)', color='orange')
+        axr.plot(rate_times,rateovertime,'orange',alpha=0.5)
+        axr.set_ylim([0, None])
     else:
         h = ax2[1].hist(1e-3*efo_or_dtovertime,bins=100,range=(0,200))
         # ax2[0].plot([tdmedian,tdmedian],[0,h[0].max()])
@@ -339,12 +348,21 @@ def analyse_locrate(data,datasource='Localizations',ds_coalesced='coalesced_nz',
     if plot:
         if showTimeAverages:
             delta_averages, bin_edges, binnumber = binned_statistic(starts[:-1],deltas,statistic='mean', bins=50)
+            
+            rate_averages, rate_bin_edges = np.histogram(starts[:-1], bins=50)
+            bin_width = rate_bin_edges[1]-rate_bin_edges[0]
+            ratepmin_averages = rate_averages / bin_width * 60
+            rate_av_times = 0.5*(rate_bin_edges[:-1] + rate_bin_edges[1:]) # bin centres
+            
             delta_av_times = 0.5*(bin_edges[:-1] + bin_edges[1:]) # bin centres
             plot_stats_minflux(deltas, durations_proper, tdintrace, delta_averages, delta_av_times,
+                               ratepmin_averages, rate_av_times,
                                showTimeAverages=True, dsKey = datasource, areaString=area_string,
                                statStrings=stat_strings,timeStamp=ts)
         else:
-            plot_stats_minflux(deltas, durations_proper, tdintrace, data['efo'], None, dsKey = datasource,
+            plot_stats_minflux(deltas, durations_proper, tdintrace, data['efo'], None,
+                               None, None,
+                               dsKey = datasource,
                                areaString=area_string, timeStamp=ts)
 
     return (starts,ends,deltas,durations_proper,tdintrace)
