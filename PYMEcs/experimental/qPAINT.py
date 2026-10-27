@@ -861,7 +861,8 @@ class QPCalc:
             try:
                 tau1m, tau2m, atau1m, tau1errm, tau2errm, atau1errm, chisqrm = fitDarkTimes.fitTaus(binctrs,hc,
                                                                                                     fitTau2=not self.fitSettings.Tau2Constant,
-                                                                                                    tau2const=self.fitSettings.Tau2FixedValue)
+                                                                                                    tau2const=self.fitSettings.Tau2FixedValue,
+                                                                                                    tau2max=self.fitSettings.Tau2Max)
                 logger.info("fitTaus: tau1 %f, tau2 %f, atau1 %f, tau1err %f, tau2err %f, atau1err %f, chisq %.1g" %
                             (tau1m, tau2m, atau1m, tau1errm, tau2errm, atau1errm, chisqrm))
             except RuntimeError:

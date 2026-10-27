@@ -372,6 +372,7 @@ class FitSettings(HasTraits):
     fitMode = Enum(['SingleMode','TwoModes'])
     Tau2Constant = Bool(False)
     Tau2FixedValue = Float(2.0)
+    Tau2Max = Float(8.0)
     IDcolumn = CStr('objectID')
 
     
