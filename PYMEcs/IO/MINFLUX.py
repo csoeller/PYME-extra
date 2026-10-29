@@ -883,6 +883,9 @@ class MBMRawBeads(object):
     def __setstate__(self, d):
         warn("MBMRawBeads is being unpickled - this is just a dummy unpickle, won't be usable after unpickling")
         self._unpickled = d
+
+    def to_JSON(self): # this is a dummy mostly to get the object to convert without error in metadata output
+        return "Dummy for MBMRawBeads object"
     
 ##############################
 ### tabular classes  #########
